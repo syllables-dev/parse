@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": [
+      "src/**/*.ts",
+      "!biome.jsonc",
+      "!package.json",
+      "!bun.lock",
+      "!tests/fixtures"
+    ]
+  },
+  "extends": ["ultracite/biome/core"]
+}

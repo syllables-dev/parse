@@ -1,0 +1,70 @@
+# @syllables-dev/parse
+
+Readers and writers for lyric formats, built around one shared document schema.
+
+Every format reads into a plain `LyricsDocument` object and writes back out from it (hub and spoke).
+
+Supported spokes:
+- TTML (Apple Music lyric profile only, not generic W3C TTML)
+- LRC (absorbs A2 word tags when present; the A2 dialect is not its own format)
+- ESLRC
+- QRC
+- YRC
+- LYS
+- LQE
+
+Any-to-any conversion is `write(read(text))`; codecs never import each other, with LQE as the one documented exception (it is a container that delegates its sections to other codecs).
+
+## Rules
+
+- Always use the Bun toolchain: `bun` and `bunx`. Never `node`, `npm`, `pnpm`, or `npx`.
+- Run tests with `bun test`.
+- Do not use em dashes anywhere: not in code, comments, docs, responses, or any other writing in this repo.
+- `tests/fixtures/` is read only. Never modify, reformat, or "fix" a fixture; codecs must adapt to fixtures, never the reverse.
+- Documents are plain JSON-serializable data: no classes, Maps, or Dates in the schema.
+- Zero runtime dependencies. Do not add any without explicit approval.
+- Named exports only. No `utils.ts`; shared code gets a descriptive name and lives in `src/internal/`.
+
+## Coding style
+
+- Clear, meaningful names for files, variables, and functions. Short enough to scan, yet concise enough to convey intent. Nothing that reads like boilerplate or AI output.
+- Avoid snake_case for file names. Use kebab-case for file names, camelCase for variables and functions, PascalCase for types and classes.
+- No redundant intermediate variables or function hops. Write `const c = g(f(a))`, not `const b = f(a); const c = g(b)`, unless `b` is reused.
+- Function size:
+  - Under 20 lines and used once: inline it. No one-off helpers.
+  - Under 20 lines and used more than once: extract a named function.
+  - Over 20 lines: split or refactor as needed.
+- Strict top-to-bottom order in every file: imports, then enums, then types/interfaces, then logic.
+- A comment may only say what the code cannot: a format quirk, an invariant, a why. If it restates what the code does, delete it. Comments should be concise and in all lowercase.
+
+  ```ts
+  // bad: narrates the next line
+  // parse the timestamp and convert to ms
+  const ms = toMs(stamp);
+
+  // good: states a fact the code cannot express
+  // <t> marks a word START; the last word of a line inherits the line end
+  ```
+
+- Do not handle impossible states; let them throw. Readers are the boundary and get to be paranoid about dirty input. Everything after them trusts the document. No try/catch around code that cannot throw, no null checks the types already rule out, no fallback values that hide bugs.
+
+  ```ts
+  // bad: the type says text exists; ?? "" would bury a real bug
+  const text = line?.text ?? "";
+
+  // good
+  const text = line.text;
+  ```
+
+- No `any`, no `as` casts to silence errors, no type annotations inference already covers.
+- No premature abstraction: no single-implementer interfaces, no config objects with one field, no wrappers that add a name but no behavior. This is a small package; write like it.
+- Generic names are banned: `data`, `result`, `item`, `temp`, `obj`, `helper`, `process`, `handle`. Name the thing for what it is: `stamps`, `rows`, `syllables`.
+- Before finishing, make a deletion pass: remove every comment that restates code, every single-use variable that adds nothing, every branch that cannot be reached.
+
+## Code quality
+
+Do the following steps after finishing any task:
+
+1. Run `bun tsgo` (tsgo). Fix every reported issue.
+2. Run `bun fix` (ultracite). Fix every issue it cannot auto-fix.
+3. Rerun both until both pass clean in the same round, then stop.
