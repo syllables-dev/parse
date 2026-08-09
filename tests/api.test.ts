@@ -36,6 +36,7 @@ const capabilityCases = [
     "lrc",
     {
       agents: false,
+      author: true,
       backing: false,
       pronunciation: false,
       translation: false,
@@ -46,6 +47,7 @@ const capabilityCases = [
     "eslrc",
     {
       agents: false,
+      author: true,
       backing: false,
       pronunciation: false,
       translation: false,
@@ -56,6 +58,7 @@ const capabilityCases = [
     "qrc",
     {
       agents: false,
+      author: true,
       backing: true,
       pronunciation: false,
       translation: false,
@@ -66,6 +69,7 @@ const capabilityCases = [
     "yrc",
     {
       agents: false,
+      author: true,
       backing: false,
       pronunciation: false,
       translation: false,
@@ -76,6 +80,7 @@ const capabilityCases = [
     "lys",
     {
       agents: true,
+      author: true,
       backing: true,
       pronunciation: false,
       translation: false,
@@ -86,6 +91,7 @@ const capabilityCases = [
     "lqe",
     {
       agents: true,
+      author: true,
       backing: true,
       pronunciation: false,
       translation: true,
@@ -96,6 +102,7 @@ const capabilityCases = [
     "ttml",
     {
       agents: true,
+      author: false,
       backing: true,
       pronunciation: true,
       translation: true,
@@ -103,6 +110,34 @@ const capabilityCases = [
     },
   ],
 ] satisfies [FormatId, FormatCapabilities][];
+
+const authorCases = [
+  {
+    format: "lrc",
+    source: "[by:Thereallo]\n[00:01.000]Hello",
+  },
+  {
+    format: "eslrc",
+    source: "[by:Thereallo]\n[00:01.000]Hello[00:02.000]",
+  },
+  {
+    format: "qrc",
+    source: "[by:Thereallo]\n[1000,1000]Hello(1000,1000)",
+  },
+  {
+    format: "yrc",
+    source: `${JSON.stringify({ c: [{ tx: "作词: Writer" }], t: 0 })}\n[by:Thereallo]\n[1000,1000](1000,1000,0)Hello`,
+  },
+  {
+    format: "lys",
+    source: "[by:Thereallo]\n[4]Hello(1000,1000)",
+  },
+  {
+    format: "lqe",
+    source:
+      "[Lyricify Quick Export]\n[version:1.0]\n[by:Thereallo]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
+  },
+] satisfies { format: FormatId; source: string }[];
 
 const precedenceCases = [
   {
@@ -250,6 +285,77 @@ describe("public dispatch", () => {
       expect(capabilities(format)).toEqual(expected);
     }
   );
+
+  test.each(authorCases)(
+    "round-trips $format lyric authors",
+    ({ format, source }) => {
+      const doc = read(source, format);
+      const restored = read(write(doc, format), format);
+
+      expect(doc.meta.author).toBe("Thereallo");
+      expect(
+        doc.lines
+          .slice(0, 1)
+          .flatMap((line) => line.p.map((syllable) => syllable.text))
+          .join("")
+      ).toBe("Hello");
+      expect(restored.meta.author).toBe("Thereallo");
+    }
+  );
+
+  test.each(authorCases)(
+    "treats empty $format authors as absent",
+    ({ format, source }) => {
+      const doc = read(source.replace("[by:Thereallo]", "[by:]"), format);
+
+      expect(doc.meta.author).toBeUndefined();
+      expect(
+        doc.lines
+          .slice(0, 1)
+          .flatMap((line) => line.p.map((syllable) => syllable.text))
+          .join("")
+      ).toBe("Hello");
+    }
+  );
+
+  test("preserves whitespace inside lyric author tags", () => {
+    const doc = read("[by:  There:allo [mix]  ]\n[00:01.000]Hello", "lrc");
+
+    expect(doc.meta.author).toBe("  There:allo [mix]  ");
+    expect(write(doc, "lrc").split("\n")[0]).toBe("[by:  There:allo [mix]  ]");
+  });
+
+  test("places the lqe author directly after its version", () => {
+    const source =
+      "[Lyricify Quick Export]\n[version:1.0]\n[by:Thereallo]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)";
+
+    expect(write(read(source, "lqe"), "lqe").split("\n").slice(0, 3)).toEqual([
+      "[Lyricify Quick Export]",
+      "[version:1.0]",
+      "[by:Thereallo]",
+    ]);
+  });
+
+  test.each(authorCases)(
+    "rejects line breaks in $format authors",
+    ({ format, source }) => {
+      const doc = read(source, format);
+      doc.meta.author = "There\nallo";
+
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent line breaks in an author`
+      );
+    }
+  );
+
+  test("rejects lyric authors in ttml output", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.author = "Thereallo";
+
+    expect(() => write(doc, "ttml")).toThrow(
+      "ttml cannot represent a lyric file author"
+    );
+  });
 
   test("returns isolated capability snapshots", () => {
     const exposed = capabilities("lrc");
