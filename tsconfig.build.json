@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "allowJs": false,
+    "declaration": true,
+    "module": "ESNext",
+    "noEmit": false,
+    "noEmitOnError": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"]
+}

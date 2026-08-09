@@ -1,9 +1,49 @@
 {
   "name": "@syllables-dev/parse",
+  "version": "0.1.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
-  "module": "src/index.ts",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ttml": {
+      "types": "./dist/formats/ttml/index.d.ts",
+      "import": "./dist/formats/ttml/index.js"
+    },
+    "./lrc": {
+      "types": "./dist/formats/lrc.d.ts",
+      "import": "./dist/formats/lrc.js"
+    },
+    "./eslrc": {
+      "types": "./dist/formats/eslrc.d.ts",
+      "import": "./dist/formats/eslrc.js"
+    },
+    "./qrc": {
+      "types": "./dist/formats/qrc.d.ts",
+      "import": "./dist/formats/qrc.js"
+    },
+    "./yrc": {
+      "types": "./dist/formats/yrc.d.ts",
+      "import": "./dist/formats/yrc.js"
+    },
+    "./lys": {
+      "types": "./dist/formats/lys.d.ts",
+      "import": "./dist/formats/lys.js"
+    },
+    "./lqe": {
+      "types": "./dist/formats/lqe.d.ts",
+      "import": "./dist/formats/lqe.js"
+    }
+  },
+  "files": ["dist", "LICENSE", "README.md"],
+  "sideEffects": false,
   "scripts": {
+    "build": "bun run build:clean && tsgo -p tsconfig.build.json",
+    "build:clean": "bun -e 'import { rm } from \"fs/promises\"; await rm(\"dist\", { force: true, recursive: true });'",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "tsgo": "tsgo --noEmit"
