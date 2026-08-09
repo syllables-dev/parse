@@ -103,26 +103,6 @@ function addText(
   return last ? loose : loose + value;
 }
 
-function readNested(
-  element: XmlElement,
-  offset: number,
-  idPrefix: string,
-  lineAgent: string | null,
-  syllables: Syllable[],
-  leading: string
-) {
-  const first = syllables.length;
-  let loose = leading;
-  for (const child of element.children) {
-    if (child.kind === "text") {
-      loose = addText(child.text, syllables, first, loose);
-    } else {
-      readWord(child, offset, idPrefix, lineAgent, syllables, loose);
-      loose = "";
-    }
-  }
-}
-
 function readWord(
   element: XmlElement,
   offset: number,
@@ -138,7 +118,16 @@ function readWord(
     syllables.push({ ...range, id, text: leading + text(element) });
     return;
   }
-  readNested(element, offset, idPrefix, lineAgent, syllables, leading);
+  const first = syllables.length;
+  let loose = leading;
+  for (const child of element.children) {
+    if (child.kind === "text") {
+      loose = addText(child.text, syllables, first, loose);
+    } else {
+      readWord(child, offset, idPrefix, lineAgent, syllables, loose);
+      loose = "";
+    }
+  }
 }
 
 export function readWords(
@@ -195,13 +184,6 @@ export function untimed(nodes: XmlNode[], lineAgent: string | null) {
     lyric += untimed(child.children, lineAgent);
   }
   return lyric;
-}
-
-export function unwrapText(lyric: string) {
-  if (!(lyric.startsWith("(") && lyric.endsWith(")"))) {
-    throw new ParseError("ttml backing text requires wrapping parentheses");
-  }
-  return lyric.slice(1, -1);
 }
 
 export function checkTrack(
@@ -274,26 +256,6 @@ function readLine(
   return lyricLine;
 }
 
-function readDivRange(division: XmlElement, populated: boolean) {
-  const beginText = attr(division, "begin", null);
-  const endText = attr(division, "end", null);
-  if (
-    (beginText === undefined) !== (endText === undefined) ||
-    (populated && beginText === undefined)
-  ) {
-    throw new ParseError(
-      "populated ttml divisions require begin and end times"
-    );
-  }
-  if (beginText !== undefined && endText !== undefined) {
-    const begin = readTime(beginText, "ttml division start");
-    const end = readTime(endText, "ttml division end");
-    if (end <= begin) {
-      throw new ParseError("ttml division end must follow its start");
-    }
-  }
-}
-
 function readDiv(
   division: XmlElement,
   firstIndex: number,
@@ -312,7 +274,23 @@ function readDiv(
     key(itunesUri, "songPart"),
   ]);
   const paragraphs = elements(division);
-  readDivRange(division, paragraphs.length > 0);
+  const beginText = attr(division, "begin", null);
+  const endText = attr(division, "end", null);
+  if (
+    (beginText === undefined) !== (endText === undefined) ||
+    (paragraphs.length > 0 && beginText === undefined)
+  ) {
+    throw new ParseError(
+      "populated ttml divisions require begin and end times"
+    );
+  }
+  if (beginText !== undefined && endText !== undefined) {
+    const begin = readTime(beginText, "ttml division start");
+    const end = readTime(endText, "ttml division end");
+    if (end <= begin) {
+      throw new ParseError("ttml division end must follow its start");
+    }
+  }
   const divAgent = agentRef(division, inheritedAgent, agentIds);
   return paragraphs.map((paragraph, index) => {
     if (!is(paragraph, "p", ttmlUri)) {
@@ -327,16 +305,6 @@ function readDiv(
       offset
     );
   });
-}
-
-function checkLines(lines: LyricsLine[], duration: number, offset: number) {
-  const ids = lines.map((line) => line.id);
-  if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
-    throw new ParseError("ttml line keys must be nonempty and unique");
-  }
-  if (lines.some((line) => line.end + offset > duration)) {
-    throw new ParseError("ttml body duration ends before its lyrics");
-  }
 }
 
 export function readBody(
@@ -355,6 +323,12 @@ export function readBody(
       ...readDiv(division, lines.length, timing, bodyAgent, agentIds, offset)
     );
   }
-  checkLines(lines, duration, offset);
+  const ids = lines.map((line) => line.id);
+  if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
+    throw new ParseError("ttml line keys must be nonempty and unique");
+  }
+  if (lines.some((line) => line.end + offset > duration)) {
+    throw new ParseError("ttml body duration ends before its lyrics");
+  }
   return lines;
 }

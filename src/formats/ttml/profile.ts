@@ -111,17 +111,6 @@ export function readTime(value: string, label: string) {
   return stamp;
 }
 
-export function readOffset(value: string) {
-  const sign = value.charAt(0);
-  return (
-    (sign === "-" ? -1 : 1) *
-    readTime(
-      sign === "-" || sign === "+" ? value.slice(1) : value,
-      "ttml lyric offset"
-    )
-  );
-}
-
 export function readRange(element: XmlElement, offset: number, label: string) {
   const begin = readTime(needAttr(element, "begin", null), `${label} start`);
   const end = readTime(needAttr(element, "end", null), `${label} end`);
@@ -168,15 +157,4 @@ export function writeTime(milliseconds: number) {
   return `${minutes}:${Math.floor(remainder / 1000)
     .toString()
     .padStart(2, "0")}.${(remainder % 1000).toString().padStart(3, "0")}`;
-}
-
-export function writeOffset(milliseconds: number) {
-  if (!Number.isSafeInteger(milliseconds)) {
-    throw new RangeError("ttml lyric offset must be a safe integer");
-  }
-  const sign = milliseconds < 0 ? "-" : "";
-  const magnitude = Math.abs(milliseconds);
-  return `${sign}${Math.floor(magnitude / 1000)}.${(magnitude % 1000)
-    .toString()
-    .padStart(3, "0")}`;
 }

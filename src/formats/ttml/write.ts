@@ -12,7 +12,6 @@ import {
   ttmlUri,
   ttmUri,
   validLanguage,
-  writeOffset,
   writeTime,
 } from "./profile";
 
@@ -83,43 +82,10 @@ function checkMaps(line: LyricsLine, lineTimed: boolean, offset: number) {
   }
 }
 
-function checkLine(
-  line: LyricsLine,
-  lineTimed: boolean,
-  offset: number,
-  agentIds: Set<string>
-) {
-  const begin = sourceTime(line.begin, offset, `line ${line.id} start`);
-  const end = sourceTime(line.end, offset, `line ${line.id} end`);
-  if (end <= begin) {
-    throw new RangeError(`line ${line.id} end must follow its start`);
+function checkIds(ids: string[], label: string) {
+  if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
+    throw new Error(`ttml ${label} must be nonempty and unique`);
   }
-  if (line.agent !== null && !agentIds.has(line.agent)) {
-    throw new Error(`line ${line.id} references an undeclared ttml agent`);
-  }
-  checkTrack(line.p, line, offset, lineTimed, `line ${line.id} primary track`);
-  checkTrack(line.b, line, offset, lineTimed, `line ${line.id} backing track`);
-  checkMaps(line, lineTimed, offset);
-}
-
-function checkKeys(doc: LyricsDocument) {
-  const agentIds = doc.agents.map((agent) => agent.id);
-  if (
-    agentIds.some(
-      (id, index) => id.length === 0 || agentIds.indexOf(id) !== index
-    )
-  ) {
-    throw new Error("ttml agent ids must be nonempty and unique");
-  }
-  const lineIds = doc.lines.map((line) => line.id);
-  if (
-    lineIds.some(
-      (id, index) => id.length === 0 || lineIds.indexOf(id) !== index
-    )
-  ) {
-    throw new Error("ttml line ids must be nonempty and unique");
-  }
-  return new Set(agentIds);
 }
 
 function checkDoc(doc: LyricsDocument) {
@@ -142,13 +108,50 @@ function checkDoc(doc: LyricsDocument) {
   if (doc.meta.songwriters?.length === 0) {
     throw new Error("ttml cannot preserve an empty songwriter list");
   }
-  const agentIds = checkKeys(doc);
+  const agentIds = doc.agents.map((agent) => agent.id);
+  checkIds(agentIds, "agent ids");
+  checkIds(
+    doc.lines.map((line) => line.id),
+    "line ids"
+  );
+  const knownAgents = new Set(agentIds);
   for (const line of doc.lines) {
-    checkLine(line, doc.timing === "line", offset, agentIds);
+    const begin = sourceTime(line.begin, offset, `line ${line.id} start`);
+    const end = sourceTime(line.end, offset, `line ${line.id} end`);
+    if (end <= begin) {
+      throw new RangeError(`line ${line.id} end must follow its start`);
+    }
+    if (line.agent !== null && !knownAgents.has(line.agent)) {
+      throw new Error(`line ${line.id} references an undeclared ttml agent`);
+    }
+    checkTrack(
+      line.p,
+      line,
+      offset,
+      doc.timing === "line",
+      `line ${line.id} primary track`
+    );
+    checkTrack(
+      line.b,
+      line,
+      offset,
+      doc.timing === "line",
+      `line ${line.id} backing track`
+    );
+    checkMaps(line, doc.timing === "line", offset);
   }
 }
 
-function writeSyllables(syllables: Syllable[], offset: number, wrap: boolean) {
+function writeTrack(
+  syllables: Syllable[],
+  offset: number,
+  lineTimed: boolean,
+  wrap: boolean
+) {
+  if (lineTimed) {
+    const lyric = syllables.map((syllable) => syllable.text).join("");
+    return escapeText(wrap && syllables.length > 0 ? `(${lyric})` : lyric);
+  }
   return syllables
     .map((syllable, index) => {
       const opening = wrap && index === 0 ? "(" : "";
@@ -166,19 +169,6 @@ function writeSyllables(syllables: Syllable[], offset: number, wrap: boolean) {
       return `<span begin="${writeTime(begin)}" end="${writeTime(end)}">${escapeText(opening + syllable.text + closing)}</span>`;
     })
     .join("");
-}
-
-function writeTrack(
-  syllables: Syllable[],
-  offset: number,
-  lineTimed: boolean,
-  wrap: boolean
-) {
-  if (lineTimed) {
-    const lyric = syllables.map((syllable) => syllable.text).join("");
-    return escapeText(wrap && syllables.length > 0 ? `(${lyric})` : lyric);
-  }
-  return writeSyllables(syllables, offset, wrap);
 }
 
 function writeTranslations(doc: LyricsDocument) {
@@ -235,19 +225,6 @@ function writeProns(doc: LyricsDocument, offset: number) {
     .join("");
 }
 
-function writeLine(line: LyricsLine, timing: "line" | "word", offset: number) {
-  const agent =
-    line.agent === null ? "" : ` ttm:agent="${escapeAttr(line.agent)}"`;
-  const primary = writeTrack(line.p, offset, timing === "line", false);
-  const backing =
-    line.b.length === 0
-      ? ""
-      : `<span ttm:role="x-bg">${writeTrack(line.b, offset, timing === "line", true)}</span>`;
-  const begin = sourceTime(line.begin, offset, `line ${line.id} start`);
-  const end = sourceTime(line.end, offset, `line ${line.id} end`);
-  return `<p begin="${writeTime(begin)}" end="${writeTime(end)}" itunes:key="${escapeAttr(line.id)}"${agent}>${primary}${backing}</p>`;
-}
-
 function writeHead(doc: LyricsDocument, offset: number) {
   const agents = doc.agents
     .map(
@@ -260,10 +237,12 @@ function writeHead(doc: LyricsDocument, offset: number) {
   const songwriters = (doc.meta.songwriters ?? [])
     .map((writer) => `<songwriter>${escapeText(writer)}</songwriter>`)
     .join("");
-  const audio =
-    doc.meta.offset === undefined
-      ? ""
-      : `<audio lyricOffset="${writeOffset(offset)}"/>`;
+  let audio = "";
+  if (doc.meta.offset !== undefined) {
+    const sign = offset < 0 ? "-" : "";
+    const magnitude = Math.abs(offset);
+    audio = `<audio lyricOffset="${sign}${Math.floor(magnitude / 1000)}.${(magnitude % 1000).toString().padStart(3, "0")}"/>`;
+  }
   const transliterations =
     prons.length === 0 ? "" : `<transliterations>${prons}</transliterations>`;
   return `<head><metadata>${agents}<iTunesMetadata xmlns="${itunesUri}"><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`;
@@ -283,7 +262,18 @@ function writeBody(doc: LyricsDocument, offset: number) {
     )
   );
   const paragraphs = doc.lines
-    .map((line) => writeLine(line, doc.timing, offset))
+    .map((line) => {
+      const agent =
+        line.agent === null ? "" : ` ttm:agent="${escapeAttr(line.agent)}"`;
+      const primary = writeTrack(line.p, offset, doc.timing === "line", false);
+      const backing =
+        line.b.length === 0
+          ? ""
+          : `<span ttm:role="x-bg">${writeTrack(line.b, offset, doc.timing === "line", true)}</span>`;
+      const lineBegin = sourceTime(line.begin, offset, `line ${line.id} start`);
+      const lineEnd = sourceTime(line.end, offset, `line ${line.id} end`);
+      return `<p begin="${writeTime(lineBegin)}" end="${writeTime(lineEnd)}" itunes:key="${escapeAttr(line.id)}"${agent}>${primary}${backing}</p>`;
+    })
     .join("");
   return `<body dur="${writeTime(duration)}"><div begin="${writeTime(begin)}" end="${writeTime(duration)}">${paragraphs}</div></body>`;
 }

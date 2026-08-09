@@ -1,14 +1,7 @@
 import { ParseError } from "../../errors";
 import type { XmlElement, XmlNode } from "../../internal/xml";
 import type { LyricsDocument, LyricsLine } from "../../types";
-import {
-  checkTrack,
-  readWords,
-  splitRuns,
-  untimed,
-  unwrap,
-  unwrapText,
-} from "./lines";
+import { checkTrack, readWords, splitRuns, untimed, unwrap } from "./lines";
 import {
   attr,
   checkAttrs,
@@ -19,7 +12,6 @@ import {
   locale,
   needAttr,
   only,
-  readOffset,
   readTime,
   text,
   ttmlUri,
@@ -56,86 +48,16 @@ function readAgent(declaration: XmlElement, ids: Set<string>) {
   return { id, type: needAttr(declaration, "type", null) };
 }
 
-function readAgents(metadata: XmlElement) {
-  const agents: LyricsDocument["agents"] = [];
-  const ids = new Set<string>();
-  for (const declaration of elements(metadata)) {
-    if (is(declaration, "agent", ttmUri)) {
-      agents.push(readAgent(declaration, ids));
-    }
-  }
-  return agents;
-}
-
-function readAudio(audio: XmlElement | undefined) {
-  if (!audio) {
-    return {};
-  }
-  checkAttrs(audio, [
-    key(null, "lyricOffset"),
-    key(null, "role"),
-    key(null, "spatial"),
-  ]);
-  if (elements(audio).length > 0) {
-    throw new ParseError("ttml audio metadata must be empty");
-  }
-  const value = attr(audio, "lyricOffset", null);
-  return value === undefined ? {} : { offset: readOffset(value) };
-}
-
-function readWriters(container: XmlElement | undefined) {
-  if (!container) {
-    return [];
-  }
-  checkAttrs(container, []);
-  return elements(container).map((writer) => {
-    if (!is(writer, "songwriter", itunesUri)) {
-      throw new ParseError(`unsupported songwriter child <${writer.name}>`);
-    }
-    checkAttrs(writer, [key(itunesUri, "artistId")]);
-    return text(writer);
-  });
-}
-
-function readAppleBody(apple: XmlElement): Omit<TtmlHead, "agents"> {
-  const children = elements(apple);
-  const writers = children.filter((child) =>
-    is(child, "songwriters", itunesUri)
-  );
-  const audioBlocks = children.filter((child) => is(child, "audio", itunesUri));
-  if (writers.length > 1 || audioBlocks.length > 1) {
+function single(children: XmlElement[], local: string) {
+  const matches = children.filter((child) => is(child, local, itunesUri));
+  if (matches.length > 1) {
     throw new ParseError("duplicate ttml metadata container");
   }
-  const allowed = ["translations", "transliterations", "songwriters", "audio"];
-  if (
-    children.some(
-      (child) => !allowed.some((local) => is(child, local, itunesUri))
-    )
-  ) {
-    throw new ParseError("unsupported Apple lyric metadata element");
-  }
-  const [writerBlock] = writers;
-  const [audio] = audioBlocks;
-  return {
-    ...readAudio(audio),
-    songwriters: readWriters(writerBlock),
-    translations: children.filter((child) =>
-      is(child, "translations", itunesUri)
-    ),
-    transliterations: children.filter((child) =>
-      is(child, "transliterations", itunesUri)
-    ),
-  };
+  return matches[0];
 }
 
 function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
-  const blocks = elements(metadata).filter((child) =>
-    is(child, "iTunesMetadata", itunesUri)
-  );
-  if (blocks.length > 1) {
-    throw new ParseError("ttml supports one iTunesMetadata block");
-  }
-  const [apple] = blocks;
+  const apple = single(elements(metadata), "iTunesMetadata");
   if (!apple) {
     return { songwriters: [], translations: [], transliterations: [] };
   }
@@ -144,7 +66,60 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
   if (leading !== undefined) {
     readTime(leading, "ttml leading silence");
   }
-  return readAppleBody(apple);
+  const children = elements(apple);
+  const allowed = ["translations", "transliterations", "songwriters", "audio"];
+  if (
+    children.some(
+      (child) => !allowed.some((local) => is(child, local, itunesUri))
+    )
+  ) {
+    throw new ParseError("unsupported Apple lyric metadata element");
+  }
+  const writerBlock = single(children, "songwriters");
+  if (writerBlock) {
+    checkAttrs(writerBlock, []);
+  }
+  const songwriters = (writerBlock ? elements(writerBlock) : []).map(
+    (writer) => {
+      if (!is(writer, "songwriter", itunesUri)) {
+        throw new ParseError(`unsupported songwriter child <${writer.name}>`);
+      }
+      checkAttrs(writer, [key(itunesUri, "artistId")]);
+      return text(writer);
+    }
+  );
+  const audio = single(children, "audio");
+  let offset: number | undefined;
+  if (audio) {
+    checkAttrs(audio, [
+      key(null, "lyricOffset"),
+      key(null, "role"),
+      key(null, "spatial"),
+    ]);
+    if (elements(audio).length > 0) {
+      throw new ParseError("ttml audio metadata must be empty");
+    }
+    const lyricOffset = attr(audio, "lyricOffset", null);
+    if (lyricOffset !== undefined) {
+      const sign = lyricOffset.charAt(0);
+      offset =
+        (sign === "-" ? -1 : 1) *
+        readTime(
+          sign === "-" || sign === "+" ? lyricOffset.slice(1) : lyricOffset,
+          "ttml lyric offset"
+        );
+    }
+  }
+  return {
+    ...(offset === undefined ? {} : { offset }),
+    songwriters,
+    translations: children.filter((child) =>
+      is(child, "translations", itunesUri)
+    ),
+    transliterations: children.filter((child) =>
+      is(child, "transliterations", itunesUri)
+    ),
+  };
 }
 
 export function readHead(root: XmlElement): TtmlHead {
@@ -162,7 +137,14 @@ export function readHead(root: XmlElement): TtmlHead {
       throw new ParseError(`unsupported metadata element <${child.name}>`);
     }
   }
-  return { agents: readAgents(metadata), ...readApple(metadata) };
+  const agents: LyricsDocument["agents"] = [];
+  const ids = new Set<string>();
+  for (const declaration of elements(metadata)) {
+    if (is(declaration, "agent", ttmUri)) {
+      agents.push(readAgent(declaration, ids));
+    }
+  }
+  return { agents, ...readApple(metadata) };
 }
 
 function target(textLine: XmlElement, lineById: Map<string, LyricsLine>) {
@@ -198,35 +180,21 @@ function addTranslation(
     );
   }
   const runs = splitRuns(textLine, line.agent);
+  const backing =
+    runs.backing === null ? undefined : untimed(runs.backing, line.agent);
+  if (
+    backing !== undefined &&
+    !(backing.startsWith("(") && backing.endsWith(")"))
+  ) {
+    throw new ParseError("ttml backing text requires wrapping parentheses");
+  }
   line.translations = {
     ...line.translations,
     [language]: {
-      ...(runs.backing === null
-        ? {}
-        : { b: unwrapText(untimed(runs.backing, line.agent)) }),
+      ...(backing === undefined ? {} : { b: backing.slice(1, -1) }),
       p: untimed(runs.primary, line.agent),
     },
   };
-}
-
-function readTranslation(
-  translation: XmlElement,
-  lineById: Map<string, LyricsLine>
-) {
-  if (!is(translation, "translation", itunesUri)) {
-    throw new ParseError(
-      `unsupported translation element <${translation.name}>`
-    );
-  }
-  checkAttrs(translation, [key(null, "type"), key(xmlUri, "lang")]);
-  const kind = needAttr(translation, "type", null);
-  if (kind !== "subtitle" && kind !== "replacement") {
-    throw new ParseError(`unsupported ttml translation type ${kind}`);
-  }
-  const language = locale(translation);
-  for (const textLine of elements(translation)) {
-    addTranslation(textLine, language, lineById);
-  }
 }
 
 export function readTranslations(
@@ -237,7 +205,20 @@ export function readTranslations(
   for (const container of containers) {
     checkAttrs(container, []);
     for (const translation of elements(container)) {
-      readTranslation(translation, lineById);
+      if (!is(translation, "translation", itunesUri)) {
+        throw new ParseError(
+          `unsupported translation element <${translation.name}>`
+        );
+      }
+      checkAttrs(translation, [key(null, "type"), key(xmlUri, "lang")]);
+      const kind = needAttr(translation, "type", null);
+      if (kind !== "subtitle" && kind !== "replacement") {
+        throw new ParseError(`unsupported ttml translation type ${kind}`);
+      }
+      const language = locale(translation);
+      for (const textLine of elements(translation)) {
+        addTranslation(textLine, language, lineById);
+      }
     }
   }
 }
@@ -293,24 +274,6 @@ function addPron(
   };
 }
 
-function readPron(
-  transliteration: XmlElement,
-  trackIndex: number,
-  lineById: Map<string, LyricsLine>,
-  offset: number
-) {
-  if (!is(transliteration, "transliteration", itunesUri)) {
-    throw new ParseError(
-      `unsupported transliteration element <${transliteration.name}>`
-    );
-  }
-  checkAttrs(transliteration, [key(xmlUri, "lang")]);
-  const language = locale(transliteration);
-  for (const textLine of elements(transliteration)) {
-    addPron(textLine, language, trackIndex, lineById, offset);
-  }
-}
-
 export function readProns(
   containers: XmlElement[],
   lines: LyricsLine[],
@@ -321,7 +284,16 @@ export function readProns(
   for (const container of containers) {
     checkAttrs(container, []);
     for (const transliteration of elements(container)) {
-      readPron(transliteration, trackIndex, lineById, offset);
+      if (!is(transliteration, "transliteration", itunesUri)) {
+        throw new ParseError(
+          `unsupported transliteration element <${transliteration.name}>`
+        );
+      }
+      checkAttrs(transliteration, [key(xmlUri, "lang")]);
+      const language = locale(transliteration);
+      for (const textLine of elements(transliteration)) {
+        addPron(textLine, language, trackIndex, lineById, offset);
+      }
       trackIndex += 1;
     }
   }
