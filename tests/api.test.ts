@@ -250,4 +250,17 @@ describe("public dispatch", () => {
       expect(capabilities(format)).toEqual(expected);
     }
   );
+
+  test("returns isolated capability snapshots", () => {
+    const exposed = capabilities("lrc");
+    const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");
+
+    exposed.wordTiming = true;
+
+    expect(capabilities("lrc")).not.toBe(exposed);
+    expect(capabilities("lrc").wordTiming).toBeFalse();
+    expect(() => write(wordTimed, "lrc")).toThrow(
+      "lrc cannot represent word timing"
+    );
+  });
 });
