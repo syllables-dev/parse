@@ -63,8 +63,8 @@ export interface LyricsMeta {
 export interface LyricsAgent {
   /** the stable identifier referenced by {@link LyricsLine.agent}. */
   id: string;
-  /** the source agent category used by duet derivation and round trips. */
-  type: "person" | "group" | "other";
+  /** the raw source category, commonly `person`, `group`, or `other`. */
+  type: string;
 }
 
 /**
