@@ -330,6 +330,29 @@ describe("lqe writer", () => {
     });
   });
 
+  test("rejects a same-agent backing-only line without mutation", () => {
+    const doc = {
+      ...translatedDocument,
+      lines: [
+        translatedLine,
+        {
+          agent: "lead",
+          b: [{ begin: 3000, end: 3500, id: "l1b0", text: "Reply" }],
+          begin: 3000,
+          end: 3500,
+          id: "l1",
+          p: [],
+        },
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lqe cannot preserve backing-only line l1"
+    );
+    expect(doc).toEqual(before);
+  });
+
   test("sorts valid language tags and round-trips empty translations", () => {
     const written = write(translatedDocument);
 

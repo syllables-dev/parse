@@ -49,6 +49,23 @@ async function readFixture(fileName: string) {
   );
 }
 
+function makeLine(id: string, begin: number, text: string, track: "b" | "p") {
+  const syllable = {
+    begin,
+    end: begin + 500,
+    id: `${id}${track === "b" ? "b" : "w"}0`,
+    text,
+  };
+  return {
+    agent: "v1",
+    b: track === "b" ? [syllable] : [],
+    begin,
+    end: begin + 500,
+    id,
+    p: track === "p" ? [syllable] : [],
+  } satisfies LyricsLine;
+}
+
 describe("lys fixtures", () => {
   test.each(fixtureCases)(
     "reads and round-trips $fileName",
@@ -285,6 +302,40 @@ describe("lys writer", () => {
         "[8](Reply)(3500,500)",
       ].join("\n")
     );
+  });
+
+  test("preserves a leading backing-only line", () => {
+    const doc = {
+      agents: [{ id: "v1", type: "person" }],
+      lines: [
+        makeLine("l0", 1000, "Echo", "b"),
+        makeLine("l1", 2000, "Lead", "p"),
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("rejects a same-agent backing-only line without mutation", () => {
+    const doc = {
+      agents: [{ id: "v1", type: "person" }],
+      lines: [
+        makeLine("l0", 1000, "Lead", "p"),
+        makeLine("l1", 2000, "Echo", "b"),
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lys cannot preserve backing-only line l1"
+    );
+    expect(doc).toEqual(before);
   });
 
   test("emits only the by metadata tag", () => {

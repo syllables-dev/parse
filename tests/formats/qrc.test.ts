@@ -47,6 +47,28 @@ async function readFixture(fileName: string) {
   );
 }
 
+function makeLine(
+  id: string,
+  begin: number,
+  text: string,
+  track: "b" | "p" = "p"
+) {
+  const syllable = {
+    begin,
+    end: begin + 500,
+    id: `${id}${track === "b" ? "b" : "w"}0`,
+    text,
+  };
+  return {
+    agent: null,
+    b: track === "b" ? [syllable] : [],
+    begin,
+    end: begin + 500,
+    id,
+    p: track === "p" ? [syllable] : [],
+  } satisfies LyricsLine;
+}
+
 describe("qrc fixtures", () => {
   test.each(fixtureCases)(
     "reads and round-trips $fileName",
@@ -233,6 +255,49 @@ describe("qrc writer", () => {
     } satisfies LyricsDocument;
 
     expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("preserves adjacent wrapped primary lines", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [makeLine("l0", 1000, "(One)"), makeLine("l1", 2000, "（Two）")],
+    } satisfies LyricsDocument;
+
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("preserves a leading backing-only line", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [makeLine("l0", 1000, "Echo", "b"), makeLine("l1", 2000, "Lead")],
+    } satisfies LyricsDocument;
+
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test.each([
+    {
+      doc: {
+        ...wordDocument,
+        lines: [makeLine("l0", 1000, "One"), makeLine("l1", 2000, "(Two)")],
+      } satisfies LyricsDocument,
+      sequence: "an isolated wrapped primary",
+    },
+    {
+      doc: {
+        ...wordDocument,
+        lines: [
+          makeLine("l0", 1000, "One", "b"),
+          makeLine("l1", 2000, "Two", "b"),
+        ],
+      } satisfies LyricsDocument,
+      sequence: "adjacent backing-only lines",
+    },
+  ])("rejects $sequence without mutating the document", ({ doc }) => {
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow("qrc cannot preserve lyric row ownership");
+    expect(doc).toEqual(before);
   });
 
   test("round-trips every supported metadata field", () => {
