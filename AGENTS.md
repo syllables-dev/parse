@@ -61,6 +61,17 @@ Any-to-any conversion is `write(read(text))`; codecs never import each other, wi
 - Generic names are banned: `data`, `result`, `item`, `temp`, `obj`, `helper`, `process`, `handle`. Name the thing for what it is: `stamps`, `rows`, `syllables`.
 - Before finishing, make a deletion pass: remove every comment that restates code, every single-use variable that adds nothing, every branch that cannot be reached.
 
+## Tests
+
+- Every test must protect a real behavior: a format quirk, a genuine edge case, or a demonstrated bug. If a test cannot fail for a reason a user would care about, delete it.
+- Do not write tests that restate constants, mirror the implementation line by line, or assert that TypeScript types exist. Those pass forever and protect nothing.
+- Do not pad coverage. Ten sharp tests beat fifty shallow ones; coverage percentage is not a goal.
+- The two test shapes that matters:
+  - Fixture tests: real sample file in, expected document out.
+  - Round-trip tests: write(read(x)) is stable within the format's capability tier.
+- Real edge cases worth testing: BOM, CRLF, repeated timestamps, last-word end inheritance, parens inside word text, per-char CJK syllables, JSON preamble lines, LYS property integers, empty or whitespace-only lines.
+- Test through the public API. Do not export internals just to test them.
+
 ## Code quality
 
 Do the following steps after finishing any task:
