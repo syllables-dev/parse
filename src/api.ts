@@ -150,5 +150,5 @@ export function convert(
 
 /** returns the features preserved by the selected format writer. */
 export function capabilities(format: FormatId): FormatCapabilities {
-  return codecs[format].capabilities;
+  return { ...codecs[format].capabilities };
 }
