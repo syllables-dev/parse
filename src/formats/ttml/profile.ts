@@ -4,7 +4,6 @@ import type { XmlElement } from "../../internal/xml";
 
 const xmlnsUri = "http://www.w3.org/2000/xmlns/";
 const clockPattern = /^(?:(\d+):)?(\d+)(?:\.(\d{1,3}))?$/u;
-const offsetPattern = /^([+-]?)(.*)$/u;
 const languagePattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const nonSpace = /\S/u;
 
@@ -90,16 +89,21 @@ export function text(element: XmlElement) {
 }
 
 export function readTime(value: string, label: string) {
-  const match = clockPattern.exec(value);
-  if (!match) {
+  if (!clockPattern.test(value)) {
     throw new ParseError(`${label} has an invalid timestamp`);
   }
-  const minutes = match[1] === undefined ? 0 : toInt(match[1], label);
-  const seconds = toInt(match[2] ?? "", label);
-  if (match[1] !== undefined && seconds > 59) {
+  const colon = value.indexOf(":");
+  const dot = value.indexOf(".");
+  const minutes = colon < 0 ? 0 : toInt(value.slice(0, colon), label);
+  const seconds = toInt(
+    value.slice(colon + 1, dot < 0 ? value.length : dot),
+    label
+  );
+  if (colon >= 0 && seconds > 59) {
     throw new ParseError(`${label} seconds must be less than 60`);
   }
-  const millis = toInt((match[3] ?? "").padEnd(3, "0") || "0", label);
+  const millis =
+    dot < 0 ? 0 : toInt(value.slice(dot + 1).padEnd(3, "0"), label);
   const stamp = minutes * 60_000 + seconds * 1000 + millis;
   if (!Number.isSafeInteger(stamp)) {
     throw new ParseError(`${label} exceeds the safe integer range`);
@@ -108,12 +112,13 @@ export function readTime(value: string, label: string) {
 }
 
 export function readOffset(value: string) {
-  const match = offsetPattern.exec(value);
-  if (!match) {
-    throw new ParseError("invalid ttml lyric offset");
-  }
+  const sign = value.charAt(0);
   return (
-    (match[1] === "-" ? -1 : 1) * readTime(match[2] ?? "", "ttml lyric offset")
+    (sign === "-" ? -1 : 1) *
+    readTime(
+      sign === "-" || sign === "+" ? value.slice(1) : value,
+      "ttml lyric offset"
+    )
   );
 }
 

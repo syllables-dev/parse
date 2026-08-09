@@ -62,7 +62,11 @@ function readRow(
 ): LysRow | null {
   const metadata = metaTag.exec(raw.trim());
   if (metadata) {
-    tags.set((metadata[1] ?? "").toLowerCase(), (metadata[2] ?? "").trim());
+    const colon = metadata[0].indexOf(":");
+    tags.set(
+      metadata[0].slice(1, colon).toLowerCase(),
+      metadata[0].slice(colon + 1, -1).trim()
+    );
     return null;
   }
   const header = lineHeader.exec(raw);
@@ -72,11 +76,15 @@ function readRow(
     }
     return null;
   }
-  const property = toInt(header[1] ?? "", `lys line ${lineIndex + 1} property`);
+  const close = header[0].indexOf("]");
+  const property = toInt(
+    header[0].slice(1, close),
+    `lys line ${lineIndex + 1} property`
+  );
   if (property > 8) {
     throw new ParseError(`lys line ${lineIndex + 1} has an unknown property`);
   }
-  const body = header[2] ?? "";
+  const body = header[0].slice(close + 1);
   if (whitespace.test(body)) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
   }

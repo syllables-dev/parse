@@ -89,9 +89,14 @@ function readRows(text: string, songwriters: string[]): YrcRow[] {
       }
       continue;
     }
-    const begin = toInt(header[1] ?? "", `yrc line ${lineIndex + 1} start`);
+    const comma = header[0].indexOf(",");
+    const close = header[0].indexOf("]");
+    const begin = toInt(
+      header[0].slice(1, comma),
+      `yrc line ${lineIndex + 1} start`
+    );
     const duration = toInt(
-      header[2] ?? "",
+      header[0].slice(comma + 1, close),
       `yrc line ${lineIndex + 1} duration`
     );
     if (!Number.isSafeInteger(begin + duration)) {
@@ -103,7 +108,7 @@ function readRows(text: string, songwriters: string[]): YrcRow[] {
       begin,
       end: begin + duration,
       words: readYrcWords(
-        header[3] ?? "",
+        header[0].slice(close + 1),
         lineIndex + 1,
         begin,
         begin + duration

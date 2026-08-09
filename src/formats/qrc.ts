@@ -104,7 +104,11 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
   for (const [lineIndex, raw] of splitLines(text).entries()) {
     const metadata = metaTag.exec(raw.trim());
     if (metadata) {
-      tags.set((metadata[1] ?? "").toLowerCase(), (metadata[2] ?? "").trim());
+      const colon = metadata[0].indexOf(":");
+      tags.set(
+        metadata[0].slice(1, colon).toLowerCase(),
+        metadata[0].slice(colon + 1, -1).trim()
+      );
       continue;
     }
     const header = lineHeader.exec(raw);
@@ -115,9 +119,14 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
       continue;
     }
 
-    const begin = toInt(header[1] ?? "", `qrc line ${lineIndex + 1} start`);
+    const comma = header[0].indexOf(",");
+    const close = header[0].indexOf("]");
+    const begin = toInt(
+      header[0].slice(1, comma),
+      `qrc line ${lineIndex + 1} start`
+    );
     const duration = toInt(
-      header[2] ?? "",
+      header[0].slice(comma + 1, close),
       `qrc line ${lineIndex + 1} duration`
     );
     if (!Number.isSafeInteger(begin + duration)) {
@@ -126,7 +135,7 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
       );
     }
     const words = readTimedWords(
-      header[3] ?? "",
+      header[0].slice(close + 1),
       lineIndex + 1,
       begin,
       begin + duration

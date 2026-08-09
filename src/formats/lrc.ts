@@ -45,6 +45,19 @@ export const capabilities = {
   wordTiming: false,
 } satisfies FormatCapabilities;
 
+function readTime(marker: string) {
+  const colon = marker.indexOf(":");
+  const dot = marker.indexOf(".", colon + 1);
+  const secondColon = marker.indexOf(":", colon + 1);
+  const fraction = dot >= 0 ? dot : secondColon;
+  const end = marker.length - 1;
+  return readStamp(
+    marker.slice(1, colon),
+    marker.slice(colon + 1, fraction >= 0 ? fraction : end),
+    fraction >= 0 ? marker.slice(fraction + 1, end) : undefined
+  );
+}
+
 function readMeta(tags: Map<string, string>): LyricsMeta {
   const offsetText = tags.get("offset");
   let offset: number | undefined;
@@ -73,21 +86,17 @@ function readWords(body: string, lineEnd: number) {
   if (markers[0]?.index !== 0) {
     throw new ParseError("enhanced lrc text must begin with a word timestamp");
   }
-  return markers.map((marker, index) => ({
-    begin: readStamp(marker[1] ?? "", marker[2] ?? "", marker[3]),
-    end:
-      index + 1 < markers.length
-        ? readStamp(
-            markers[index + 1]?.[1] ?? "",
-            markers[index + 1]?.[2] ?? "",
-            markers[index + 1]?.[3]
-          )
-        : lineEnd,
-    text: body.slice(
-      (marker.index ?? 0) + marker[0].length,
-      markers[index + 1]?.index ?? body.length
-    ),
-  }));
+  return markers.map((marker, index) => {
+    const next = markers[index + 1];
+    return {
+      begin: readTime(marker[0]),
+      end: next ? readTime(next[0]) : lineEnd,
+      text: body.slice(
+        (marker.index ?? 0) + marker[0].length,
+        next?.index ?? body.length
+      ),
+    };
+  });
 }
 
 function readRows(
@@ -99,7 +108,11 @@ function readRows(
   for (const [lineIndex, raw] of splitLines(text).entries()) {
     const metadata = metaTag.exec(raw.trim());
     if (metadata) {
-      tags.set((metadata[1] ?? "").toLowerCase(), (metadata[2] ?? "").trim());
+      const colon = metadata[0].indexOf(":");
+      tags.set(
+        metadata[0].slice(1, colon).toLowerCase(),
+        metadata[0].slice(colon + 1, -1).trim()
+      );
       continue;
     }
 
@@ -108,9 +121,7 @@ function readRows(
     let consumed = 0;
     let timestamp = lineStamp.exec(raw);
     while (timestamp) {
-      stamps.push(
-        readStamp(timestamp[1] ?? "", timestamp[2] ?? "", timestamp[3])
-      );
+      stamps.push(readTime(timestamp[0]));
       consumed = lineStamp.lastIndex;
       timestamp = lineStamp.exec(raw);
     }

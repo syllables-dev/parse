@@ -26,8 +26,15 @@ export function readTimedWords(
   suffixStamp.lastIndex = 0;
   let marker = suffixStamp.exec(body);
   while (marker) {
-    const begin = toInt(marker[1] ?? "", `line ${lineNumber} word start`);
-    const duration = toInt(marker[2] ?? "", `line ${lineNumber} word duration`);
+    const comma = marker[0].indexOf(",");
+    const begin = toInt(
+      marker[0].slice(1, comma),
+      `line ${lineNumber} word start`
+    );
+    const duration = toInt(
+      marker[0].slice(comma + 1, -1),
+      `line ${lineNumber} word duration`
+    );
     if (!Number.isSafeInteger(begin + duration)) {
       throw new ParseError(
         `line ${lineNumber} word end exceeds the safe integer range`
@@ -66,11 +73,19 @@ export function readYrcWords(
   }
 
   return markers.map((marker, index) => {
-    if (marker[3] !== "0") {
+    const firstComma = marker[0].indexOf(",");
+    const secondComma = marker[0].indexOf(",", firstComma + 1);
+    if (marker[0].slice(secondComma + 1, -1) !== "0") {
       throw new ParseError(`line ${lineNumber} has an unsupported word flag`);
     }
-    const begin = toInt(marker[1] ?? "", `line ${lineNumber} word start`);
-    const duration = toInt(marker[2] ?? "", `line ${lineNumber} word duration`);
+    const begin = toInt(
+      marker[0].slice(1, firstComma),
+      `line ${lineNumber} word start`
+    );
+    const duration = toInt(
+      marker[0].slice(firstComma + 1, secondComma),
+      `line ${lineNumber} word duration`
+    );
     if (!Number.isSafeInteger(begin + duration)) {
       throw new ParseError(
         `line ${lineNumber} word end exceeds the safe integer range`

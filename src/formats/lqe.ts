@@ -84,7 +84,9 @@ function readPreamble(lines: string[], firstLine: number) {
   ) {
     const raw = lines[lineIndex] ?? "";
     const header = sectionHeader.exec(raw.trim());
-    const name = header?.[1]?.toLowerCase();
+    const name = header
+      ? header[0].slice(1, header[0].indexOf(":")).toLowerCase()
+      : undefined;
     if (isSection(name)) {
       return { lineIndex, metadata, version };
     }
@@ -92,17 +94,21 @@ function readPreamble(lines: string[], firstLine: number) {
       continue;
     }
     const tag = metadataHeader.exec(raw.trim());
-    const tagName = tag?.[1]?.toLowerCase();
-    if (tagName === "version") {
-      if (version !== undefined) {
-        throw new ParseError("lqe contains duplicate version tags");
+    if (tag) {
+      const colon = tag[0].indexOf(":");
+      const tagName = tag[0].slice(1, colon).toLowerCase();
+      const value = tag[0].slice(colon + 1, -1).trim();
+      if (tagName === "version") {
+        if (version !== undefined) {
+          throw new ParseError("lqe contains duplicate version tags");
+        }
+        version = value;
+        continue;
       }
-      version = tag?.[2]?.trim();
-      continue;
-    }
-    if (tagName && supportedMetadata.has(tagName)) {
-      metadata.set(tagName, tag?.[2]?.trim() ?? "");
-      continue;
+      if (supportedMetadata.has(tagName)) {
+        metadata.set(tagName, value);
+        continue;
+      }
     }
     throw new ParseError(`unsupported lqe header on line ${lineIndex + 1}`);
   }
@@ -115,17 +121,28 @@ function readSectionBodies(lines: string[], firstLine: number) {
   for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex += 1) {
     const raw = lines[lineIndex] ?? "";
     const header = sectionHeader.exec(raw.trim());
-    const name = header?.[1]?.toLowerCase();
-    if (isSection(name)) {
-      section = {
-        attributes: readAttributes(header?.[2] ?? "", lineIndex + 1),
-        body: [],
-        kind: name,
-      };
-      sections.push(section);
-    } else if (header && name && !supportedMetadata.has(name)) {
-      throw new ParseError(`unsupported lqe section on line ${lineIndex + 1}`);
-    } else if (section) {
+    if (header) {
+      const colon = header[0].indexOf(":");
+      const name = header[0].slice(1, colon).toLowerCase();
+      if (isSection(name)) {
+        section = {
+          attributes: readAttributes(
+            header[0].slice(colon + 1, -1).trim(),
+            lineIndex + 1
+          ),
+          body: [],
+          kind: name,
+        };
+        sections.push(section);
+        continue;
+      }
+      if (!supportedMetadata.has(name)) {
+        throw new ParseError(
+          `unsupported lqe section on line ${lineIndex + 1}`
+        );
+      }
+    }
+    if (section) {
       section.body.push(raw);
     } else if (raw.trim().length > 0) {
       throw new ParseError(`malformed lqe content on line ${lineIndex + 1}`);
@@ -154,7 +171,10 @@ function checkBody(lines: string[], row: RegExp, kind: string) {
     if (trimmed.length === 0 || row.test(trimmed)) {
       continue;
     }
-    const tag = metadataHeader.exec(trimmed)?.[1]?.toLowerCase();
+    const header = metadataHeader.exec(trimmed);
+    const tag = header
+      ? header[0].slice(1, header[0].indexOf(":")).toLowerCase()
+      : undefined;
     if (!(tag && supportedMetadata.has(tag))) {
       throw new ParseError(`malformed lqe ${kind} row ${lineIndex + 1}`);
     }
@@ -250,7 +270,7 @@ function addTranslation(
         ...(existing?.b !== undefined && { b: existing.b }),
         ...(target.track === "p"
           ? { p: text }
-          : { b: wrapped ? (wrapped[1] ?? wrapped[2] ?? "") : text }),
+          : { b: wrapped ? wrapped[0].slice(1, -1) : text }),
       },
     };
   }

@@ -82,7 +82,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   for (const [lineIndex, physicalLine] of splitLines(text).entries()) {
     const metadata = metaTag.exec(physicalLine.trim());
     if (metadata) {
-      tags.set((metadata[1] ?? "").toLowerCase(), (metadata[2] ?? "").trim());
+      const colon = metadata[0].indexOf(":");
+      tags.set(
+        metadata[0].slice(1, colon).toLowerCase(),
+        metadata[0].slice(colon + 1, -1).trim()
+      );
       continue;
     }
 
@@ -99,13 +103,24 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
       );
     }
     rows.push({
-      markers: matches.map((match, markerIndex) => ({
-        begin: readStamp(match[1] ?? "", match[2] ?? "", match[3]),
-        text: physicalLine.slice(
-          (match.index ?? 0) + match[0].length,
-          matches[markerIndex + 1]?.index ?? physicalLine.length
-        ),
-      })),
+      markers: matches.map((match, markerIndex) => {
+        const colon = match[0].indexOf(":");
+        const dot = match[0].indexOf(".", colon + 1);
+        const secondColon = match[0].indexOf(":", colon + 1);
+        const fraction = dot >= 0 ? dot : secondColon;
+        const end = match[0].length - 1;
+        return {
+          begin: readStamp(
+            match[0].slice(1, colon),
+            match[0].slice(colon + 1, fraction >= 0 ? fraction : end),
+            fraction >= 0 ? match[0].slice(fraction + 1, end) : undefined
+          ),
+          text: physicalLine.slice(
+            (match.index ?? 0) + match[0].length,
+            matches[markerIndex + 1]?.index ?? physicalLine.length
+          ),
+        };
+      }),
     });
   }
 
