@@ -6,6 +6,7 @@
  */
 
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import {
   readStamp,
   splitLines,
@@ -29,7 +30,6 @@ interface EslrcRow {
   markers: EslrcMarker[];
 }
 
-const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const stamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gu;
 const reservedStamp = /\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
 const signPrefix = /^[+-]/u;
@@ -37,6 +37,7 @@ const lastLineMs = 5000;
 
 export const capabilities = {
   agents: false,
+  author: true,
   backing: false,
   pronunciation: false,
   translation: false,
@@ -46,13 +47,9 @@ export const capabilities = {
 function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
   const rows: EslrcRow[] = [];
   for (const [lineIndex, physicalLine] of splitLines(text).entries()) {
-    const metadata = metaTag.exec(physicalLine.trim());
-    if (metadata) {
-      const colon = metadata[0].indexOf(":");
-      tags.set(
-        metadata[0].slice(1, colon).toLowerCase(),
-        metadata[0].slice(colon + 1, -1).trim()
-      );
+    const tag = readTag(physicalLine);
+    if (tag) {
+      tags.set(tag.name, tag.text);
       continue;
     }
 
@@ -104,6 +101,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const rows = readRows(text, tags);
   const album = tags.get("al");
   const artist = tags.get("ar");
+  const author = tags.get("by");
   const offsetText = tags.get("offset");
   let offset: number | undefined;
   if (offsetText !== undefined) {
@@ -120,6 +118,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const meta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
+    ...(author && { author }),
     ...(offset !== undefined && { offset }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
@@ -202,7 +201,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    "[by:]",
+    `[by:${doc.meta.author ?? ""}]`,
     ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
     ...(doc.meta.songwriters?.[0] === undefined
       ? []

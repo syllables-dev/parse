@@ -10,6 +10,7 @@
  */
 
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import {
   readStamp,
   splitLines,
@@ -30,7 +31,6 @@ interface LrcRow {
   order: number;
 }
 
-const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineStamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gy;
 const wordStamp = /<(\d+):(\d{1,2})(?:[.:](\d{1,3}))?>/gu;
 const reservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
@@ -39,6 +39,7 @@ const lastLineMs = 5000;
 
 export const capabilities = {
   agents: false,
+  author: true,
   backing: false,
   pronunciation: false,
   translation: false,
@@ -86,13 +87,9 @@ function readRows(
 ): LrcRow[] {
   const rows: LrcRow[] = [];
   for (const [lineIndex, raw] of splitLines(text).entries()) {
-    const metadata = metaTag.exec(raw.trim());
-    if (metadata) {
-      const colon = metadata[0].indexOf(":");
-      tags.set(
-        metadata[0].slice(1, colon).toLowerCase(),
-        metadata[0].slice(colon + 1, -1).trim()
-      );
+    const tag = readTag(raw);
+    if (tag) {
+      tags.set(tag.name, tag.text);
       continue;
     }
 
@@ -175,9 +172,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
       );
   }
   const songwriters = tags.get("au");
+  const author = tags.get("by");
   const meta = {
     ...(tags.has("al") && { album: tags.get("al") }),
     ...(tags.has("ar") && { artist: tags.get("ar") }),
+    ...(author && { author }),
     ...(offset !== undefined && { offset }),
     ...(songwriters !== undefined && { songwriters: [songwriters] }),
     ...(tags.has("ti") && { title: tags.get("ti") }),
@@ -209,7 +208,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     }
   }
   return [
-    "[by:]",
+    `[by:${doc.meta.author ?? ""}]`,
     ...doc.lines.map(
       (line) =>
         `[${writeStamp(line.begin)}]${line.p

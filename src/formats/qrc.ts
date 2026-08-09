@@ -6,6 +6,7 @@
  */
 
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
@@ -36,13 +37,13 @@ interface QrcWriteLine {
   p: QrcWriteRow[];
 }
 
-const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const signPrefix = /^[+-]/u;
 
 export const capabilities = {
   agents: false,
+  author: true,
   backing: true,
   pronunciation: false,
   translation: false,
@@ -83,13 +84,9 @@ function makeTrack(
 function readRows(text: string, tags: Map<string, string>): QrcRow[] {
   const rows: QrcRow[] = [];
   for (const [lineIndex, raw] of splitLines(text).entries()) {
-    const metadata = metaTag.exec(raw.trim());
-    if (metadata) {
-      const colon = metadata[0].indexOf(":");
-      tags.set(
-        metadata[0].slice(1, colon).toLowerCase(),
-        metadata[0].slice(colon + 1, -1).trim()
-      );
+    const tag = readTag(raw);
+    if (tag) {
+      tags.set(tag.name, tag.text);
       continue;
     }
     const header = lineHeader.exec(raw);
@@ -178,6 +175,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const rows = readRows(text, tags);
   const album = tags.get("al");
   const artist = tags.get("ar");
+  const author = tags.get("by");
   const offsetText = tags.get("offset");
   let offset: number | undefined;
   if (offsetText !== undefined) {
@@ -194,6 +192,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const meta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
+    ...(author && { author }),
     ...(offset !== undefined && { offset }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
@@ -305,7 +304,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    "[by:]",
+    `[by:${doc.meta.author ?? ""}]`,
     ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
     ...(doc.meta.songwriters?.[0] === undefined
       ? []

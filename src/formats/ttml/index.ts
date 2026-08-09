@@ -7,6 +7,7 @@ export const write = writeTtml;
 
 export const capabilities = {
   agents: true,
+  author: false,
   backing: true,
   pronunciation: true,
   translation: true,

@@ -6,6 +6,7 @@
  */
 
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import { readYrcWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
@@ -28,6 +29,7 @@ const creditLabel = /^(?:作词|作詞|作曲)\s*[:：]\s*/u;
 
 export const capabilities = {
   agents: false,
+  author: true,
   backing: false,
   pronunciation: false,
   translation: false,
@@ -70,7 +72,11 @@ function readCredits(raw: string, lineNumber: number): string[] {
     .filter((name) => name.length > 0);
 }
 
-function readRows(text: string, songwriters: string[]): YrcRow[] {
+function readRows(
+  text: string,
+  songwriters: string[],
+  tags: Map<string, string>
+): YrcRow[] {
   const rows: YrcRow[] = [];
   for (const [lineIndex, raw] of splitLines(text).entries()) {
     const trimmedStart = raw.trimStart();
@@ -80,6 +86,11 @@ function readRows(text: string, songwriters: string[]): YrcRow[] {
           (songwriter) => !songwriters.includes(songwriter)
         )
       );
+      continue;
+    }
+    const tag = readTag(raw);
+    if (tag?.name === "by") {
+      tags.set(tag.name, tag.text);
       continue;
     }
     const header = lineHeader.exec(raw);
@@ -126,7 +137,9 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     throw new Error("expandRepeats is available for lrc input");
   }
   const songwriters: string[] = [];
-  const rows = readRows(text, songwriters);
+  const tags = new Map<string, string>();
+  const rows = readRows(text, songwriters, tags);
+  const author = tags.get("by");
   return {
     agents: [],
     lines: rows.map((row, lineIndex) => ({
@@ -142,7 +155,10 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
         text: word.text,
       })),
     })),
-    meta: songwriters.length > 0 ? { songwriters } : {},
+    meta: {
+      ...(author && { author }),
+      ...(songwriters.length > 0 && { songwriters }),
+    },
     timing: "word",
     version: 1,
   };
@@ -182,6 +198,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     : [];
   return [
     ...preamble,
+    `[by:${doc.meta.author ?? ""}]`,
     ...doc.lines.map((line) => {
       const duration = line.end - line.begin;
       checkTime(duration, `line ${line.id} duration`);

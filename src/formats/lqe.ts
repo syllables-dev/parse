@@ -1,4 +1,5 @@
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import { splitLines } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
@@ -43,6 +44,7 @@ const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
 
 export const capabilities = {
   agents: true,
+  author: true,
   backing: true,
   pronunciation: false,
   translation: true,
@@ -74,20 +76,17 @@ function readPreamble(lines: string[], firstLine: number) {
     if (raw.trim().length === 0) {
       continue;
     }
-    const tag = metadataHeader.exec(raw.trim());
+    const tag = readTag(raw);
     if (tag) {
-      const colon = tag[0].indexOf(":");
-      const tagName = tag[0].slice(1, colon).toLowerCase();
-      const value = tag[0].slice(colon + 1, -1).trim();
-      if (tagName === "version") {
+      if (tag.name === "version") {
         if (version !== undefined) {
           throw new ParseError("lqe contains duplicate version tags");
         }
-        version = value;
+        version = tag.text;
         continue;
       }
-      if (supportedMetadata.has(tagName)) {
-        metadata.set(tagName, value);
+      if (supportedMetadata.has(tag.name)) {
+        metadata.set(tag.name, tag.text);
         continue;
       }
     }
@@ -381,7 +380,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   const sections = [
     containerMark,
     "[version:1.0]",
-    "[by:]",
+    `[by:${doc.meta.author ?? ""}]`,
     "",
     "[lyrics: format@Lyricify Syllable]",
     writeLys({

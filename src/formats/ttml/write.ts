@@ -94,6 +94,9 @@ function checkDoc(doc: LyricsDocument) {
       "ttml requires a version 1 line-timed or word-timed document"
     );
   }
+  if (doc.meta.author !== undefined) {
+    throw new Error("ttml cannot represent a lyric file author");
+  }
   if (
     doc.meta.title !== undefined ||
     doc.meta.artist !== undefined ||

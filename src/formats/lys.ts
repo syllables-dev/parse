@@ -6,6 +6,7 @@
  */
 
 import { ParseError } from "../errors";
+import { readTag } from "../internal/lyric-tags";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
@@ -28,7 +29,6 @@ interface LysRow {
   wrapped: boolean;
 }
 
-const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
@@ -36,6 +36,7 @@ const propertyAgents = [null, "v1", "v2", null, "v1", "v2", null, "v1", "v2"];
 
 export const capabilities = {
   agents: true,
+  author: true,
   backing: true,
   pronunciation: false,
   translation: false,
@@ -61,13 +62,9 @@ function readRow(
   lineIndex: number,
   tags: Map<string, string>
 ): LysRow | null {
-  const metadata = metaTag.exec(raw.trim());
-  if (metadata) {
-    const colon = metadata[0].indexOf(":");
-    tags.set(
-      metadata[0].slice(1, colon).toLowerCase(),
-      metadata[0].slice(colon + 1, -1).trim()
-    );
+  const tag = readTag(raw);
+  if (tag) {
+    tags.set(tag.name, tag.text);
     return null;
   }
   const header = lineHeader.exec(raw);
@@ -164,6 +161,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const lines = makeLines(rows);
   const album = tags.get("al");
   const artist = tags.get("ar");
+  const author = tags.get("by");
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const agents: LyricsDocument["agents"] = [];
@@ -176,6 +174,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const meta: LyricsMeta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
+    ...(author && { author }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };
@@ -251,5 +250,5 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       ...(line.b.length > 0 ? [writeRow(side + 6, line.b, true)] : []),
     ];
   });
-  return ["[by:]", ...lyricRows].join("\n");
+  return [`[by:${doc.meta.author ?? ""}]`, ...lyricRows].join("\n");
 }

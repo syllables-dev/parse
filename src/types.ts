@@ -49,6 +49,8 @@ export interface LyricsMeta {
   album?: string;
   /** the primary artist name. */
   artist?: string;
+  /** the lyric file author. */
+  author?: string;
   /** the source offset in milliseconds, already applied to document timestamps. */
   offset?: number;
   /** songwriter names in source order. */
@@ -141,6 +143,8 @@ export interface Problem {
 export interface FormatCapabilities {
   /** whether the format preserves vocal agent attribution. */
   agents: boolean;
+  /** whether the format preserves lyric file authorship. */
+  author: boolean;
   /** whether the format preserves a separate backing-vocal track. */
   backing: boolean;
   /** whether the format preserves timed pronunciation tracks. */

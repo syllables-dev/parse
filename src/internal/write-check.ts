@@ -27,6 +27,12 @@ export function checkWrite(
   format: FormatId,
   capabilities: FormatCapabilities
 ): void {
+  if (!capabilities.author && doc.meta.author !== undefined) {
+    throw new Error(`${format} cannot represent a lyric file author`);
+  }
+  if (doc.meta.author !== undefined && lineBreak.test(doc.meta.author)) {
+    throw new Error(`${format} cannot represent line breaks in an author`);
+  }
   if (!capabilities.wordTiming && doc.timing === "word") {
     throw new Error(`${format} cannot represent word timing`);
   }
