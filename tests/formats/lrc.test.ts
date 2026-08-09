@@ -142,6 +142,54 @@ describe("lrc reader", () => {
 });
 
 describe("lrc writer", () => {
+  test("rejects empty documents", () => {
+    expect(() => write({ ...lineDocument, lines: [] })).toThrow(
+      "lrc cannot represent an empty document"
+    );
+  });
+
+  test.each([
+    { message: "line breaks", text: "Hel\nlo" },
+    { message: "reserved marks", text: "Hel<00:01.500>lo" },
+  ])("rejects $message without mutating the document", ({ message, text }) => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        {
+          ...lyricLine,
+          p: [{ begin: 1000, end: 6000, id: "word", text }],
+        },
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(`lrc cannot represent ${message} in text`);
+    expect(doc).toEqual(before);
+  });
+
+  test("preserves literal angle and square brackets", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        {
+          ...lyricLine,
+          p: [
+            {
+              begin: 1000,
+              end: 6000,
+              id: "word",
+              text: "Hello <verse> [chorus]",
+            },
+          ],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(read(write(doc)).lines[0]?.p[0]?.text).toBe(
+      "Hello <verse> [chorus]"
+    );
+  });
+
   test("emits only the by metadata tag", () => {
     const doc = {
       ...lineDocument,

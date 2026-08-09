@@ -117,6 +117,53 @@ describe("eslrc reader", () => {
 });
 
 describe("eslrc writer", () => {
+  test("rejects empty documents", () => {
+    expect(() => write({ ...wordDocument, lines: [] })).toThrow(
+      "eslrc cannot represent an empty document"
+    );
+  });
+
+  test.each([
+    { message: "line breaks", text: "Hel\rlo" },
+    { message: "reserved marks", text: "Hel[00:01.500]lo" },
+  ])("rejects $message without mutating the document", ({ message, text }) => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          p: lyricLine.p.map((syllable, index) => ({
+            ...syllable,
+            text: index === 0 ? text : syllable.text,
+          })),
+        },
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      `eslrc cannot represent ${message} in text`
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test("preserves literal square brackets", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          p: lyricLine.p.map((syllable, index) => ({
+            ...syllable,
+            text: index === 0 ? "Hel [chorus]" : syllable.text,
+          })),
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(read(write(doc))).toEqual(doc);
+  });
+
   test("round-trips every supported metadata field", () => {
     const doc = {
       ...wordDocument,

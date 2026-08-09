@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import { type LyricsDocument, type LyricsLine, ParseError } from "../../src";
+import {
+  createDocument,
+  type LyricsDocument,
+  type LyricsLine,
+  ParseError,
+} from "../../src";
 import { read, write } from "../../src/formats/ttml";
 
 const ttmlUri = "http://www.w3.org/ns/ttml";
@@ -523,6 +528,12 @@ describe("ttml reader", () => {
 });
 
 describe("ttml writer", () => {
+  test("round-trips an empty document", () => {
+    const doc = createDocument();
+
+    expect(read(write(doc))).toEqual(doc);
+  });
+
   test("escapes opaque ids and round-trips every representable field", () => {
     const lineId = "line&\"'<tag>";
     const agentId = "voice&\"'<tag>";

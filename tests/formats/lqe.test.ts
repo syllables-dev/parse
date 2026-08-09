@@ -235,6 +235,101 @@ describe("lqe reader", () => {
 });
 
 describe("lqe writer", () => {
+  test("rejects empty documents", () => {
+    expect(() => write({ ...translatedDocument, lines: [] })).toThrow(
+      "lqe cannot represent an empty document"
+    );
+  });
+
+  test.each([
+    {
+      doc: {
+        ...translatedDocument,
+        lines: [
+          {
+            ...translatedLine,
+            p: translatedLine.p.map((syllable) => ({
+              ...syllable,
+              text: "Lead\nreply",
+            })),
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "line breaks in lyric text",
+    },
+    {
+      doc: {
+        ...translatedDocument,
+        lines: [
+          {
+            ...translatedLine,
+            b: translatedLine.b.map((syllable) => ({
+              ...syllable,
+              text: "Echo(1200,300)",
+            })),
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "reserved lyric marks",
+    },
+    {
+      doc: {
+        ...translatedDocument,
+        lines: [
+          {
+            ...translatedLine,
+            translations: { ja: { p: "meaning\rreply" } },
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "line breaks in translation text",
+    },
+    {
+      doc: {
+        ...translatedDocument,
+        lines: [
+          {
+            ...translatedLine,
+            translations: {
+              ja: { b: "echo<00:01.200>reply", p: "meaning" },
+            },
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "reserved translation marks",
+    },
+  ])("rejects $message without mutating the document", ({ doc, message }) => {
+    const before = structuredClone(doc);
+    const error = message.startsWith("line breaks")
+      ? "lqe cannot represent line breaks in text"
+      : "lqe cannot represent reserved marks in text";
+
+    expect(() => write(doc)).toThrow(error);
+    expect(doc).toEqual(before);
+  });
+
+  test("preserves literal punctuation in lyrics and translations", () => {
+    const doc = {
+      ...translatedDocument,
+      lines: [
+        {
+          ...translatedLine,
+          p: translatedLine.p.map((syllable) => ({
+            ...syllable,
+            text: "Lead (live) [mix]",
+          })),
+          translations: { ja: { p: "意味 <verse> [note]" } },
+        },
+      ],
+    } satisfies LyricsDocument;
+    const restored = read(write(doc));
+
+    expect(restored.lines[0]?.p[0]?.text).toBe("Lead (live) [mix]");
+    expect(restored.lines[0]).toMatchObject({
+      translations: { ja: { p: "意味 <verse> [note]" } },
+    });
+  });
+
   test("sorts valid language tags and round-trips empty translations", () => {
     const written = write(translatedDocument);
 
