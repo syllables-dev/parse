@@ -4,9 +4,204 @@
  *
  * [ti:Title]
  * [ar:Artist]
- * 
+ *
  * [00:12.00]Hello world
  * [00:15.30][01:02.10]repeated chorus line
  */
 
-export {};
+import { ParseError } from "../errors";
+import {
+  readStamp,
+  splitLines,
+  toInt,
+  writeStamp,
+} from "../internal/timestamps";
+import { checkWrite } from "../internal/write-check";
+import type {
+  FormatCapabilities,
+  LyricsDocument,
+  LyricsMeta,
+  ReadOptions,
+  WriteOptions,
+} from "../types";
+
+interface LrcRow {
+  begin: number;
+  body: string;
+  order: number;
+}
+
+const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
+const lineStamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gy;
+const wordStamp = /<(\d+):(\d{1,2})(?:[.:](\d{1,3}))?>/gu;
+const signPrefix = /^[+-]/u;
+const lastLineMs = 5000;
+
+export const capabilities = {
+  agents: false,
+  backing: false,
+  pronunciation: false,
+  translation: false,
+  wordTiming: false,
+} satisfies FormatCapabilities;
+
+function readMeta(tags: Map<string, string>): LyricsMeta {
+  const offsetText = tags.get("offset");
+  let offset: number | undefined;
+  if (offsetText !== undefined) {
+    const sign = offsetText.startsWith("-") ? -1 : 1;
+    const magnitudeText = signPrefix.test(offsetText)
+      ? offsetText.slice(1)
+      : offsetText;
+    offset = sign * toInt(magnitudeText, "lrc offset");
+  }
+  const songwriters = tags.get("au");
+  return {
+    ...(tags.has("al") && { album: tags.get("al") }),
+    ...(tags.has("ar") && { artist: tags.get("ar") }),
+    ...(offset !== undefined && { offset }),
+    ...(songwriters !== undefined && { songwriters: [songwriters] }),
+    ...(tags.has("ti") && { title: tags.get("ti") }),
+  };
+}
+
+function readWords(body: string, lineEnd: number) {
+  const markers = [...body.matchAll(wordStamp)];
+  if (markers.length === 0) {
+    return [];
+  }
+  if (markers[0]?.index !== 0) {
+    throw new ParseError("enhanced lrc text must begin with a word timestamp");
+  }
+  return markers.map((marker, index) => ({
+    begin: readStamp(marker[1] ?? "", marker[2] ?? "", marker[3]),
+    end:
+      index + 1 < markers.length
+        ? readStamp(
+            markers[index + 1]?.[1] ?? "",
+            markers[index + 1]?.[2] ?? "",
+            markers[index + 1]?.[3]
+          )
+        : lineEnd,
+    text: body.slice(
+      (marker.index ?? 0) + marker[0].length,
+      markers[index + 1]?.index ?? body.length
+    ),
+  }));
+}
+
+function readRows(
+  text: string,
+  tags: Map<string, string>,
+  expandRepeats: boolean
+): LrcRow[] {
+  const rows: LrcRow[] = [];
+  for (const [lineIndex, raw] of splitLines(text).entries()) {
+    const metadata = metaTag.exec(raw.trim());
+    if (metadata) {
+      tags.set((metadata[1] ?? "").toLowerCase(), (metadata[2] ?? "").trim());
+      continue;
+    }
+
+    lineStamp.lastIndex = 0;
+    const stamps: number[] = [];
+    let consumed = 0;
+    let timestamp = lineStamp.exec(raw);
+    while (timestamp) {
+      stamps.push(
+        readStamp(timestamp[1] ?? "", timestamp[2] ?? "", timestamp[3])
+      );
+      consumed = lineStamp.lastIndex;
+      timestamp = lineStamp.exec(raw);
+    }
+    if (stamps.length === 0) {
+      if (raw.trim().length > 0 && raw.startsWith("[")) {
+        throw new ParseError(`malformed lrc line ${lineIndex + 1}`);
+      }
+      continue;
+    }
+
+    const body = raw.slice(consumed);
+    const selectedStamps = expandRepeats ? stamps : stamps.slice(0, 1);
+    for (const begin of selectedStamps) {
+      rows.push({ begin, body, order: lineIndex });
+    }
+  }
+  if (rows.length === 0) {
+    throw new ParseError("input contains no recognizable lrc lyric lines");
+  }
+  rows.sort(
+    (left, right) => left.begin - right.begin || left.order - right.order
+  );
+  return rows;
+}
+
+function makeLines(rows: LrcRow[], offset: number) {
+  let wordTimed = false;
+  const lines = rows.map((row, lineIndex) => {
+    const sourceEnd = rows[lineIndex + 1]?.begin ?? row.begin + lastLineMs;
+    const words = readWords(row.body, sourceEnd);
+    wordTimed ||= words.length > 0;
+    return {
+      agent: null,
+      b: [],
+      begin: row.begin - offset,
+      end: sourceEnd - offset,
+      id: `l${lineIndex}`,
+      p:
+        words.length > 0
+          ? words.map((word, wordIndex) => ({
+              begin: word.begin - offset,
+              end: word.end - offset,
+              id: `l${lineIndex}w${wordIndex}`,
+              text: word.text,
+            }))
+          : [
+              {
+                begin: row.begin - offset,
+                end: sourceEnd - offset,
+                id: `l${lineIndex}w0`,
+                text: row.body,
+              },
+            ],
+    };
+  });
+  return { lines, wordTimed };
+}
+
+export function read(text: string, options: ReadOptions = {}): LyricsDocument {
+  const tags = new Map<string, string>();
+  const rows = readRows(text, tags, options.expandRepeats ?? false);
+  const meta = readMeta(tags);
+  const { lines, wordTimed } = makeLines(rows, meta.offset ?? 0);
+  return {
+    agents: [],
+    lines,
+    meta,
+    timing: wordTimed ? "word" : "line",
+    version: 1,
+  };
+}
+
+export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
+  if (Object.keys(options).length > 0) {
+    throw new Error("lrc write options are unsupported");
+  }
+  checkWrite(doc, "lrc", capabilities);
+  for (const [lineIndex, line] of doc.lines.entries()) {
+    const expectedEnd =
+      doc.lines[lineIndex + 1]?.begin ?? line.begin + lastLineMs;
+    if (line.end !== expectedEnd) {
+      throw new Error(`lrc cannot represent the end time of line ${line.id}`);
+    }
+  }
+  return [
+    "[by:]",
+    ...doc.lines.map(
+      (line) =>
+        `[${writeStamp(line.begin)}]${line.p
+          .map((syllable) => syllable.text)
+          .join("")}`
+    ),
+  ].join("\n");
+}
