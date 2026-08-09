@@ -1,6 +1,6 @@
 import { ParseError } from "../errors";
 import { splitLines } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -35,6 +35,8 @@ const metadataHeader = /^\[([A-Za-z]+):(.*)\]$/u;
 const lrcRow = /^(?:\[\d+:\d{1,2}(?:[.:]\d{1,3})?\])+/u;
 const lysRow = /^\[\d+\]/u;
 const languageTag = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
+const lrcReservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
+const lysReservedStamp = /\(\d+,\d+\)/u;
 const offsetTag = /^\[offset:.*\]$/iu;
 const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
 const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
@@ -354,7 +356,19 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("lqe write options are unsupported");
   }
+  checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
+  for (const line of doc.lines) {
+    for (const syllable of [...line.p, ...line.b]) {
+      checkText(syllable.text, "lqe", lysReservedStamp);
+    }
+    for (const translation of Object.values(line.translations ?? {})) {
+      checkText(translation.p, "lqe", lrcReservedStamp);
+      if (translation.b !== undefined) {
+        checkText(translation.b, "lqe", lrcReservedStamp);
+      }
+    }
+  }
   const sections = [
     containerMark,
     "[version:1.0]",

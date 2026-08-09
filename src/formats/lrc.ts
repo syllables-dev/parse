@@ -16,7 +16,7 @@ import {
   toInt,
   writeStamp,
 } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -33,6 +33,7 @@ interface LrcRow {
 const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineStamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gy;
 const wordStamp = /<(\d+):(\d{1,2})(?:[.:](\d{1,3}))?>/gu;
+const reservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
 const signPrefix = /^[+-]/u;
 const lastLineMs = 5000;
 
@@ -195,8 +196,12 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("lrc write options are unsupported");
   }
+  checkLines(doc, "lrc");
   checkWrite(doc, "lrc", capabilities);
   for (const [lineIndex, line] of doc.lines.entries()) {
+    for (const syllable of line.p) {
+      checkText(syllable.text, "lrc", reservedStamp);
+    }
     const expectedEnd =
       doc.lines[lineIndex + 1]?.begin ?? line.begin + lastLineMs;
     if (line.end !== expectedEnd) {

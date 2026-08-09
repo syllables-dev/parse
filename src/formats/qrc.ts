@@ -8,7 +8,7 @@
 import { ParseError } from "../errors";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -27,6 +27,7 @@ interface QrcRow {
 
 const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
+const reservedStamp = /\(\d+,\d+\)/u;
 const signPrefix = /^[+-]/u;
 
 export const capabilities = {
@@ -216,7 +217,13 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("qrc write options are unsupported");
   }
+  checkLines(doc, "qrc");
   checkWrite(doc, "qrc", capabilities);
+  for (const line of doc.lines) {
+    for (const syllable of [...line.p, ...line.b]) {
+      checkText(syllable.text, "qrc", reservedStamp);
+    }
+  }
   const offset = doc.meta.offset ?? 0;
   const lyricRows = doc.lines.flatMap((line) => {
     const rows =

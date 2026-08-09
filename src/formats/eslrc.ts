@@ -12,7 +12,7 @@ import {
   toInt,
   writeStamp,
 } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -31,6 +31,7 @@ interface EslrcRow {
 
 const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const stamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gu;
+const reservedStamp = /\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
 const signPrefix = /^[+-]/u;
 const lastLineMs = 5000;
 
@@ -186,7 +187,13 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("eslrc write options are unsupported");
   }
+  checkLines(doc, "eslrc");
   checkWrite(doc, "eslrc", capabilities);
+  for (const line of doc.lines) {
+    for (const syllable of line.p) {
+      checkText(syllable.text, "eslrc", reservedStamp);
+    }
+  }
   const offset = doc.meta.offset ?? 0;
   if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
     throw new Error("eslrc cannot represent multiple songwriters");

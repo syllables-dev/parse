@@ -8,7 +8,7 @@
 import { ParseError } from "../errors";
 import { readYrcWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -23,6 +23,7 @@ interface YrcRow {
 }
 
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
+const reservedStamp = /\(\d+,\d+,-?\d+\)/u;
 const creditLabel = /^(?:作词|作詞|作曲)\s*[:：]\s*/u;
 
 export const capabilities = {
@@ -151,7 +152,13 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("yrc write options are unsupported");
   }
+  checkLines(doc, "yrc");
   checkWrite(doc, "yrc", capabilities);
+  for (const line of doc.lines) {
+    for (const syllable of line.p) {
+      checkText(syllable.text, "yrc", reservedStamp);
+    }
+  }
   if (
     doc.meta.title !== undefined ||
     doc.meta.artist !== undefined ||

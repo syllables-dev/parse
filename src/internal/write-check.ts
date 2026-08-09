@@ -1,6 +1,27 @@
 import type { FormatCapabilities, FormatId, LyricsDocument } from "../types";
 import { checkTime } from "./timestamps";
 
+const lineBreak = /[\r\n]/u;
+
+export function checkLines(doc: LyricsDocument, format: FormatId): void {
+  if (doc.lines.length === 0) {
+    throw new Error(`${format} cannot represent an empty document`);
+  }
+}
+
+export function checkText(
+  text: string,
+  format: FormatId,
+  reservedMark: RegExp
+): void {
+  if (lineBreak.test(text)) {
+    throw new Error(`${format} cannot represent line breaks in text`);
+  }
+  if (reservedMark.test(text)) {
+    throw new Error(`${format} cannot represent reserved marks in text`);
+  }
+}
+
 export function checkWrite(
   doc: LyricsDocument,
   format: FormatId,

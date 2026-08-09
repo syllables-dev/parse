@@ -8,7 +8,7 @@
 import { ParseError } from "../errors";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
 import { checkTime, splitLines, toInt } from "../internal/timestamps";
-import { checkWrite } from "../internal/write-check";
+import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -30,6 +30,7 @@ interface LysRow {
 
 const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineHeader = /^\[(\d+)\](.*)$/u;
+const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
 const propertyAgents = [null, "v1", "v2", null, "v1", "v2", null, "v1", "v2"];
 
@@ -203,7 +204,13 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("lys write options are unsupported");
   }
+  checkLines(doc, "lys");
   checkWrite(doc, "lys", capabilities);
+  for (const line of doc.lines) {
+    for (const syllable of [...line.p, ...line.b]) {
+      checkText(syllable.text, "lys", reservedStamp);
+    }
+  }
   const agentIds = doc.agents.map((agent) => agent.id);
   if (agentIds.length > 2) {
     throw new Error("lys supports up to two vocal agents");
