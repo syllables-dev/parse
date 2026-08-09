@@ -47,27 +47,6 @@ export const capabilities = {
   wordTiming: true,
 } satisfies FormatCapabilities;
 
-function readAttributes(description: string, lineNumber: number) {
-  const attributes = new Map<string, string>();
-  for (const rawAttribute of description.split(",")) {
-    const separator = rawAttribute.indexOf("@");
-    if (separator < 1 || separator === rawAttribute.length - 1) {
-      throw new ParseError(
-        `malformed lqe section header on line ${lineNumber}`
-      );
-    }
-    const key = rawAttribute.slice(0, separator).trim().toLowerCase();
-    const value = rawAttribute.slice(separator + 1).trim();
-    if (attributes.has(key)) {
-      throw new ParseError(
-        `duplicate lqe ${key} attribute on line ${lineNumber}`
-      );
-    }
-    attributes.set(key, value);
-  }
-  return attributes;
-}
-
 function isSection(name: string | undefined): name is SectionKind {
   return (
     name === "lyrics" || name === "pronunciation" || name === "translation"
@@ -115,7 +94,31 @@ function readPreamble(lines: string[], firstLine: number) {
   return { lineIndex: lines.length, metadata, version };
 }
 
-function readSectionBodies(lines: string[], firstLine: number) {
+function readSection(header: string, kind: SectionKind, lineNumber: number) {
+  const attributes = new Map<string, string>();
+  for (const rawAttribute of header
+    .slice(header.indexOf(":") + 1, -1)
+    .trim()
+    .split(",")) {
+    const separator = rawAttribute.indexOf("@");
+    if (separator < 1 || separator === rawAttribute.length - 1) {
+      throw new ParseError(
+        `malformed lqe section header on line ${lineNumber}`
+      );
+    }
+    const key = rawAttribute.slice(0, separator).trim().toLowerCase();
+    const value = rawAttribute.slice(separator + 1).trim();
+    if (attributes.has(key)) {
+      throw new ParseError(
+        `duplicate lqe ${key} attribute on line ${lineNumber}`
+      );
+    }
+    attributes.set(key, value);
+  }
+  return { attributes, body: [], kind };
+}
+
+function readSections(lines: string[], firstLine: number) {
   const sections: LqeSection[] = [];
   let section: LqeSection | undefined;
   for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex += 1) {
@@ -125,14 +128,7 @@ function readSectionBodies(lines: string[], firstLine: number) {
       const colon = header[0].indexOf(":");
       const name = header[0].slice(1, colon).toLowerCase();
       if (isSection(name)) {
-        section = {
-          attributes: readAttributes(
-            header[0].slice(colon + 1, -1).trim(),
-            lineIndex + 1
-          ),
-          body: [],
-          kind: name,
-        };
+        section = readSection(header[0], name, lineIndex + 1);
         sections.push(section);
         continue;
       }
@@ -151,20 +147,6 @@ function readSectionBodies(lines: string[], firstLine: number) {
   return sections;
 }
 
-function readSections(text: string) {
-  const lines = splitLines(text);
-  const firstLine = lines.findIndex((line) => line.trim().length > 0);
-  if (firstLine < 0 || lines[firstLine]?.trim() !== containerMark) {
-    throw new ParseError("input is missing the lqe container header");
-  }
-  const { lineIndex, metadata, version } = readPreamble(lines, firstLine);
-  if (version !== "1.0") {
-    throw new ParseError("lqe version must be 1.0");
-  }
-  const sections = readSectionBodies(lines, lineIndex);
-  return { metadata, sections };
-}
-
 function checkBody(lines: string[], row: RegExp, kind: string) {
   for (const [lineIndex, line] of lines.entries()) {
     const trimmed = line.trim();
@@ -181,42 +163,14 @@ function checkBody(lines: string[], row: RegExp, kind: string) {
   }
 }
 
-function readLyrics(section: LqeSection, metadata: Map<string, string>) {
-  if (
-    section.attributes.size !== 1 ||
-    section.attributes.get("format")?.toLowerCase() !== "lyricify syllable"
-  ) {
-    throw new ParseError("lqe lyrics must use Lyricify Syllable format");
-  }
-  const metadataLines = [...metadata]
-    .filter(([tag]) => tag !== "offset")
-    .map(([tag, value]) => `[${tag}:${value}]`);
-  checkBody(section.body, lysRow, "lyrics");
-  return readLys([...metadataLines, ...section.body].join("\n"));
-}
-
-function indexTargets(lines: LyricsLine[]) {
-  const targets = new Map<number, TranslationTarget | null>();
-  for (const line of lines) {
-    for (const [track, syllables] of [
-      ["p", line.p],
-      ["b", line.b],
-    ] as const) {
-      const begin = syllables[0]?.begin;
-      if (begin === undefined) {
-        continue;
-      }
-      targets.set(begin, targets.has(begin) ? null : { line, track });
-    }
-  }
-  return targets;
-}
-
-function readLanguage(section: LqeSection) {
-  const format = section.attributes.get("format");
+function addTranslation(
+  section: LqeSection,
+  targets: Map<number, TranslationTarget | null>,
+  assigned: Map<LyricsLine, Set<string>>
+) {
   if (
     (section.attributes.size !== 1 && section.attributes.size !== 2) ||
-    format?.toLowerCase() !== "lrc" ||
+    section.attributes.get("format")?.toLowerCase() !== "lrc" ||
     [...section.attributes.keys()].some(
       (key) => key !== "format" && key !== "language"
     )
@@ -227,19 +181,11 @@ function readLanguage(section: LqeSection) {
   if (!languageTag.test(language)) {
     throw new ParseError("lqe translation language is invalid");
   }
-  return language;
-}
-
-function addTranslation(
-  section: LqeSection,
-  targets: Map<number, TranslationTarget | null>,
-  assigned: Map<LyricsLine, Set<string>>
-) {
-  const language = readLanguage(section);
   const body = section.body.filter((line) => !offsetTag.test(line.trim()));
   checkBody(body, lrcRow, "translation");
-  const translation = readLrc(body.join("\n"), { expandRepeats: true });
-  for (const translationLine of translation.lines) {
+  for (const translationLine of readLrc(body.join("\n"), {
+    expandRepeats: true,
+  }).lines) {
     const target = targets.get(translationLine.begin);
     if (target === undefined) {
       throw new ParseError(
@@ -276,18 +222,43 @@ function addTranslation(
   }
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
-  const { metadata, sections } = readSections(text);
+function readTracks(
+  sections: LqeSection[],
+  metadata: Map<string, string>
+): LyricsDocument {
   const lyricSections = sections.filter((section) => section.kind === "lyrics");
   const lyricSection = lyricSections.at(0);
   if (!lyricSection || lyricSections.length !== 1) {
     throw new ParseError("lqe must contain exactly one lyrics section");
   }
-  const doc = readLyrics(lyricSection, metadata);
-  const targets = indexTargets(doc.lines);
+  if (
+    lyricSection.attributes.size !== 1 ||
+    lyricSection.attributes.get("format")?.toLowerCase() !== "lyricify syllable"
+  ) {
+    throw new ParseError("lqe lyrics must use Lyricify Syllable format");
+  }
+  const metadataLines = [...metadata]
+    .filter(([tag]) => tag !== "offset")
+    .map(([tag, value]) => `[${tag}:${value}]`);
+  checkBody(lyricSection.body, lysRow, "lyrics");
+  const doc = readLys([...metadataLines, ...lyricSection.body].join("\n"));
+  const targets = new Map<number, TranslationTarget | null>();
+  for (const line of doc.lines) {
+    const primaryBegin = line.p[0]?.begin;
+    if (primaryBegin !== undefined) {
+      targets.set(
+        primaryBegin,
+        targets.has(primaryBegin) ? null : { line, track: "p" }
+      );
+    }
+    const backingBegin = line.b[0]?.begin;
+    if (backingBegin !== undefined) {
+      targets.set(
+        backingBegin,
+        targets.has(backingBegin) ? null : { line, track: "b" }
+      );
+    }
+  }
   const assigned = new Map<LyricsLine, Set<string>>();
   for (const section of sections) {
     if (section.kind === "translation") {
@@ -297,19 +268,20 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   return doc;
 }
 
-function lyricDocument(doc: LyricsDocument): LyricsDocument {
-  return {
-    ...doc,
-    lines: doc.lines.map((line) => ({
-      agent: line.agent,
-      b: line.b,
-      begin: line.begin,
-      end: line.end,
-      id: line.id,
-      p: line.p,
-    })),
-    meta: {},
-  };
+export function read(text: string, options: ReadOptions = {}): LyricsDocument {
+  if (options.expandRepeats) {
+    throw new Error("expandRepeats is available for lrc input");
+  }
+  const lines = splitLines(text);
+  const firstLine = lines.findIndex((line) => line.trim().length > 0);
+  if (firstLine < 0 || lines[firstLine]?.trim() !== containerMark) {
+    throw new ParseError("input is missing the lqe container header");
+  }
+  const { lineIndex, metadata, version } = readPreamble(lines, firstLine);
+  if (version !== "1.0") {
+    throw new ParseError("lqe version must be 1.0");
+  }
+  return readTracks(readSections(lines, lineIndex), metadata);
 }
 
 function addRow(
@@ -337,10 +309,7 @@ function addRow(
   });
 }
 
-function translationDocument(
-  doc: LyricsDocument,
-  language: string
-): LyricsDocument {
+function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
   const rows: TranslationRow[] = [];
   for (const line of doc.lines) {
     const translation = line.translations?.[language];
@@ -392,7 +361,21 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     "[by:]",
     "",
     "[lyrics: format@Lyricify Syllable]",
-    writeLys(lyricDocument(doc)).split("\n").slice(1).join("\n"),
+    writeLys({
+      ...doc,
+      lines: doc.lines.map((line) => ({
+        agent: line.agent,
+        b: line.b,
+        begin: line.begin,
+        end: line.end,
+        id: line.id,
+        p: line.p,
+      })),
+      meta: {},
+    })
+      .split("\n")
+      .slice(1)
+      .join("\n"),
   ];
   const languages = [
     ...new Set(
@@ -403,14 +386,12 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     if (!languageTag.test(language)) {
       throw new Error(`invalid lqe translation language ${language}`);
     }
-    const label = language === "und" ? "" : `language@${language}, `;
     sections.push(
       "",
-      `[translation: ${label}format@LRC]`,
-      writeLrc(translationDocument(doc, language))
-        .split("\n")
-        .slice(1)
-        .join("\n")
+      `[translation: ${
+        language === "und" ? "" : `language@${language}, `
+      }format@LRC]`,
+      writeLrc(translationDoc(doc, language)).split("\n").slice(1).join("\n")
     );
   }
   return sections.join("\n");
