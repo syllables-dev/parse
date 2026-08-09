@@ -1,1 +1,301 @@
-export {};
+import { describe, expect, test } from "bun:test";
+import { file as openFile } from "bun";
+import { type LyricsDocument, type LyricsLine, ParseError } from "../../src";
+import { read, write } from "../../src/formats/lys";
+
+const fixtureCases = [
+  {
+    agents: [
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
+    ],
+    fileName: "duet-values.lys",
+    firstText: "Through the rose-colored lenses",
+    lineCount: 50,
+  },
+  {
+    agents: [{ id: "v1", type: "person" }],
+    fileName: "primary-background.lys",
+    firstText: "Tryna feel something real",
+    lineCount: 57,
+  },
+];
+
+const lyricLine = {
+  agent: "lead",
+  b: [],
+  begin: 1001,
+  end: 2503,
+  id: "line",
+  p: [
+    { begin: 1001, end: 1752, id: "first", text: "Hel" },
+    { begin: 1752, end: 2503, id: "second", text: "lo" },
+  ],
+} satisfies LyricsLine;
+
+const wordDocument = {
+  agents: [{ id: "lead", type: "person" }],
+  lines: [lyricLine],
+  meta: {},
+  timing: "word",
+  version: 1,
+} satisfies LyricsDocument;
+
+async function readFixture(fileName: string) {
+  return read(
+    await openFile(
+      new URL(`../fixtures/lys/${fileName}`, import.meta.url)
+    ).text()
+  );
+}
+
+describe("lys fixtures", () => {
+  test.each(fixtureCases)(
+    "reads and round-trips $fileName",
+    async ({ agents, fileName, firstText, lineCount }) => {
+      const doc = await readFixture(fileName);
+
+      expect(doc).toMatchObject({ meta: {}, timing: "word", version: 1 });
+      expect(doc.agents).toEqual(agents);
+      expect(doc.lines).toHaveLength(lineCount);
+      expect(
+        doc.lines
+          .slice(0, 1)
+          .map((line) => line.p.map((word) => word.text).join(""))
+      ).toEqual([firstText]);
+      expect(read(write(doc))).toEqual(doc);
+    }
+  );
+
+  test("merges the fixture's explicit backing rows", async () => {
+    const doc = await readFixture("primary-background.lys");
+
+    expect(doc.lines[20]).toMatchObject({
+      agent: "v1",
+      begin: 71_459,
+      end: 72_967,
+      id: "l20",
+    });
+    expect(
+      doc.lines
+        .slice(20, 21)
+        .map((line) => line.p.map((word) => word.text).join(""))
+    ).toEqual(["They say "]);
+    expect(
+      doc.lines
+        .slice(20, 21)
+        .map((line) => line.b.map((word) => word.text).join(""))
+    ).toEqual(["Ooh-ooh, ooh"]);
+  });
+});
+
+describe("lys reader", () => {
+  test("accepts a BOM and CRLF endings", () => {
+    const doc = read("\uFEFF[4]one(1001,1001)\r\n[4]two(3003,1001)\r\n");
+
+    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
+      [1001, 2002],
+      [3003, 4004],
+    ]);
+  });
+
+  test("maps properties zero through eight to tracks and agents", () => {
+    const doc = read(
+      Array.from(
+        { length: 9 },
+        (_, property) => `[${property}]p${property}(${property * 1000},500)`
+      ).join("\n")
+    );
+
+    expect(doc.agents).toEqual([
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
+    ]);
+    expect(
+      doc.lines.map((line) => ({
+        agent: line.agent,
+        track: line.p.length > 0 ? "primary" : "backing",
+      }))
+    ).toEqual([
+      { agent: null, track: "primary" },
+      { agent: "v1", track: "primary" },
+      { agent: "v2", track: "primary" },
+      { agent: null, track: "primary" },
+      { agent: "v1", track: "primary" },
+      { agent: "v2", track: "primary" },
+      { agent: null, track: "backing" },
+      { agent: "v1", track: "backing" },
+      { agent: "v2", track: "backing" },
+    ]);
+  });
+
+  test("reads corrected suffix spacing without moving text", () => {
+    const doc = read("[4]Hel(12000,400)lo (12400,300)world(12700,600)");
+
+    expect(doc.lines[0]).toMatchObject({ begin: 12_000, end: 13_300 });
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 12_000, end: 12_400, id: "l0w0", text: "Hel" },
+      { begin: 12_400, end: 12_700, id: "l0w1", text: "lo " },
+      { begin: 12_700, end: 13_300, id: "l0w2", text: "world" },
+    ]);
+  });
+
+  test("merges explicit and inferred backing rows", () => {
+    const explicit = read("[4]Lead(1000,1000)\n[7](Echo)(1200,500)");
+    const inferred = read("[4]Lead(1000,1000)\n[1](Echo)(1200,500)");
+
+    for (const doc of [explicit, inferred]) {
+      expect(doc.lines).toHaveLength(1);
+      expect(doc.lines[0]?.b).toEqual([
+        { begin: 1200, end: 1700, id: "l0b0", text: "Echo" },
+      ]);
+    }
+  });
+
+  test("preserves overlapping lyric rows", () => {
+    const doc = read(
+      "[4]one(1000,1000)\n[4]two(1500,1000)\n[5]three(1750,1000)"
+    );
+
+    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
+      [1000, 2000],
+      [1500, 2500],
+      [1750, 2750],
+    ]);
+  });
+
+  test("reads metadata and ignores the dead offset tag", () => {
+    const doc = read(
+      [
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[au:Writer]",
+        "[offset:900]",
+        "[4]Hello(1000,500)",
+      ].join("\n")
+    );
+
+    expect(doc.meta).toEqual({
+      album: "Album",
+      artist: "Singer",
+      songwriters: ["Writer"],
+      title: "Song",
+    });
+    expect(doc.lines[0]).toMatchObject({ begin: 1000, end: 1500 });
+  });
+
+  test.each([
+    "plain lyrics",
+    "[9]unknown(1000,500)",
+    "[4]   ",
+    "[4]word(1000,500)tail",
+  ])("throws ParseError for malformed or unsupported input", (source) => {
+    expect(() => read(source)).toThrow(ParseError);
+  });
+});
+
+describe("lys writer", () => {
+  test("maps arbitrary declared agent ids by declaration order", () => {
+    const doc = {
+      agents: [
+        { id: "lead", type: "person" },
+        { id: "guest", type: "person" },
+      ],
+      lines: [
+        {
+          agent: "lead",
+          b: [{ begin: 1500, end: 2000, id: "leadBacking", text: "Echo" }],
+          begin: 1000,
+          end: 2000,
+          id: "leadLine",
+          p: [{ begin: 1000, end: 1500, id: "leadWord", text: "Lead" }],
+        },
+        {
+          agent: "guest",
+          b: [{ begin: 3500, end: 4000, id: "guestBacking", text: "Reply" }],
+          begin: 3000,
+          end: 4000,
+          id: "guestLine",
+          p: [{ begin: 3000, end: 3500, id: "guestWord", text: "Guest" }],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    expect(write(doc)).toBe(
+      [
+        "[by:]",
+        "[4]Lead(1000,500)",
+        "[7](Echo)(1500,500)",
+        "[5]Guest(3000,500)",
+        "[8](Reply)(3500,500)",
+      ].join("\n")
+    );
+  });
+
+  test("emits only the by metadata tag", () => {
+    const doc = {
+      ...wordDocument,
+      meta: {
+        album: "Album",
+        artist: "Singer",
+        offset: 25,
+        songwriters: ["Writer"],
+        title: "Song",
+      },
+    };
+
+    expect(write(doc)).toBe("[by:]\n[4]Hel(1001,751)lo(1752,751)");
+  });
+
+  test.each([
+    {
+      doc: {
+        ...wordDocument,
+        lines: [
+          {
+            ...lyricLine,
+            translations: { zh: { p: "你好" } },
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "lys cannot represent translations",
+    },
+    {
+      doc: {
+        ...wordDocument,
+        lines: [
+          {
+            ...lyricLine,
+            pronunciations: { ja: { b: [], p: [] } },
+          },
+        ],
+      } satisfies LyricsDocument,
+      message: "lys cannot represent pronunciations",
+    },
+    {
+      doc: {
+        ...wordDocument,
+        agents: [
+          { id: "one", type: "person" },
+          { id: "two", type: "person" },
+          { id: "three", type: "person" },
+        ],
+        lines: [{ ...lyricLine, agent: "one" }],
+      } satisfies LyricsDocument,
+      message: "lys supports up to two vocal agents",
+    },
+    {
+      doc: {
+        ...wordDocument,
+        lines: [{ ...lyricLine, agent: "missing" }],
+      } satisfies LyricsDocument,
+      message: "lys lines must reference declared vocal agents",
+    },
+  ])("rejects unrepresentable document fields", ({ doc, message }) => {
+    expect(() => write(doc)).toThrow(message);
+  });
+});
