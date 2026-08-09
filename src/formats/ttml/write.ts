@@ -36,6 +36,11 @@ function checkTrack(
     if (end <= begin) {
       throw new RangeError(`syllable ${syllable.id} end must follow its start`);
     }
+    if (syllable.begin < line.begin || syllable.end > line.end) {
+      throw new RangeError(
+        `syllable ${syllable.id} must stay within line ${line.id}`
+      );
+    }
     if (
       lineTimed &&
       (syllable.begin !== line.begin || syllable.end !== line.end)

@@ -204,6 +204,20 @@ export function unwrapText(lyric: string) {
   return lyric.slice(1, -1);
 }
 
+export function checkTrack(
+  syllables: Syllable[],
+  line: Pick<LyricsLine, "begin" | "end" | "id">
+) {
+  const outside = syllables.find(
+    (syllable) => syllable.begin < line.begin || syllable.end > line.end
+  );
+  if (outside) {
+    throw new ParseError(
+      `ttml syllable ${outside.id} falls outside line ${line.id}`
+    );
+  }
+}
+
 function readTrack(
   nodes: XmlNode[],
   line: Pick<LyricsLine, "begin" | "end" | "agent">,
@@ -245,7 +259,7 @@ function readLine(
       ? { backing: paragraph.children, primary: [] }
       : splitRuns(paragraph, agent);
   const line = { agent, ...range };
-  return {
+  const lyricLine = {
     agent,
     b:
       runs.backing === null
@@ -255,6 +269,9 @@ function readLine(
     id,
     p: readTrack(runs.primary, line, timing, offset, `${id}w`),
   };
+  checkTrack(lyricLine.p, lyricLine);
+  checkTrack(lyricLine.b, lyricLine);
+  return lyricLine;
 }
 
 function readDivRange(division: XmlElement, populated: boolean) {

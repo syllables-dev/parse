@@ -1,7 +1,14 @@
 import { ParseError } from "../../errors";
 import type { XmlElement, XmlNode } from "../../internal/xml";
 import type { LyricsDocument, LyricsLine } from "../../types";
-import { readWords, splitRuns, untimed, unwrap, unwrapText } from "./lines";
+import {
+  checkTrack,
+  readWords,
+  splitRuns,
+  untimed,
+  unwrap,
+  unwrapText,
+} from "./lines";
 import {
   attr,
   checkAttrs,
@@ -250,7 +257,9 @@ function readPronTrack(
     idPrefix,
     line.agent
   );
-  return backing ? unwrap(syllables) : syllables;
+  const track = backing ? unwrap(syllables) : syllables;
+  checkTrack(track, line);
+  return track;
 }
 
 function addPron(
