@@ -28,7 +28,7 @@ Any-to-any conversion is `write(read(text))`; codecs never import each other, wi
 ## Coding style
 
 - Clear, meaningful names for files, variables, and functions. Short enough to scan, yet concise enough to convey intent. Nothing that reads like boilerplate or AI output.
-- Avoid snake_case for file names. Use kebab-case for file names, camelCase for variables and functions, PascalCase for types and classes.
+- Avoid snake_case for everything. Use kebab-case for file names, camelCase for variables and functions, PascalCase for types and classes.
 - No redundant intermediate variables or function hops. Write `const c = g(f(a))`, not `const b = f(a); const c = g(b)`, unless `b` is reused.
 - Function size:
   - Under 20 lines and used once: inline it. No one-off helpers.
