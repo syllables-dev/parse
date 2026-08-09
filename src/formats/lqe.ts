@@ -369,6 +369,15 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       }
     }
   }
+  for (const [lineIndex, line] of doc.lines.entries()) {
+    if (
+      line.p.length === 0 &&
+      line.b.length > 0 &&
+      doc.lines[lineIndex - 1]?.agent === line.agent
+    ) {
+      throw new Error(`lqe cannot preserve backing-only line ${line.id}`);
+    }
+  }
   const sections = [
     containerMark,
     "[version:1.0]",

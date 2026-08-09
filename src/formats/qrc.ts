@@ -25,6 +25,17 @@ interface QrcRow {
   wrapped: boolean;
 }
 
+interface QrcWriteRow {
+  lineIndex: number;
+  track: "b" | "p";
+  wrapped: boolean;
+}
+
+interface QrcWriteLine {
+  b: QrcWriteRow[];
+  p: QrcWriteRow[];
+}
+
 const metaTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
@@ -37,6 +48,13 @@ export const capabilities = {
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;
+
+function isWrapped(text: string) {
+  return (
+    (text.startsWith("(") && text.endsWith(")")) ||
+    (text.startsWith("（") && text.endsWith("）"))
+  );
+}
 
 function unwrapWords(words: TimedWord[]): TimedWord[] {
   return words.map((word, index) => ({
@@ -108,9 +126,7 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
       begin,
       end: begin + duration,
       words,
-      wrapped:
-        (lyric.startsWith("(") && lyric.endsWith(")")) ||
-        (lyric.startsWith("（") && lyric.endsWith("）")),
+      wrapped: isWrapped(lyric),
     });
   }
   if (rows.length === 0) {
@@ -213,6 +229,34 @@ function writeRow(
     .join("")}`;
 }
 
+function checkRows(rows: QrcWriteRow[], lineCount: number) {
+  const lines: QrcWriteLine[] = [];
+  for (const [rowIndex, row] of rows.entries()) {
+    const backing =
+      row.wrapped &&
+      !rows[rowIndex - 1]?.wrapped &&
+      !rows[rowIndex + 1]?.wrapped;
+    const previous = lines.at(-1);
+    if (backing && previous) {
+      previous.b.push(row);
+      continue;
+    }
+    lines.push({ b: backing ? [row] : [], p: backing ? [] : [row] });
+  }
+  if (
+    lines.length !== lineCount ||
+    lines.some(
+      (line, lineIndex) =>
+        line.p.some(
+          (row) => row.lineIndex !== lineIndex || row.track !== "p"
+        ) ||
+        line.b.some((row) => row.lineIndex !== lineIndex || row.track !== "b")
+    )
+  ) {
+    throw new Error("qrc cannot preserve lyric row ownership");
+  }
+}
+
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("qrc write options are unsupported");
@@ -225,6 +269,21 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     }
   }
   const offset = doc.meta.offset ?? 0;
+  const rowModel: QrcWriteRow[] = [];
+  for (const [lineIndex, line] of doc.lines.entries()) {
+    if (line.p.length > 0 || line.b.length === 0) {
+      const lyric = line.p.map((syllable) => syllable.text).join("");
+      rowModel.push({
+        lineIndex,
+        track: "p",
+        wrapped: isWrapped(lyric),
+      });
+    }
+    if (line.b.length > 0) {
+      rowModel.push({ lineIndex, track: "b", wrapped: true });
+    }
+  }
+  checkRows(rowModel, doc.lines.length);
   const lyricRows = doc.lines.flatMap((line) => {
     const rows =
       line.p.length > 0 || line.b.length === 0

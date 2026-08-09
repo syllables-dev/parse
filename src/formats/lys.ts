@@ -225,6 +225,16 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   ) {
     throw new Error("lys lines must reference declared vocal agents");
   }
+  for (const [lineIndex, line] of doc.lines.entries()) {
+    const previous = doc.lines[lineIndex - 1];
+    if (
+      line.p.length === 0 &&
+      line.b.length > 0 &&
+      previous?.agent === line.agent
+    ) {
+      throw new Error(`lys cannot preserve backing-only line ${line.id}`);
+    }
+  }
   const lyricRows = doc.lines.flatMap((line) => {
     const syllables = [...line.p, ...line.b];
     if (syllables.length === 0) {
