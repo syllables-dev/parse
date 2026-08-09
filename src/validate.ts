@@ -107,7 +107,9 @@ function checkContent(
       id: line.id,
       message: "timed line is empty",
     });
-  } else if (lineSyllables.every((syllable) => syllable.text.length === 0)) {
+  } else if (
+    lineSyllables.every((syllable) => syllable.text.trim().length === 0)
+  ) {
     problems.push({
       code: "line-without-text",
       id: line.id,
