@@ -13,7 +13,6 @@ import type {
   FormatCapabilities,
   LyricsDocument,
   ReadOptions,
-  Syllable,
   WriteOptions,
 } from "../types";
 
@@ -148,16 +147,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   };
 }
 
-function writeWords(syllables: Syllable[]): string {
-  return syllables
-    .map((syllable) => {
-      const duration = syllable.end - syllable.begin;
-      checkTime(duration, `syllable ${syllable.id} duration`);
-      return `(${syllable.begin},${duration},0)${syllable.text}`;
-    })
-    .join("");
-}
-
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("yrc write options are unsupported");
@@ -189,7 +178,13 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...doc.lines.map((line) => {
       const duration = line.end - line.begin;
       checkTime(duration, `line ${line.id} duration`);
-      return `[${line.begin},${duration}]${writeWords(line.p)}`;
+      return `[${line.begin},${duration}]${line.p
+        .map((syllable) => {
+          const syllableDuration = syllable.end - syllable.begin;
+          checkTime(syllableDuration, `syllable ${syllable.id} duration`);
+          return `(${syllable.begin},${syllableDuration},0)${syllable.text}`;
+        })
+        .join("")}`;
     }),
   ].join("\n");
 }

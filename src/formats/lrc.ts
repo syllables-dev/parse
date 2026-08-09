@@ -20,7 +20,6 @@ import { checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
-  LyricsMeta,
   ReadOptions,
   WriteOptions,
 } from "../types";
@@ -56,26 +55,6 @@ function readTime(marker: string) {
     marker.slice(colon + 1, fraction >= 0 ? fraction : end),
     fraction >= 0 ? marker.slice(fraction + 1, end) : undefined
   );
-}
-
-function readMeta(tags: Map<string, string>): LyricsMeta {
-  const offsetText = tags.get("offset");
-  let offset: number | undefined;
-  if (offsetText !== undefined) {
-    const sign = offsetText.startsWith("-") ? -1 : 1;
-    const magnitudeText = signPrefix.test(offsetText)
-      ? offsetText.slice(1)
-      : offsetText;
-    offset = sign * toInt(magnitudeText, "lrc offset");
-  }
-  const songwriters = tags.get("au");
-  return {
-    ...(tags.has("al") && { album: tags.get("al") }),
-    ...(tags.has("ar") && { artist: tags.get("ar") }),
-    ...(offset !== undefined && { offset }),
-    ...(songwriters !== undefined && { songwriters: [songwriters] }),
-    ...(tags.has("ti") && { title: tags.get("ti") }),
-  };
 }
 
 function readWords(body: string, lineEnd: number) {
@@ -183,7 +162,25 @@ function makeLines(rows: LrcRow[], offset: number) {
 export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags, options.expandRepeats ?? false);
-  const meta = readMeta(tags);
+  const offsetText = tags.get("offset");
+  let offset: number | undefined;
+  if (offsetText !== undefined) {
+    const sign = offsetText.startsWith("-") ? -1 : 1;
+    offset =
+      sign *
+      toInt(
+        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
+        "lrc offset"
+      );
+  }
+  const songwriters = tags.get("au");
+  const meta = {
+    ...(tags.has("al") && { album: tags.get("al") }),
+    ...(tags.has("ar") && { artist: tags.get("ar") }),
+    ...(offset !== undefined && { offset }),
+    ...(songwriters !== undefined && { songwriters: [songwriters] }),
+    ...(tags.has("ti") && { title: tags.get("ti") }),
+  };
   const { lines, wordTimed } = makeLines(rows, meta.offset ?? 0);
   return {
     agents: [],

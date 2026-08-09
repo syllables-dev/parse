@@ -16,7 +16,6 @@ import { checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
-  LyricsMeta,
   ReadOptions,
   WriteOptions,
 } from "../types";
@@ -43,42 +42,8 @@ export const capabilities = {
   wordTiming: true,
 } satisfies FormatCapabilities;
 
-function readOffset(offsetText: string | undefined): number | undefined {
-  if (offsetText === undefined) {
-    return;
-  }
-  const sign = offsetText.startsWith("-") ? -1 : 1;
-  return (
-    sign *
-    toInt(
-      signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
-      "eslrc offset"
-    )
-  );
-}
-
-function readMeta(tags: Map<string, string>): LyricsMeta {
-  const album = tags.get("al");
-  const artist = tags.get("ar");
-  const offset = readOffset(tags.get("offset"));
-  const songwriter = tags.get("au");
-  const title = tags.get("ti");
-  return {
-    ...(album !== undefined && { album }),
-    ...(artist !== undefined && { artist }),
-    ...(offset !== undefined && { offset }),
-    ...(songwriter !== undefined && { songwriters: [songwriter] }),
-    ...(title !== undefined && { title }),
-  };
-}
-
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
-  const tags = new Map<string, string>();
+function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
   const rows: EslrcRow[] = [];
-
   for (const [lineIndex, physicalLine] of splitLines(text).entries()) {
     const metadata = metaTag.exec(physicalLine.trim());
     if (metadata) {
@@ -127,9 +92,38 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   if (rows.length === 0) {
     throw new ParseError("input contains no recognizable eslrc lyric lines");
   }
+  return rows;
+}
 
-  const meta = readMeta(tags);
-  const offset = meta.offset ?? 0;
+export function read(text: string, options: ReadOptions = {}): LyricsDocument {
+  if (options.expandRepeats) {
+    throw new Error("expandRepeats is available for lrc input");
+  }
+  const tags = new Map<string, string>();
+  const rows = readRows(text, tags);
+  const album = tags.get("al");
+  const artist = tags.get("ar");
+  const offsetText = tags.get("offset");
+  let offset: number | undefined;
+  if (offsetText !== undefined) {
+    const sign = offsetText.startsWith("-") ? -1 : 1;
+    offset =
+      sign *
+      toInt(
+        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
+        "eslrc offset"
+      );
+  }
+  const songwriter = tags.get("au");
+  const title = tags.get("ti");
+  const meta = {
+    ...(album !== undefined && { album }),
+    ...(artist !== undefined && { artist }),
+    ...(offset !== undefined && { offset }),
+    ...(songwriter !== undefined && { songwriters: [songwriter] }),
+    ...(title !== undefined && { title }),
+  };
+  const shift = meta.offset ?? 0;
   const lines = rows.map((row, lineIndex) => {
     const [firstMarker] = row.markers;
     if (!firstMarker) {
@@ -150,8 +144,8 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
       }
       return [
         {
-          begin: marker.begin - offset,
-          end: (row.markers[markerIndex + 1]?.begin ?? sourceEnd) - offset,
+          begin: marker.begin - shift,
+          end: (row.markers[markerIndex + 1]?.begin ?? sourceEnd) - shift,
           text: marker.text,
         },
       ];
@@ -161,16 +155,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
         ? timedSegments
         : [
             {
-              begin: firstMarker.begin - offset,
-              end: sourceEnd - offset,
+              begin: firstMarker.begin - shift,
+              end: sourceEnd - shift,
               text: "",
             },
           ];
     return {
       agent: null,
       b: [],
-      begin: firstMarker.begin - offset,
-      end: sourceEnd - offset,
+      begin: firstMarker.begin - shift,
+      end: sourceEnd - shift,
       id: `l${lineIndex}`,
       p: syllables.map((syllable, syllableIndex) => ({
         ...syllable,
@@ -188,30 +182,24 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   };
 }
 
-function writeMeta(meta: LyricsMeta): string[] {
-  if (meta.songwriters && meta.songwriters.length > 1) {
-    throw new Error("eslrc cannot represent multiple songwriters");
-  }
-  return [
-    ...(meta.title === undefined ? [] : [`[ti:${meta.title}]`]),
-    ...(meta.artist === undefined ? [] : [`[ar:${meta.artist}]`]),
-    ...(meta.album === undefined ? [] : [`[al:${meta.album}]`]),
-    "[by:]",
-    ...(meta.offset === undefined ? [] : [`[offset:${meta.offset}]`]),
-    ...(meta.songwriters?.[0] === undefined
-      ? []
-      : [`[au:${meta.songwriters[0]}]`]),
-  ];
-}
-
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   if (Object.keys(options).length > 0) {
     throw new Error("eslrc write options are unsupported");
   }
   checkWrite(doc, "eslrc", capabilities);
   const offset = doc.meta.offset ?? 0;
+  if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
+    throw new Error("eslrc cannot represent multiple songwriters");
+  }
   return [
-    ...writeMeta(doc.meta),
+    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
+    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
+    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
+    "[by:]",
+    ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
+    ...(doc.meta.songwriters?.[0] === undefined
+      ? []
+      : [`[au:${doc.meta.songwriters[0]}]`]),
     ...doc.lines.map((line) => {
       const emptySyllables = line.p.filter(
         (syllable) => syllable.text.length === 0

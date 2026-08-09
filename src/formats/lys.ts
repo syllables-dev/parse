@@ -105,20 +105,6 @@ function readRow(
   };
 }
 
-function readRows(text: string, tags: Map<string, string>): LysRow[] {
-  const rows: LysRow[] = [];
-  for (const [lineIndex, raw] of splitLines(text).entries()) {
-    const row = readRow(raw, lineIndex, tags);
-    if (row) {
-      rows.push(row);
-    }
-  }
-  if (rows.length === 0) {
-    throw new ParseError("input contains no recognizable lys lyric lines");
-  }
-  return rows;
-}
-
 function makeLines(rows: LysRow[]): LyricsLine[] {
   const lines: LyricsLine[] = [];
   for (const [rowIndex, row] of rows.entries()) {
@@ -164,7 +150,17 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     throw new Error("expandRepeats is available for lrc input");
   }
   const tags = new Map<string, string>();
-  const lines = makeLines(readRows(text, tags));
+  const rows: LysRow[] = [];
+  for (const [lineIndex, raw] of splitLines(text).entries()) {
+    const row = readRow(raw, lineIndex, tags);
+    if (row) {
+      rows.push(row);
+    }
+  }
+  if (rows.length === 0) {
+    throw new ParseError("input contains no recognizable lys lyric lines");
+  }
+  const lines = makeLines(rows);
   const album = tags.get("al");
   const artist = tags.get("ar");
   const songwriter = tags.get("au");
@@ -191,8 +187,8 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   };
 }
 
-function writeWords(syllables: Syllable[], wrap: boolean): string {
-  return syllables
+function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
+  return `[${property}]${syllables
     .map((syllable, wordIndex) => {
       const duration = syllable.end - syllable.begin;
       checkTime(duration, `syllable ${syllable.id} duration`);
@@ -200,11 +196,7 @@ function writeWords(syllables: Syllable[], wrap: boolean): string {
       const suffix = wrap && wordIndex === syllables.length - 1 ? ")" : "";
       return `${prefix}${syllable.text}${suffix}(${syllable.begin},${duration})`;
     })
-    .join("");
-}
-
-function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
-  return `[${property}]${writeWords(syllables, wrap)}`;
+    .join("")}`;
 }
 
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {

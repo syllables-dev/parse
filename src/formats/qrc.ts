@@ -13,7 +13,6 @@ import type {
   FormatCapabilities,
   LyricsDocument,
   LyricsLine,
-  LyricsMeta,
   ReadOptions,
   Syllable,
   WriteOptions,
@@ -37,43 +36,6 @@ export const capabilities = {
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;
-
-function readOffset(offsetText: string | undefined): number | undefined {
-  if (offsetText === undefined) {
-    return;
-  }
-  const sign = offsetText.startsWith("-") ? -1 : 1;
-  return (
-    sign *
-    toInt(
-      signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
-      "qrc offset"
-    )
-  );
-}
-
-function readMeta(tags: Map<string, string>): LyricsMeta {
-  const album = tags.get("al");
-  const artist = tags.get("ar");
-  const offset = readOffset(tags.get("offset"));
-  const songwriter = tags.get("au");
-  const title = tags.get("ti");
-  return {
-    ...(album !== undefined && { album }),
-    ...(artist !== undefined && { artist }),
-    ...(offset !== undefined && { offset }),
-    ...(songwriter !== undefined && { songwriters: [songwriter] }),
-    ...(title !== undefined && { title }),
-  };
-}
-
-function isWrapped(words: TimedWord[]): boolean {
-  const lyric = words.map((word) => word.text).join("");
-  return (
-    (lyric.startsWith("(") && lyric.endsWith(")")) ||
-    (lyric.startsWith("（") && lyric.endsWith("）"))
-  );
-}
 
 function unwrapWords(words: TimedWord[]): TimedWord[] {
   return words.map((word, index) => ({
@@ -140,11 +102,14 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
       begin,
       begin + duration
     );
+    const lyric = words.map((word) => word.text).join("");
     rows.push({
       begin,
       end: begin + duration,
       words,
-      wrapped: isWrapped(words),
+      wrapped:
+        (lyric.startsWith("(") && lyric.endsWith(")")) ||
+        (lyric.startsWith("（") && lyric.endsWith("）")),
     });
   }
   if (rows.length === 0) {
@@ -194,7 +159,28 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   }
   const tags = new Map<string, string>();
   const rows = readRows(text, tags);
-  const meta = readMeta(tags);
+  const album = tags.get("al");
+  const artist = tags.get("ar");
+  const offsetText = tags.get("offset");
+  let offset: number | undefined;
+  if (offsetText !== undefined) {
+    const sign = offsetText.startsWith("-") ? -1 : 1;
+    offset =
+      sign *
+      toInt(
+        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
+        "qrc offset"
+      );
+  }
+  const songwriter = tags.get("au");
+  const title = tags.get("ti");
+  const meta = {
+    ...(album !== undefined && { album }),
+    ...(artist !== undefined && { artist }),
+    ...(offset !== undefined && { offset }),
+    ...(songwriter !== undefined && { songwriters: [songwriter] }),
+    ...(title !== undefined && { title }),
+  };
   return {
     agents: [],
     lines: makeLines(rows, meta.offset ?? 0),
@@ -202,39 +188,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     timing: "word",
     version: 1,
   };
-}
-
-function writeMeta(meta: LyricsMeta): string[] {
-  if (meta.songwriters && meta.songwriters.length > 1) {
-    throw new Error("qrc cannot represent multiple songwriters");
-  }
-  return [
-    ...(meta.title === undefined ? [] : [`[ti:${meta.title}]`]),
-    ...(meta.artist === undefined ? [] : [`[ar:${meta.artist}]`]),
-    ...(meta.album === undefined ? [] : [`[al:${meta.album}]`]),
-    "[by:]",
-    ...(meta.offset === undefined ? [] : [`[offset:${meta.offset}]`]),
-    ...(meta.songwriters?.[0] === undefined
-      ? []
-      : [`[au:${meta.songwriters[0]}]`]),
-  ];
-}
-
-function writeWords(
-  syllables: Syllable[],
-  offset: number,
-  wrap: boolean
-): string {
-  return syllables
-    .map((syllable, index) => {
-      const duration = syllable.end - syllable.begin;
-      checkTime(duration, `syllable ${syllable.id} duration`);
-      checkTime(syllable.begin + offset, `syllable ${syllable.id} start`);
-      const prefix = wrap && index === 0 ? "(" : "";
-      const suffix = wrap && index === syllables.length - 1 ? ")" : "";
-      return `${prefix}${syllable.text}${suffix}(${syllable.begin + offset},${duration})`;
-    })
-    .join("");
 }
 
 function writeRow(
@@ -247,11 +200,16 @@ function writeRow(
   const duration = end - begin;
   checkTime(duration, "qrc line duration");
   checkTime(begin + offset, "qrc line start");
-  return `[${begin + offset},${duration}]${writeWords(
-    syllables,
-    offset,
-    wrap
-  )}`;
+  return `[${begin + offset},${duration}]${syllables
+    .map((syllable, index) => {
+      const syllableDuration = syllable.end - syllable.begin;
+      checkTime(syllableDuration, `syllable ${syllable.id} duration`);
+      checkTime(syllable.begin + offset, `syllable ${syllable.id} start`);
+      const prefix = wrap && index === 0 ? "(" : "";
+      const suffix = wrap && index === syllables.length - 1 ? ")" : "";
+      return `${prefix}${syllable.text}${suffix}(${syllable.begin + offset},${syllableDuration})`;
+    })
+    .join("")}`;
 }
 
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
@@ -274,5 +232,18 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     }
     return rows;
   });
-  return [...writeMeta(doc.meta), ...lyricRows].join("\n");
+  if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
+    throw new Error("qrc cannot represent multiple songwriters");
+  }
+  return [
+    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
+    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
+    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
+    "[by:]",
+    ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
+    ...(doc.meta.songwriters?.[0] === undefined
+      ? []
+      : [`[au:${doc.meta.songwriters[0]}]`]),
+    ...lyricRows,
+  ].join("\n");
 }
