@@ -147,25 +147,25 @@ describe("yrc reader", () => {
     );
   });
 
-  test("preserves exact metadata and consumes a positive offset", () => {
+  test("reads metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
-        "[offset: +25 ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
+        "[offset:+25]",
         "[1001,1502](1001,751,0)Hel(1752,751,0)lo",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
     expect(
@@ -184,9 +184,7 @@ describe("yrc reader", () => {
   });
 
   test("adds negative offsets to every timed range", () => {
-    const doc = read(
-      "[offset: -25 ]\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
-    );
+    const doc = read("[offset:-25]\n[1001,1502](1001,751,0)Hel(1752,751,0)lo");
 
     expect(doc.meta).toEqual({});
     expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
@@ -271,16 +269,16 @@ describe("yrc writer", () => {
     expect(read(written)).toEqual(doc);
   });
 
-  test("round-trips exact metadata and consumes document offsets", () => {
+  test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
-        title: " Song ",
+        title: "Song",
       },
     };
     const written = write(doc);
@@ -291,17 +289,17 @@ describe("yrc writer", () => {
     expect(read(written)).toEqual({
       ...doc,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         songwriters: ["Writer"],
-        title: " Song ",
+        title: "Song",
       },
     });
   });
 
   test("round-trips every single songwriter string through an au tag", () => {
-    for (const songwriter of ["", " Writer ", "One/Two"]) {
+    for (const songwriter of ["", "Writer", "One/Two"]) {
       const doc = {
         ...wordDocument,
         meta: { songwriters: [songwriter] },

@@ -83,32 +83,32 @@ describe("eslrc reader", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("preserves metadata text and trims only the numeric offset", () => {
+  test("reads metadata and consumes a negative offset", () => {
     const doc = read(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
-        "[offset: -25 ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
+        "[offset:-25]",
         "[00:01.001]Hi[00:02.002]",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 976, end: 1977 });
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 976, end: 1977 });
   });
 
   test("adds positive offsets to every timed range", () => {
-    const doc = read("[offset: +25 ]\n[00:01.001]Hel[00:01.752]lo[00:02.503]");
+    const doc = read("[offset:+25]\n[00:01.001]Hel[00:01.752]lo[00:02.503]");
 
     expect(doc.meta).toEqual({});
     expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });

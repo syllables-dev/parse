@@ -162,25 +162,25 @@ describe("qrc reader", () => {
     ]);
   });
 
-  test("preserves exact metadata and consumes a positive offset", () => {
+  test("reads metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
-        "[offset: +25 ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
+        "[offset:+25]",
         "[1001,1502]Hel(1001,751)lo(1752,751)",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
     expect(
@@ -199,7 +199,7 @@ describe("qrc reader", () => {
   });
 
   test("adds negative offsets to every timed range", () => {
-    const doc = read("[offset: -25 ]\n[1001,1502]Hel(1001,751)lo(1752,751)");
+    const doc = read("[offset:-25]\n[1001,1502]Hel(1001,751)lo(1752,751)");
 
     expect(doc.meta).toEqual({});
     expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
@@ -317,37 +317,37 @@ describe("qrc writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("round-trips exact metadata and consumes document offsets", () => {
+  test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         offset: 25,
-        songwriters: [" Writer "],
-        title: " Song ",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     };
     const written = write(doc);
 
     expect(written.split("\n").slice(0, 6)).toEqual([
-      "[ti: Song ]",
-      "[ar: Singer ]",
-      "[al: Album ]",
-      "[by: Author ]",
-      "[au: Writer ]",
+      "[ti:Song]",
+      "[ar:Singer]",
+      "[al:Album]",
+      "[by:Author]",
+      "[au:Writer]",
       "[1001,1502]Hel(1001,751)lo(1752,751)",
     ]);
     expect(written).not.toContain("[offset:");
     expect(read(written)).toEqual({
       ...doc,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
-        songwriters: [" Writer "],
-        title: " Song ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     });
   });

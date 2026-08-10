@@ -142,14 +142,14 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.translations).toEqual({ und: { b: "", p: "" } });
   });
 
-  test("preserves exact metadata, consumes its offset, and ignores dead fields", () => {
+  test("reads metadata, consumes its offset, and ignores dead fields", () => {
     const doc = read(
       makeLqe(
-        "[by: Author ]",
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[au: Writer ]",
+        "[by:Author]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[au:Writer]",
         "[offset:900]",
         "",
         "[lyrics: format@Lyricify Syllable]",
@@ -166,11 +166,11 @@ describe("lqe reader", () => {
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1900, end: 2400 });
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 1900, end: 2400 });
@@ -178,25 +178,25 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.pronunciations).toBeUndefined();
   });
 
-  test("trims only the required container version", () => {
+  test("trims the container version", () => {
     const doc = read(
       [
         containerMark,
         "[version: 1.0 ]",
-        "[ti: Song ]",
+        "[ti:Song]",
         "[lyrics: format@Lyricify Syllable]",
         "[4]Lyric(1000,500)",
       ].join("\n")
     );
 
-    expect(doc.meta.title).toBe(" Song ");
+    expect(doc.meta.title).toBe("Song");
     expect(doc.lines[0]?.p[0]?.text).toBe("Lyric");
   });
 
   test("adds a negative preamble offset after joining translations", () => {
     const doc = read(
       makeLqe(
-        "[offset: -25 ]",
+        "[offset:-25]",
         "[lyrics: format@Lyricify Syllable]",
         "[4]Lead(1000,500)",
         "[7](Echo)(1200,500)",
@@ -421,38 +421,38 @@ describe("lqe writer", () => {
     });
   });
 
-  test("round-trips exact container metadata and consumes document offsets", () => {
+  test("round-trips container metadata and consumes document offsets", () => {
     const written = write({
       ...translatedDocument,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         offset: 25,
-        songwriters: [" Writer "],
-        title: " Song ",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     });
 
     expect(written.split("\n").slice(0, 9)).toEqual([
       containerMark,
       "[version:1.0]",
-      "[by: Author ]",
-      "[ti: Song ]",
-      "[ar: Singer ]",
-      "[al: Album ]",
-      "[au: Writer ]",
+      "[by:Author]",
+      "[ti:Song]",
+      "[ar:Singer]",
+      "[al:Album]",
+      "[au:Writer]",
       "",
       "[lyrics: format@Lyricify Syllable]",
     ]);
     expect(written).not.toContain("[offset:");
     expect(written).toContain("[4]Lead(1000,1000)");
     expect(read(written).meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
   });
 

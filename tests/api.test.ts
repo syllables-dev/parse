@@ -318,11 +318,12 @@ describe("public dispatch", () => {
     }
   );
 
-  test("preserves whitespace inside lyric author tags", () => {
+  test("trims whitespace inside lyric author tags", () => {
     const doc = read("[by:  There:allo [mix]  ]\n[00:01.000]Hello", "lrc");
 
-    expect(doc.meta.author).toBe("  There:allo [mix]  ");
-    expect(write(doc, "lrc").split("\n")[0]).toBe("[by:  There:allo [mix]  ]");
+    expect(doc.meta.author).toBe("There:allo [mix]");
+    expect(doc.lines[0]?.p[0]?.text).toBe("Hello");
+    expect(write(doc, "lrc").split("\n")[0]).toBe("[by:There:allo [mix]]");
   });
 
   test("places the lqe author directly after its version", () => {

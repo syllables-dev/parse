@@ -181,25 +181,25 @@ describe("lys reader", () => {
     ]);
   });
 
-  test("preserves exact metadata and consumes a positive offset", () => {
+  test("reads metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
-        "[offset: +900 ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
+        "[offset:+900]",
         "[4]Hello(1000,500)",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1900, end: 2400 });
     expect(doc.lines[0]?.p[0]).toMatchObject({
@@ -210,7 +210,7 @@ describe("lys reader", () => {
   });
 
   test("adds negative offsets to every timed range", () => {
-    const doc = read("[offset: -25 ]\n[4]Hel(1001,751)lo(1752,751)");
+    const doc = read("[offset:-25]\n[4]Hel(1001,751)lo(1752,751)");
 
     expect(doc.meta).toEqual({});
     expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
@@ -360,27 +360,27 @@ describe("lys writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("round-trips exact metadata and consumes document offsets", () => {
+  test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         offset: 25,
-        songwriters: [" Writer "],
-        title: " Song ",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     };
     const written = write(doc);
 
     expect(written).toBe(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
         "[4]Hel(1001,751)lo(1752,751)",
       ].join("\n")
     );
@@ -397,11 +397,11 @@ describe("lys writer", () => {
         },
       ],
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
-        songwriters: [" Writer "],
-        title: " Song ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     });
   });

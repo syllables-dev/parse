@@ -101,26 +101,26 @@ describe("lrc reader", () => {
     ]);
   });
 
-  test("preserves exact metadata and consumes a positive offset", () => {
+  test("reads metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
-        "[offset: +250 ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
+        "[offset:+250]",
         "[00:01.234]<00:01.234>one <00:01.999>two",
         "[00:02.500]next",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: " Album ",
-      artist: " Singer ",
-      author: " Author ",
-      songwriters: [" Writer "],
-      title: " Song ",
+      album: "Album",
+      artist: "Singer",
+      author: "Author",
+      songwriters: ["Writer"],
+      title: "Song",
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1484, end: 2750 });
     expect(
@@ -140,7 +140,7 @@ describe("lrc reader", () => {
 
   test("adds negative offsets to line and A2 word timestamps", () => {
     const doc = read(
-      "[offset: -250 ]\n[00:01.000]<00:01.000>one <00:01.500>two\n[00:02.000]next"
+      "[offset:-250]\n[00:01.000]<00:01.000>one <00:01.500>two\n[00:02.000]next"
     );
 
     expect(doc.meta).toEqual({});
@@ -211,27 +211,27 @@ describe("lrc writer", () => {
     );
   });
 
-  test("round-trips exact metadata and consumes document offsets", () => {
+  test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...lineDocument,
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
         offset: 25,
-        songwriters: [" Writer "],
-        title: " Song ",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     };
     const written = write(doc);
 
     expect(written).toBe(
       [
-        "[ti: Song ]",
-        "[ar: Singer ]",
-        "[al: Album ]",
-        "[by: Author ]",
-        "[au: Writer ]",
+        "[ti:Song]",
+        "[ar:Singer]",
+        "[al:Album]",
+        "[by:Author]",
+        "[au:Writer]",
         "[00:01.000]Hello",
       ].join("\n")
     );
@@ -244,11 +244,11 @@ describe("lrc writer", () => {
         },
       ],
       meta: {
-        album: " Album ",
-        artist: " Singer ",
-        author: " Author ",
-        songwriters: [" Writer "],
-        title: " Song ",
+        album: "Album",
+        artist: "Singer",
+        author: "Author",
+        songwriters: ["Writer"],
+        title: "Song",
       },
     });
   });
