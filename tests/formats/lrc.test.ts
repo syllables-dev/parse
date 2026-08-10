@@ -268,6 +268,67 @@ describe("lrc writer", () => {
     ).toThrow("lrc cannot represent line breaks in metadata");
   });
 
+  test("rejects an empty author without mutation", () => {
+    const doc = { ...lineDocument, meta: { author: "" } };
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lrc cannot represent an empty lyric file author"
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test.each([
+    {
+      createPrimaryDocument: () =>
+        ({
+          ...lineDocument,
+          lines: [{ ...lyricLine, p: [] }],
+        }) satisfies LyricsDocument,
+      message: "count",
+    },
+    {
+      createPrimaryDocument: () =>
+        ({
+          ...lineDocument,
+          lines: [
+            {
+              ...lyricLine,
+              p: [
+                { begin: 1000, end: 3000, id: "first", text: "Hel" },
+                { begin: 3000, end: 6000, id: "second", text: "lo" },
+              ],
+            },
+          ],
+        }) satisfies LyricsDocument,
+      message: "count",
+    },
+    {
+      createPrimaryDocument: () =>
+        ({
+          ...lineDocument,
+          lines: [
+            {
+              ...lyricLine,
+              p: [{ begin: 1001, end: 6000, id: "word", text: "Hello" }],
+            },
+          ],
+        }) satisfies LyricsDocument,
+      message: "range",
+    },
+  ])(
+    "rejects a lossy primary syllable $message without mutation",
+    ({ createPrimaryDocument, message }) => {
+      const primaryDocument = createPrimaryDocument();
+      const before = structuredClone(primaryDocument);
+
+      expect(() => write(primaryDocument)).toThrow(
+        `lrc cannot represent the primary syllable ${message} of line line`
+      );
+      expect(primaryDocument).toEqual(before);
+    }
+  );
+
   test("rejects unsupported document fields", () => {
     expect(() => write({ ...lineDocument, timing: "word" })).toThrow(
       "lrc cannot represent word timing"

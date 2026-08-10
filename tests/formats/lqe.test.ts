@@ -24,7 +24,7 @@ const fixtureCases = [
 ];
 
 const translatedLine = {
-  agent: "lead",
+  agent: "v1",
   b: [{ begin: 1200, end: 1700, id: "l0b0", text: "Echo" }],
   begin: 1000,
   end: 2000,
@@ -38,7 +38,7 @@ const translatedLine = {
 } satisfies LyricsLine;
 
 const translatedDocument = {
-  agents: [{ id: "lead", type: "person" }],
+  agents: [{ id: "v1", type: "person" }],
   lines: [translatedLine],
   meta: {},
   timing: "word",
@@ -382,7 +382,7 @@ describe("lqe writer", () => {
       lines: [
         translatedLine,
         {
-          agent: "lead",
+          agent: "v1",
           b: [{ begin: 3000, end: 3500, id: "l1b0", text: "Reply" }],
           begin: 3000,
           end: 3500,
@@ -409,17 +409,65 @@ describe("lqe writer", () => {
       "[translation: format@LRC]",
       "[translation: language@zh-Hans, format@LRC]",
     ]);
-    expect(read(written)).toEqual({
-      ...translatedDocument,
-      agents: [{ id: "v1", type: "person" }],
-      lines: [
-        {
-          ...translatedLine,
-          agent: "v1",
-        },
-      ],
-    });
+    expect(read(written)).toEqual(translatedDocument);
   });
+
+  test.each([
+    {
+      createAgentDocument: () =>
+        ({
+          ...translatedDocument,
+          agents: [{ id: "lead", type: "person" }],
+          lines: [{ ...translatedLine, agent: "lead" }],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...translatedDocument,
+          agents: [{ id: "v1", type: "other" }],
+          lines: [translatedLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...translatedDocument,
+          agents: [
+            { id: "v1", type: "person" },
+            { id: "v2", type: "person" },
+          ],
+          lines: [translatedLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...translatedDocument,
+          agents: [],
+          lines: [translatedLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...translatedDocument,
+          agents: [],
+          lines: [{ ...translatedLine, agent: "guest" }],
+        }) satisfies LyricsDocument,
+    },
+  ])(
+    "rejects a lossy agent model without mutation",
+    ({ createAgentDocument }) => {
+      const agentDocument = createAgentDocument();
+      const before = structuredClone(agentDocument);
+
+      expect(() => write(agentDocument)).toThrow(
+        "lqe requires referenced v1 and v2 person agents in canonical order"
+      );
+      expect(agentDocument).toEqual(before);
+    }
+  );
 
   test("round-trips container metadata and consumes document offsets", () => {
     const written = write({
@@ -472,6 +520,16 @@ describe("lqe writer", () => {
     expect(() =>
       write({ ...translatedDocument, meta: { author: "One\rTwo" } })
     ).toThrow("lqe cannot represent line breaks in an author");
+  });
+
+  test("rejects an empty author without mutation", () => {
+    const doc = { ...translatedDocument, meta: { author: "" } };
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lqe cannot represent an empty lyric file author"
+    );
+    expect(doc).toEqual(before);
   });
 
   test("rejects invalid language tags and pronunciation tracks", () => {

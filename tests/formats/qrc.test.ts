@@ -367,6 +367,16 @@ describe("qrc writer", () => {
     ).toThrow("qrc cannot represent line breaks in metadata");
   });
 
+  test("rejects an empty author without mutation", () => {
+    const doc = { ...wordDocument, meta: { author: "" } };
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "qrc cannot represent an empty lyric file author"
+    );
+    expect(doc).toEqual(before);
+  });
+
   test.each([
     {
       doc: {

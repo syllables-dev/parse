@@ -234,6 +234,29 @@ describe("eslrc writer", () => {
     ).toThrow("eslrc cannot represent line breaks in metadata");
   });
 
+  test("rejects an empty author without mutation", () => {
+    const doc = { ...wordDocument, meta: { author: "" } };
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "eslrc cannot represent an empty lyric file author"
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test("rejects an empty primary track without mutation", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [{ ...lyricLine, p: [] }],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "eslrc cannot represent empty primary line l0"
+    );
+    expect(doc).toEqual(before);
+  });
+
   test.each([
     {
       doc: {

@@ -22,7 +22,7 @@ const fixtureCases = [
 ];
 
 const lyricLine = {
-  agent: "lead",
+  agent: "v1",
   b: [],
   begin: 1001,
   end: 2503,
@@ -34,7 +34,7 @@ const lyricLine = {
 } satisfies LyricsLine;
 
 const wordDocument = {
-  agents: [{ id: "lead", type: "person" }],
+  agents: [{ id: "v1", type: "person" }],
   lines: [lyricLine],
   meta: {},
   timing: "word",
@@ -286,28 +286,17 @@ describe("lys writer", () => {
     expect(read(write(doc)).lines[0]?.p[0]?.text).toBe("Hel (live) [mix]");
   });
 
-  test("maps arbitrary declared agent ids by declaration order", () => {
+  test("round-trips a canonical v2 declaration", () => {
     const doc = {
-      agents: [
-        { id: "lead", type: "person" },
-        { id: "guest", type: "person" },
-      ],
+      agents: [{ id: "v2", type: "person" }],
       lines: [
         {
-          agent: "lead",
-          b: [{ begin: 1500, end: 2000, id: "leadBacking", text: "Echo" }],
+          agent: "v2",
+          b: [],
           begin: 1000,
-          end: 2000,
-          id: "leadLine",
-          p: [{ begin: 1000, end: 1500, id: "leadWord", text: "Lead" }],
-        },
-        {
-          agent: "guest",
-          b: [{ begin: 3500, end: 4000, id: "guestBacking", text: "Reply" }],
-          begin: 3000,
-          end: 4000,
-          id: "guestLine",
-          p: [{ begin: 3000, end: 3500, id: "guestWord", text: "Guest" }],
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Guest" }],
         },
       ],
       meta: {},
@@ -315,16 +304,87 @@ describe("lys writer", () => {
       version: 1,
     } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe(
-      [
-        "[by:]",
-        "[4]Lead(1000,500)",
-        "[7](Echo)(1500,500)",
-        "[5]Guest(3000,500)",
-        "[8](Reply)(3500,500)",
-      ].join("\n")
-    );
+    expect(write(doc)).toBe("[by:]\n[5]Guest(1000,500)");
+    expect(read(write(doc))).toEqual(doc);
   });
+
+  test.each([
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [{ id: "lead", type: "person" }],
+          lines: [{ ...lyricLine, agent: "lead" }],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [{ id: "v1", type: "group" }],
+          lines: [lyricLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [
+            { id: "v1", type: "person" },
+            { id: "v2", type: "person" },
+          ],
+          lines: [lyricLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [],
+          lines: [lyricLine],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [],
+          lines: [{ ...lyricLine, agent: "guest" }],
+        }) satisfies LyricsDocument,
+    },
+    {
+      createAgentDocument: () =>
+        ({
+          ...wordDocument,
+          agents: [
+            { id: "v2", type: "person" },
+            { id: "v1", type: "person" },
+          ],
+          lines: [
+            lyricLine,
+            {
+              ...lyricLine,
+              agent: "v2",
+              begin: 3000,
+              end: 3500,
+              id: "l1",
+              p: [{ begin: 3000, end: 3500, id: "l1w0", text: "Reply" }],
+            },
+          ],
+        }) satisfies LyricsDocument,
+    },
+  ])(
+    "rejects a lossy agent model without mutation",
+    ({ createAgentDocument }) => {
+      const agentDocument = createAgentDocument();
+      const before = structuredClone(agentDocument);
+
+      expect(() => write(agentDocument)).toThrow(
+        "lys requires referenced v1 and v2 person agents in canonical order"
+      );
+      expect(agentDocument).toEqual(before);
+    }
+  );
 
   test("preserves a leading backing-only line", () => {
     const doc = {
@@ -421,6 +481,16 @@ describe("lys writer", () => {
     ).toThrow("lys cannot represent line breaks in metadata");
   });
 
+  test("rejects an empty author without mutation", () => {
+    const doc = { ...wordDocument, meta: { author: "" } };
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lys cannot represent an empty lyric file author"
+    );
+    expect(doc).toEqual(before);
+  });
+
   test.each([
     {
       doc: {
@@ -445,25 +515,6 @@ describe("lys writer", () => {
         ],
       } satisfies LyricsDocument,
       message: "lys cannot represent pronunciations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        agents: [
-          { id: "one", type: "person" },
-          { id: "two", type: "person" },
-          { id: "three", type: "person" },
-        ],
-        lines: [{ ...lyricLine, agent: "one" }],
-      } satisfies LyricsDocument,
-      message: "lys supports up to two vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [{ ...lyricLine, agent: "missing" }],
-      } satisfies LyricsDocument,
-      message: "lys lines must reference declared vocal agents",
     },
   ])("rejects unrepresentable document fields", ({ doc, message }) => {
     expect(() => write(doc)).toThrow(message);
