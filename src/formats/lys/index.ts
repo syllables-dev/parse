@@ -5,17 +5,17 @@
  * [4]Hel(12000,400)lo (12400,300)world(12700,600)
  */
 
-import { ParseError } from "../errors";
-import { readTag, writeTags } from "../internal/lyric-tags";
-import { readTimedWords, type TimedWord } from "../internal/timed-words";
+import { ParseError } from "../../errors";
+import { readTag, writeTags } from "../../internal/lyric-tags";
+import { readTimedWords, type TimedWord } from "../../internal/timed-words";
 import {
   checkTime,
   readOffset,
   shiftTimes,
   splitLines,
   toInt,
-} from "../internal/timestamps";
-import { checkLines, checkText, checkWrite } from "../internal/write-check";
+} from "../../internal/timestamps";
+import { checkLines, checkText, checkWrite } from "../../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -24,7 +24,8 @@ import type {
   ReadOptions,
   Syllable,
   WriteOptions,
-} from "../types";
+} from "../../types";
+import { checkLysAgents } from "./agents";
 
 interface LysRow {
   agent: string | null;
@@ -222,20 +223,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       checkText(syllable.text, "lys", reservedStamp);
     }
   }
-  const agentIds = doc.agents.map((agent) => agent.id);
-  if (agentIds.length > 2) {
-    throw new Error("lys supports up to two vocal agents");
-  }
-  if (new Set(agentIds).size !== agentIds.length) {
-    throw new Error("lys requires unique vocal agent ids");
-  }
-  if (
-    doc.lines.some(
-      (line) => line.agent !== null && !agentIds.includes(line.agent)
-    )
-  ) {
-    throw new Error("lys lines must reference declared vocal agents");
-  }
+  checkLysAgents(doc, "lys");
   for (const [lineIndex, line] of doc.lines.entries()) {
     const previous = doc.lines[lineIndex - 1];
     if (
@@ -256,7 +244,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     if (begin !== line.begin || end !== line.end) {
       throw new Error(`lys cannot represent the range of line ${line.id}`);
     }
-    const side = line.agent === null ? 0 : agentIds.indexOf(line.agent) + 1;
+    const side = propertyAgents.indexOf(line.agent);
     return [
       ...(line.p.length > 0 ? [writeRow(side + 3, line.p, false)] : []),
       ...(line.b.length > 0 ? [writeRow(side + 6, line.b, true)] : []),

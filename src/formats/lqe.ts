@@ -11,6 +11,7 @@ import type {
 } from "../types";
 import { read as readLrc, write as writeLrc } from "./lrc";
 import { read as readLys, write as writeLys } from "./lys";
+import { checkLysAgents } from "./lys/agents";
 
 type SectionKind = "lyrics" | "pronunciation" | "translation";
 
@@ -360,6 +361,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   }
   checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
+  checkLysAgents(doc, "lqe");
   for (const line of doc.lines) {
     for (const syllable of [...line.p, ...line.b]) {
       checkText(syllable.text, "lqe", lysReservedStamp);

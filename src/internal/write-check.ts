@@ -27,6 +27,9 @@ export function checkWrite(
   format: FormatId,
   capabilities: FormatCapabilities
 ): void {
+  if (doc.meta.author === "") {
+    throw new Error(`${format} cannot represent an empty lyric file author`);
+  }
   if (!capabilities.author && doc.meta.author !== undefined) {
     throw new Error(`${format} cannot represent a lyric file author`);
   }

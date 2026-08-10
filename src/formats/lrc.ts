@@ -192,13 +192,27 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   checkLines(doc, "lrc");
   checkWrite(doc, "lrc", capabilities);
   for (const [lineIndex, line] of doc.lines.entries()) {
-    for (const syllable of line.p) {
-      checkText(syllable.text, "lrc", reservedStamp);
-    }
     const expectedEnd =
       doc.lines[lineIndex + 1]?.begin ?? line.begin + lastLineMs;
     if (line.end !== expectedEnd) {
       throw new Error(`lrc cannot represent the end time of line ${line.id}`);
+    }
+    if (line.p.length !== 1) {
+      throw new Error(
+        `lrc cannot represent the primary syllable count of line ${line.id}`
+      );
+    }
+    if (
+      line.p.some(
+        (syllable) => syllable.begin !== line.begin || syllable.end !== line.end
+      )
+    ) {
+      throw new Error(
+        `lrc cannot represent the primary syllable range of line ${line.id}`
+      );
+    }
+    for (const syllable of line.p) {
+      checkText(syllable.text, "lrc", reservedStamp);
     }
   }
   return [

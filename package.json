@@ -31,8 +31,8 @@
       "import": "./dist/formats/yrc.js"
     },
     "./lys": {
-      "types": "./dist/formats/lys.d.ts",
-      "import": "./dist/formats/lys.js"
+      "types": "./dist/formats/lys/index.d.ts",
+      "import": "./dist/formats/lys/index.js"
     },
     "./lqe": {
       "types": "./dist/formats/lqe.d.ts",
