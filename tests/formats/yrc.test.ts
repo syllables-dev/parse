@@ -93,6 +93,16 @@ describe("yrc reader", () => {
     expect(read(source).meta.songwriters).toEqual(["One", "Two"]);
   });
 
+  test("combines an au tag with JSON songwriters without duplicates", () => {
+    const source = [
+      JSON.stringify({ c: [{ tx: "作词: " }, { tx: "One/Two" }], t: 0 }),
+      "[au:Two]",
+      "[1000,1000](1000,1000,0)lyric",
+    ].join("\n");
+
+    expect(read(source).meta.songwriters).toEqual(["One", "Two"]);
+  });
+
   test("preserves empty and whitespace-only lyric lines", () => {
     const doc = read("[1000,1000]\n[2000,1000]   ");
 
@@ -119,6 +129,74 @@ describe("yrc reader", () => {
     ).toEqual([
       [1001, 1752],
       [1752, 2503],
+    ]);
+  });
+
+  test("keeps whitespace with the syllable before its next marker", () => {
+    const doc = read(
+      "[12000,1300](12000,400,0)Hel(12400,300,0)lo (12700,600,0)world"
+    );
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 12_000, end: 12_400, id: "l0w0", text: "Hel" },
+      { begin: 12_400, end: 12_700, id: "l0w1", text: "lo " },
+      { begin: 12_700, end: 13_300, id: "l0w2", text: "world" },
+    ]);
+    expect(write(doc)).toContain(
+      "(12000,400,0)Hel(12400,300,0)lo (12700,600,0)world"
+    );
+  });
+
+  test("preserves exact metadata and consumes a positive offset", () => {
+    const doc = read(
+      [
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[offset: +25 ]",
+        "[1001,1502](1001,751,0)Hel(1752,751,0)lo",
+      ].join("\n")
+    );
+
+    expect(doc.meta).toEqual({
+      album: " Album ",
+      artist: " Singer ",
+      author: " Author ",
+      songwriters: [" Writer "],
+      title: " Song ",
+    });
+    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .map((line) => line.p.map((word) => word.text).join(""))
+    ).toEqual(["Hello"]);
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
+    ).toEqual([
+      [1026, 1777],
+      [1777, 2528],
+    ]);
+  });
+
+  test("adds negative offsets to every timed range", () => {
+    const doc = read(
+      "[offset: -25 ]\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
+    );
+
+    expect(doc.meta).toEqual({});
+    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
+    ).toEqual([
+      [976, 1727],
+      [1727, 2478],
     ]);
   });
 
@@ -193,13 +271,65 @@ describe("yrc writer", () => {
     expect(read(written)).toEqual(doc);
   });
 
-  test("rejects unavailable metadata and slash-delimited names", () => {
-    expect(() => write({ ...wordDocument, meta: { title: "Song" } })).toThrow(
-      "yrc cannot represent title, artist, album, or offset metadata"
-    );
+  test("round-trips exact metadata and consumes document offsets", () => {
+    const doc = {
+      ...wordDocument,
+      meta: {
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
+        offset: 25,
+        songwriters: ["Writer"],
+        title: " Song ",
+      },
+    };
+    const written = write(doc);
+
+    expect(written).not.toContain("[offset:");
+    expect(written).toContain("[au:Writer]");
+    expect(written).toContain("[1001,1502](1001,751,0)Hel");
+    expect(read(written)).toEqual({
+      ...doc,
+      meta: {
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
+        songwriters: ["Writer"],
+        title: " Song ",
+      },
+    });
+  });
+
+  test("round-trips every single songwriter string through an au tag", () => {
+    for (const songwriter of ["", " Writer ", "One/Two"]) {
+      const doc = {
+        ...wordDocument,
+        meta: { songwriters: [songwriter] },
+      } satisfies LyricsDocument;
+      const written = write(doc);
+
+      expect(written).toContain(`[au:${songwriter}]`);
+      expect(written).toContain("[1001,1502](1001,751,0)Hel");
+      expect(read(written)).toEqual(doc);
+    }
+  });
+
+  test.each([
+    { message: "an empty list", songwriters: [] },
+    { message: "an empty name", songwriters: ["One", ""] },
+    { message: "surrounding whitespace", songwriters: ["One", " Two "] },
+    { message: "a slash", songwriters: ["One", "Two/Three"] },
+    { message: "duplicates", songwriters: ["One", "One"] },
+  ])("rejects songwriter metadata with $message", ({ songwriters }) => {
     expect(() =>
-      write({ ...wordDocument, meta: { songwriters: ["One/Two"] } })
-    ).toThrow("yrc cannot represent a slash inside a songwriter name");
+      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
+    ).toThrow();
+  });
+
+  test("rejects line breaks in metadata", () => {
+    expect(() =>
+      write({ ...wordDocument, meta: { artist: "One\nTwo" } })
+    ).toThrow("yrc cannot represent line breaks in metadata");
   });
 
   test.each([

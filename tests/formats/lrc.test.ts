@@ -101,34 +101,53 @@ describe("lrc reader", () => {
     ]);
   });
 
-  test("applies integer offsets to line and A2 word timestamps", () => {
+  test("preserves exact metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti:Song]",
-        "[ar:Singer]",
-        "[al:Album]",
-        "[au:Writer]",
-        "[offset:+250]",
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[offset: +250 ]",
         "[00:01.234]<00:01.234>one <00:01.999>two",
         "[00:02.500]next",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: "Album",
-      artist: "Singer",
-      offset: 250,
-      songwriters: ["Writer"],
-      title: "Song",
+      album: " Album ",
+      artist: " Singer ",
+      author: " Author ",
+      songwriters: [" Writer "],
+      title: " Song ",
     });
-    expect(doc.lines[0]).toMatchObject({ begin: 984, end: 2250 });
+    expect(doc.lines[0]).toMatchObject({ begin: 1484, end: 2750 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .map((line) => line.p.map((word) => word.text).join(""))
+    ).toEqual(["one two"]);
     expect(
       doc.lines
         .slice(0, 1)
         .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
     ).toEqual([
-      [984, 1749],
-      [1749, 2250],
+      [1484, 2249],
+      [2249, 2750],
+    ]);
+  });
+
+  test("adds negative offsets to line and A2 word timestamps", () => {
+    const doc = read(
+      "[offset: -250 ]\n[00:01.000]<00:01.000>one <00:01.500>two\n[00:02.000]next"
+    );
+
+    expect(doc.meta).toEqual({});
+    expect(doc.lines[0]).toMatchObject({ begin: 750, end: 1750 });
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 750, end: 1250, id: "l0w0", text: "one " },
+      { begin: 1250, end: 1750, id: "l0w1", text: "two" },
     ]);
   });
 
@@ -136,6 +155,8 @@ describe("lrc reader", () => {
     "plain lyrics",
     "[00:60.000]bad seconds",
     "[00:01.000]prefix<00:01.000>word",
+    "[offset:-1]\n[00:00.000]negative time",
+    "[offset:+9007199254740991]\n[00:00.001]unsafe time",
   ])("throws ParseError for unreadable input", (source) => {
     expect(() => read(source)).toThrow(ParseError);
   });
@@ -190,19 +211,61 @@ describe("lrc writer", () => {
     );
   });
 
-  test("emits only the by metadata tag", () => {
+  test("round-trips exact metadata and consumes document offsets", () => {
     const doc = {
       ...lineDocument,
       meta: {
-        album: "Album",
-        artist: "Singer",
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
         offset: 25,
-        songwriters: ["Writer"],
-        title: "Song",
+        songwriters: [" Writer "],
+        title: " Song ",
       },
     };
+    const written = write(doc);
 
-    expect(write(doc)).toBe("[by:]\n[00:01.000]Hello");
+    expect(written).toBe(
+      [
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[00:01.000]Hello",
+      ].join("\n")
+    );
+    expect(read(written)).toMatchObject({
+      lines: [
+        {
+          begin: 1000,
+          end: 6000,
+          p: [{ begin: 1000, end: 6000, text: "Hello" }],
+        },
+      ],
+      meta: {
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
+        songwriters: [" Writer "],
+        title: " Song ",
+      },
+    });
+  });
+
+  test.each([
+    { message: "an empty songwriter list", songwriters: [] },
+    { message: "multiple songwriters", songwriters: ["One", "Two"] },
+  ])("rejects $message", ({ message, songwriters }) => {
+    expect(() =>
+      write({ ...lineDocument, meta: { songwriters: [...songwriters] } })
+    ).toThrow(`lrc cannot represent ${message}`);
+  });
+
+  test("rejects line breaks in metadata", () => {
+    expect(() =>
+      write({ ...lineDocument, meta: { title: "Song\nTitle" } })
+    ).toThrow("lrc cannot represent line breaks in metadata");
   });
 
   test("rejects unsupported document fields", () => {

@@ -6,15 +6,17 @@ import { read, write } from "../../src/formats/qrc";
 const fixtureCases = [
   {
     fileName: "cjk-per-char.qrc",
-    firstText: "岁月如歌 - 陈奕迅 (Eason Chan)",
+    firstText: "爱上了 看见你",
     lineCount: 47,
+    lyricIndex: 4,
     title:
       "岁月如歌 (《兄妹》粤语版|《冲上云霄》电影主题曲|《冲上云霄》电视剧主题曲)",
   },
   {
     fileName: "parens-in-text.qrc",
-    firstText: "petal (Explicit) - Ariana Grande",
+    firstText: "Tryna feel something real",
     lineCount: 61,
+    lyricIndex: 4,
     title: "petal (Explicit)",
   },
 ];
@@ -72,7 +74,7 @@ function makeLine(
 describe("qrc fixtures", () => {
   test.each(fixtureCases)(
     "reads and round-trips $fileName",
-    async ({ fileName, firstText, lineCount, title }) => {
+    async ({ fileName, firstText, lineCount, lyricIndex, title }) => {
       const doc = await readFixture(fileName);
 
       expect(doc).toMatchObject({
@@ -82,11 +84,9 @@ describe("qrc fixtures", () => {
       });
       expect(doc.meta.title).toBe(title);
       expect(doc.lines).toHaveLength(lineCount);
-      expect(
-        doc.lines
-          .slice(0, 1)
-          .map((line) => line.p.map((word) => word.text).join(""))
-      ).toEqual([firstText]);
+      expect(doc.lines[lyricIndex]?.p.map((word) => word.text).join("")).toBe(
+        firstText
+      );
       expect(read(write(doc))).toEqual(doc);
     }
   );
@@ -94,25 +94,22 @@ describe("qrc fixtures", () => {
   test("keeps CJK characters as separate timed syllables", async () => {
     const doc = await readFixture("cjk-per-char.qrc");
 
-    expect(doc.lines.slice(0, 1).flatMap((line) => line.p.slice(0, 4))).toEqual(
+    expect(doc.lines.slice(4, 5).flatMap((line) => line.p.slice(0, 3))).toEqual(
       [
-        { begin: 0, end: 209, id: "l0w0", text: "岁" },
-        { begin: 209, end: 418, id: "l0w1", text: "月" },
-        { begin: 418, end: 627, id: "l0w2", text: "如" },
-        { begin: 627, end: 836, id: "l0w3", text: "歌" },
+        { begin: 13_434, end: 13_643, id: "l4w0", text: "爱" },
+        { begin: 13_643, end: 13_843, id: "l4w1", text: "上" },
+        { begin: 13_843, end: 14_227, id: "l4w2", text: "了" },
       ]
     );
   });
 
-  test("keeps literal parentheses inside primary text", async () => {
-    const doc = await readFixture("parens-in-text.qrc");
+  test("keeps literal parentheses inside a lyric line", () => {
+    const doc = read("[1000,1000]Sing (1000,500)(live)(1500,500)");
 
-    expect(doc.lines.slice(0, 1).flatMap((line) => line.p.slice(0, 2))).toEqual(
-      [
-        { begin: 66, end: 427, id: "l0w0", text: "petal (" },
-        { begin: 427, end: 667, id: "l0w1", text: "Explicit) - " },
-      ]
-    );
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 1000, end: 1500, id: "l0w0", text: "Sing " },
+      { begin: 1500, end: 2000, id: "l0w1", text: "(live)" },
+    ]);
     expect(doc.lines[0]?.b).toEqual([]);
   });
 });
@@ -165,35 +162,55 @@ describe("qrc reader", () => {
     ]);
   });
 
-  test("applies offsets and reads every metadata field", () => {
+  test("preserves exact metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti:Song]",
-        "[ar:Singer]",
-        "[al:Album]",
-        "[au:Writer]",
-        "[offset:25]",
-        "[1026,1502]Hel(1026,751)lo(1777,751)",
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[offset: +25 ]",
+        "[1001,1502]Hel(1001,751)lo(1752,751)",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: "Album",
-      artist: "Singer",
-      offset: 25,
-      songwriters: ["Writer"],
-      title: "Song",
+      album: " Album ",
+      artist: " Singer ",
+      author: " Author ",
+      songwriters: [" Writer "],
+      title: " Song ",
     });
-    expect(doc.lines[0]).toMatchObject({ begin: 1001, end: 2503 });
+    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .map((line) => line.p.map((word) => word.text).join(""))
+    ).toEqual(["Hello"]);
     expect(
       doc.lines
         .slice(0, 1)
         .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
     ).toEqual([
-      [1001, 1752],
-      [1752, 2503],
+      [1026, 1777],
+      [1777, 2528],
     ]);
-    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("adds negative offsets to every timed range", () => {
+    const doc = read("[offset: -25 ]\n[1001,1502]Hel(1001,751)lo(1752,751)");
+
+    expect(doc.meta).toEqual({});
+    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
+    ).toEqual([
+      [976, 1727],
+      [1727, 2478],
+    ]);
   });
 
   test.each([
@@ -300,28 +317,54 @@ describe("qrc writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("round-trips every supported metadata field", () => {
+  test("round-trips exact metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
-        album: "Album",
-        artist: "Singer",
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
         offset: 25,
-        songwriters: ["Writer"],
-        title: "Song",
+        songwriters: [" Writer "],
+        title: " Song ",
       },
     };
+    const written = write(doc);
 
-    expect(read(write(doc))).toEqual(doc);
+    expect(written.split("\n").slice(0, 6)).toEqual([
+      "[ti: Song ]",
+      "[ar: Singer ]",
+      "[al: Album ]",
+      "[by: Author ]",
+      "[au: Writer ]",
+      "[1001,1502]Hel(1001,751)lo(1752,751)",
+    ]);
+    expect(written).not.toContain("[offset:");
+    expect(read(written)).toEqual({
+      ...doc,
+      meta: {
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
+        songwriters: [" Writer "],
+        title: " Song ",
+      },
+    });
   });
 
-  test("rejects multiple songwriters", () => {
+  test.each([
+    { message: "an empty songwriter list", songwriters: [] },
+    { message: "multiple songwriters", songwriters: ["One", "Two"] },
+  ])("rejects $message", ({ message, songwriters }) => {
     expect(() =>
-      write({
-        ...wordDocument,
-        meta: { songwriters: ["One", "Two"] },
-      })
-    ).toThrow("qrc cannot represent multiple songwriters");
+      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
+    ).toThrow(`qrc cannot represent ${message}`);
+  });
+
+  test("rejects line breaks in metadata", () => {
+    expect(() =>
+      write({ ...wordDocument, meta: { album: "One\rTwo" } })
+    ).toThrow("qrc cannot represent line breaks in metadata");
   });
 
   test.each([

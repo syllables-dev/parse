@@ -83,27 +83,43 @@ describe("eslrc reader", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("applies offsets and reads every metadata field", () => {
+  test("preserves metadata text and trims only the numeric offset", () => {
     const doc = read(
       [
-        "[ti:Song]",
-        "[ar:Singer]",
-        "[al:Album]",
-        "[au:Writer]",
-        "[offset:-25]",
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[offset: -25 ]",
         "[00:01.001]Hi[00:02.002]",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: "Album",
-      artist: "Singer",
-      offset: -25,
-      songwriters: ["Writer"],
-      title: "Song",
+      album: " Album ",
+      artist: " Singer ",
+      author: " Author ",
+      songwriters: [" Writer "],
+      title: " Song ",
     });
-    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2027 });
-    expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 1026, end: 2027 });
+    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 1977 });
+    expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 976, end: 1977 });
+  });
+
+  test("adds positive offsets to every timed range", () => {
+    const doc = read("[offset: +25 ]\n[00:01.001]Hel[00:01.752]lo[00:02.503]");
+
+    expect(doc.meta).toEqual({});
+    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
+    ).toEqual([
+      [1026, 1777],
+      [1777, 2528],
+    ]);
   });
 
   test.each([
@@ -164,7 +180,7 @@ describe("eslrc writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("round-trips every supported metadata field", () => {
+  test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
@@ -176,15 +192,25 @@ describe("eslrc writer", () => {
       },
     };
 
-    expect(read(write(doc))).toEqual(doc);
-    expect(write(doc).split("\n").slice(0, 6)).toEqual([
+    const written = write(doc);
+
+    expect(read(written)).toEqual({
+      ...doc,
+      meta: {
+        album: "Album",
+        artist: "Singer",
+        songwriters: ["Writer"],
+        title: "Song",
+      },
+    });
+    expect(written.split("\n").slice(0, 5)).toEqual([
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
       "[by:]",
-      "[offset:25]",
       "[au:Writer]",
     ]);
+    expect(written).not.toContain("[offset:");
   });
 
   test("rejects multiple songwriters", () => {
@@ -194,6 +220,18 @@ describe("eslrc writer", () => {
         meta: { songwriters: ["One", "Two"] },
       })
     ).toThrow("eslrc cannot represent multiple songwriters");
+  });
+
+  test("rejects an empty songwriter list", () => {
+    expect(() => write({ ...wordDocument, meta: { songwriters: [] } })).toThrow(
+      "eslrc cannot represent an empty songwriter list"
+    );
+  });
+
+  test("rejects line breaks in metadata", () => {
+    expect(() =>
+      write({ ...wordDocument, meta: { title: "One\nTwo" } })
+    ).toThrow("eslrc cannot represent line breaks in metadata");
   });
 
   test.each([

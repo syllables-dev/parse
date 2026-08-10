@@ -181,25 +181,47 @@ describe("lys reader", () => {
     ]);
   });
 
-  test("reads metadata and ignores the dead offset tag", () => {
+  test("preserves exact metadata and consumes a positive offset", () => {
     const doc = read(
       [
-        "[ti:Song]",
-        "[ar:Singer]",
-        "[al:Album]",
-        "[au:Writer]",
-        "[offset:900]",
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[offset: +900 ]",
         "[4]Hello(1000,500)",
       ].join("\n")
     );
 
     expect(doc.meta).toEqual({
-      album: "Album",
-      artist: "Singer",
-      songwriters: ["Writer"],
-      title: "Song",
+      album: " Album ",
+      artist: " Singer ",
+      author: " Author ",
+      songwriters: [" Writer "],
+      title: " Song ",
     });
-    expect(doc.lines[0]).toMatchObject({ begin: 1000, end: 1500 });
+    expect(doc.lines[0]).toMatchObject({ begin: 1900, end: 2400 });
+    expect(doc.lines[0]?.p[0]).toMatchObject({
+      begin: 1900,
+      end: 2400,
+      text: "Hello",
+    });
+  });
+
+  test("adds negative offsets to every timed range", () => {
+    const doc = read("[offset: -25 ]\n[4]Hel(1001,751)lo(1752,751)");
+
+    expect(doc.meta).toEqual({});
+    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
+    expect(
+      doc.lines
+        .slice(0, 1)
+        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
+    ).toEqual([
+      [976, 1727],
+      [1727, 2478],
+    ]);
   });
 
   test.each([
@@ -338,19 +360,65 @@ describe("lys writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("emits only the by metadata tag", () => {
+  test("round-trips exact metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
-        album: "Album",
-        artist: "Singer",
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
         offset: 25,
-        songwriters: ["Writer"],
-        title: "Song",
+        songwriters: [" Writer "],
+        title: " Song ",
       },
     };
+    const written = write(doc);
 
-    expect(write(doc)).toBe("[by:]\n[4]Hel(1001,751)lo(1752,751)");
+    expect(written).toBe(
+      [
+        "[ti: Song ]",
+        "[ar: Singer ]",
+        "[al: Album ]",
+        "[by: Author ]",
+        "[au: Writer ]",
+        "[4]Hel(1001,751)lo(1752,751)",
+      ].join("\n")
+    );
+    expect(written).not.toContain("[offset:");
+    expect(read(written)).toMatchObject({
+      lines: [
+        {
+          begin: 1001,
+          end: 2503,
+          p: [
+            { begin: 1001, end: 1752, text: "Hel" },
+            { begin: 1752, end: 2503, text: "lo" },
+          ],
+        },
+      ],
+      meta: {
+        album: " Album ",
+        artist: " Singer ",
+        author: " Author ",
+        songwriters: [" Writer "],
+        title: " Song ",
+      },
+    });
+  });
+
+  test.each([
+    { message: "an empty songwriter list", songwriters: [] },
+    { message: "multiple songwriters", songwriters: ["One", "Two"] },
+  ])("rejects $message", ({ message, songwriters }) => {
+    expect(() =>
+      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
+    ).toThrow(`lys cannot represent ${message}`);
+  });
+
+  test("rejects line breaks in metadata", () => {
+    expect(() =>
+      write({ ...wordDocument, meta: { songwriters: ["One\nTwo"] } })
+    ).toThrow("lys cannot represent line breaks in metadata");
   });
 
   test.each([
