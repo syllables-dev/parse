@@ -6,15 +6,16 @@ import { read, write } from "../../src/formats/yrc";
 const fixtureCases = [
   {
     fileName: "json-preamble.yrc",
-    firstText: "初めてのルーブルは",
     lineCount: 45,
+    lyricIndex: 0,
+    lyricText: "初めてのルーブルは",
     songwriters: ["宇多田ヒカル"],
   },
   {
     fileName: "word-timed-credits.yrc",
-    firstText:
-      " 作词 : Ester Dean/Katy Perry/Mikkel S. Eriksen/Tor Erik Hermansen/Sandy Wilhelm",
     lineCount: 61,
+    lyricIndex: 2,
+    lyricText: "Do you ever feel like a plastic bag",
     songwriters: undefined,
   },
 ];
@@ -50,7 +51,7 @@ async function readFixture(fileName: string) {
 describe("yrc fixtures", () => {
   test.each(fixtureCases)(
     "reads and round-trips $fileName",
-    async ({ fileName, firstText, lineCount, songwriters }) => {
+    async ({ fileName, lineCount, lyricIndex, lyricText, songwriters }) => {
       const doc = await readFixture(fileName);
 
       expect(doc).toMatchObject({
@@ -60,11 +61,9 @@ describe("yrc fixtures", () => {
       });
       expect(doc.meta.songwriters).toEqual(songwriters);
       expect(doc.lines).toHaveLength(lineCount);
-      expect(
-        doc.lines
-          .slice(0, 1)
-          .map((line) => line.p.map((word) => word.text).join(""))
-      ).toEqual([firstText]);
+      expect(doc.lines[lyricIndex]?.p.map((word) => word.text).join("")).toBe(
+        lyricText
+      );
       expect(read(write(doc))).toEqual(doc);
     }
   );
