@@ -5,6 +5,8 @@ import {
   type LyricsDocument,
   type LyricsLine,
   ParseError,
+  read as readLyrics,
+  write as writeLyrics,
 } from "../../src";
 import { read, write } from "../../src/formats/ttml";
 
@@ -18,15 +20,14 @@ const fixtureCases = [
     fileName: "backing-vocals.ttml",
     firstLine: {
       agent: "v1",
-      begin: 7421,
-      end: 9200,
+      begin: 9023,
+      end: 10_802,
       id: "L1",
       text: "Thought I'd end up with Sean",
-      word: { begin: 7421, end: 7590, id: "L1w0", text: "Thought " },
+      word: { begin: 9023, end: 9192, id: "L1w0", text: "Thought " },
     },
     lineCount: 87,
     meta: {
-      offset: 801,
       songwriters: [
         "Ariana Grande",
         "Charles Anderson",
@@ -47,14 +48,14 @@ const fixtureCases = [
     fileName: "instrumental-gap.ttml",
     firstLine: {
       agent: "v1",
-      begin: -149,
-      end: 2757,
+      begin: 149,
+      end: 3055,
       id: "L1",
       text: "Is this the real life?",
-      word: { begin: -149, end: 309, id: "L1w0", text: "Is " },
+      word: { begin: 149, end: 607, id: "L1w0", text: "Is " },
     },
     lineCount: 73,
-    meta: { offset: 149, songwriters: ["Freddie Mercury"] },
+    meta: { songwriters: ["Freddie Mercury"] },
     pronunciationLanguages: [],
     timing: "word",
     translationLanguages: [],
@@ -259,22 +260,22 @@ describe("ttml fixtures", () => {
     const doc = await readFixture("backing-vocals.ttml");
 
     expect(doc.lines[17]?.p).toEqual([
-      { begin: 44_739, end: 45_139, id: "L18w0", text: "Thank " },
-      { begin: 45_139, end: 45_689, id: "L18w1", text: "u, " },
-      { begin: 45_872, end: 46_350, id: "L18w2", text: "next " },
+      { begin: 46_341, end: 46_741, id: "L18w0", text: "Thank " },
+      { begin: 46_741, end: 47_291, id: "L18w1", text: "u, " },
+      { begin: 47_474, end: 47_952, id: "L18w2", text: "next " },
     ]);
     expect(doc.lines[17]?.b).toEqual([
-      { begin: 46_405, end: 46_906, id: "L18b0", text: "Next" },
+      { begin: 48_007, end: 48_508, id: "L18b0", text: "Next" },
     ]);
   });
 
   test("keeps overlapping lines and instrumental gaps", async () => {
     const doc = await readFixture("instrumental-gap.ttml");
 
-    expect(doc.lines[52]).toMatchObject({ begin: 227_478, end: 231_966 });
-    expect(doc.lines[53]).toMatchObject({ begin: 230_933, end: 233_662 });
-    expect(doc.lines[34]?.end).toBe(156_911);
-    expect(doc.lines[35]?.begin).toBe(185_659);
+    expect(doc.lines[52]).toMatchObject({ begin: 227_776, end: 232_264 });
+    expect(doc.lines[53]).toMatchObject({ begin: 231_231, end: 233_960 });
+    expect(doc.lines[34]?.end).toBe(157_209);
+    expect(doc.lines[35]?.begin).toBe(185_957);
   });
 
   test("keeps every fixture translation and pronunciation line", async () => {
@@ -355,23 +356,60 @@ describe("ttml reader", () => {
   });
 
   test.each([
-    { begin: -250, end: 1750, offset: 1250, sourceOffset: "+1.250" },
-    { begin: 2250, end: 4250, offset: -1250, sourceOffset: "-1.250" },
+    { offset: 1250, sourceOffset: "+1.250", writtenBegin: "0:03.250" },
+    { offset: -1250, sourceOffset: "-1.250", writtenBegin: "0:00.750" },
   ])(
-    "applies $sourceOffset lyric offsets exactly",
-    ({ begin, end, offset, sourceOffset }) => {
-      const apple = `<itunes:iTunesMetadata><itunes:audio lyricOffset="${sourceOffset}"/></itunes:iTunesMetadata>`;
+    "consumes $sourceOffset across every timed track",
+    ({ offset, sourceOffset, writtenBegin }) => {
+      const apple = [
+        "<itunes:iTunesMetadata>",
+        `<itunes:audio lyricOffset="${sourceOffset}"/>`,
+        "<itunes:transliterations>",
+        '<itunes:transliteration xml:lang="en-Latn"><itunes:text for="offset"><span begin="2.100" end="4.800">hello </span><span ttm:role="x-bg"><span begin="2.800" end="4.000">(echo)</span></span></itunes:text></itunes:transliteration>',
+        "</itunes:transliterations>",
+        "</itunes:iTunesMetadata>",
+      ].join("");
       const source = makeTtml(
-        '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="offset"><span begin="1.000" end="3.000">Time</span></p></div>',
+        '<div begin="2.000" end="5.000"><p begin="2.000" end="5.000" itunes:key="offset"><span begin="2.000" end="3.000">Hello </span><span begin="3.000" end="5.000">world</span><span ttm:role="x-bg"><span begin="2.500" end="4.500">(echo)</span></span></p></div>',
         apple
       );
-      const doc = read(source);
+      const doc = readLyrics(source, "ttml");
+      const [line] = doc.lines;
 
-      expect(doc.meta.offset).toBe(offset);
-      expect(doc.lines[0]).toMatchObject({ begin, end });
-      expect(doc.lines[0]?.p[0]).toMatchObject({ begin, end });
+      expect(doc.meta).toEqual({});
+      expect(line).toMatchObject({
+        b: [{ begin: 2500 + offset, end: 4500 + offset }],
+        begin: 2000 + offset,
+        end: 5000 + offset,
+        p: [
+          { begin: 2000 + offset, end: 3000 + offset },
+          { begin: 3000 + offset, end: 5000 + offset },
+        ],
+        pronunciations: {
+          "en-Latn": {
+            b: [{ begin: 2800 + offset, end: 4000 + offset }],
+            p: [{ begin: 2100 + offset, end: 4800 + offset }],
+          },
+        },
+      });
+
+      const written = writeLyrics(doc, "ttml");
+      expect(written).toContain(`begin="${writtenBegin}"`);
+      expect(written.includes("lyricOffset")).toBe(false);
+      expect(readLyrics(written, "ttml")).toEqual(doc);
     }
   );
+
+  test("rejects lyric offsets that shift timestamps below zero", () => {
+    const apple =
+      '<itunes:iTunesMetadata><itunes:audio lyricOffset="-1.250"/></itunes:iTunesMetadata>';
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="underflow"><span begin="1.000" end="3.000">Too early</span></p></div>',
+      apple
+    );
+
+    expect(() => readLyrics(source, "ttml")).toThrow(ParseError);
+  });
 
   test("preserves raw line-timed primary and backing text", () => {
     const source = makeTtml(
@@ -434,6 +472,80 @@ describe("ttml reader", () => {
       },
     });
   });
+
+  test.each([
+    {
+      attribute: ' automaticallyCreated="true"',
+      created: true,
+      state: "true",
+    },
+    {
+      attribute: ' automaticallyCreated="false"',
+      created: false,
+      state: "false",
+    },
+    {
+      attribute: ' automaticallyCreated="TRUE"',
+      created: false,
+      state: "case-sensitive false",
+    },
+    { attribute: "", created: undefined, state: "absent" },
+  ])(
+    "preserves the $state automaticallyCreated state on parallel tracks",
+    ({ attribute, created }) => {
+      const apple = [
+        "<itunes:iTunesMetadata>",
+        "<itunes:translations>",
+        `<itunes:translation type="subtitle" xml:lang="fr"${attribute}><itunes:text for="line">Bonjour le monde</itunes:text></itunes:translation>`,
+        "</itunes:translations>",
+        "<itunes:transliterations>",
+        `<itunes:transliteration xml:lang="en-Latn"${attribute}><itunes:text for="line"><span begin="1.100" end="2.900">hello world</span></itunes:text></itunes:transliteration>`,
+        "</itunes:transliterations>",
+        "</itunes:iTunesMetadata>",
+      ].join("");
+      const source = makeTtml(
+        '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="line"><span begin="1.000" end="2.000">Hello </span><span begin="2.000" end="3.000">world</span></p></div>',
+        apple
+      );
+      const doc = readLyrics(source, "ttml");
+      const createdField =
+        created === undefined ? {} : { automaticallyCreated: created };
+
+      expect(doc.lines[0]?.translations?.fr).toEqual({
+        ...createdField,
+        p: "Bonjour le monde",
+      });
+      expect(doc.lines[0]?.pronunciations?.["en-Latn"]).toEqual({
+        ...createdField,
+        b: [],
+        p: [
+          {
+            begin: 1100,
+            end: 2900,
+            id: "liner0w0",
+            text: "hello world",
+          },
+        ],
+      });
+
+      const written = writeLyrics(doc, "ttml");
+      const writtenAttribute =
+        created === undefined ? "" : ` automaticallyCreated="${created}"`;
+      expect(written).toContain(
+        `<translation type="subtitle" xml:lang="fr"${writtenAttribute}>`
+      );
+      expect(written).toContain(
+        `<transliteration xml:lang="en-Latn"${writtenAttribute}>`
+      );
+      expect(written.match(/automaticallyCreated=/gu)?.length ?? 0).toBe(
+        created === undefined ? 0 : 2
+      );
+      expect(written.includes(`automaticallyCreated="${created}"`)).toBe(
+        created !== undefined
+      );
+      expect(readLyrics(written, "ttml")).toEqual(doc);
+    }
+  );
 
   test.each([
     "<tt>",
@@ -584,7 +696,7 @@ describe("ttml writer", () => {
           translations: { "fr-CA": { b: "Écho &", p: "Une <ligne>" } },
         },
       ],
-      meta: { offset: 1250, songwriters: ["Writer & Partner"] },
+      meta: { songwriters: ["Writer & Partner"] },
       timing: "word",
       version: 1,
     } satisfies LyricsDocument;
@@ -595,6 +707,76 @@ describe("ttml writer", () => {
     expect(source).toContain('itunes:key="line&amp;&quot;&apos;&lt;tag&gt;"');
     expect(source).toContain("A &amp; &lt; &gt; \" ' ");
     expect(read(source)).toEqual(doc);
+  });
+
+  test("writes adjusted times directly without audio offset metadata", () => {
+    const source = writeLyrics(
+      { ...wordDocument, meta: { offset: 1250 } },
+      "ttml"
+    );
+
+    expect(source).toContain('<p begin="0:01.000" end="0:03.000"');
+    expect(source.includes("lyricOffset")).toBe(false);
+    expect(readLyrics(source, "ttml")).toEqual(wordDocument);
+  });
+
+  test("rejects inconsistent automaticallyCreated track states", () => {
+    const laterLine = {
+      ...lyricLine,
+      begin: 4000,
+      end: 6000,
+      id: "later",
+      p: [{ begin: 4000, end: 6000, id: "laterw0", text: "Again" }],
+    } satisfies LyricsLine;
+
+    expect(() =>
+      writeLyrics(
+        {
+          ...wordDocument,
+          lines: [
+            {
+              ...lyricLine,
+              translations: {
+                fr: { automaticallyCreated: true, p: "Bonjour" },
+              },
+            },
+            {
+              ...laterLine,
+              translations: {
+                fr: { automaticallyCreated: false, p: "Encore" },
+              },
+            },
+          ],
+        },
+        "ttml"
+      )
+    ).toThrow("inconsistent automaticallyCreated values");
+    expect(() =>
+      writeLyrics(
+        {
+          ...wordDocument,
+          lines: [
+            {
+              ...lyricLine,
+              pronunciations: {
+                "en-Latn": {
+                  automaticallyCreated: false,
+                  b: [],
+                  p: lyricLine.p,
+                },
+              },
+            },
+            {
+              ...laterLine,
+              pronunciations: {
+                "en-Latn": { b: [], p: laterLine.p },
+              },
+            },
+          ],
+        },
+        "ttml"
+      )
+    ).toThrow("inconsistent automaticallyCreated values");
   });
 
   test("rejects metadata fields outside the Apple lyric profile", () => {
