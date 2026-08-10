@@ -10,7 +10,7 @@ export function readTag(line: string) {
   }
   const colon = match[0].indexOf(":");
   const name = match[0].slice(1, colon).toLowerCase();
-  const text = match[0].slice(colon + 1, -1);
+  const text = match[0].slice(colon + 1, -1).trim();
   return { name, text };
 }
 
