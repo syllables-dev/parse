@@ -112,12 +112,28 @@ export function readTime(value: string, label: string) {
 }
 
 export function readRange(element: XmlElement, offset: number, label: string) {
-  const begin = readTime(needAttr(element, "begin", null), `${label} start`);
-  const end = readTime(needAttr(element, "end", null), `${label} end`);
+  const begin = shiftTime(
+    readTime(needAttr(element, "begin", null), `${label} start`),
+    offset,
+    `${label} start`
+  );
+  const end = shiftTime(
+    readTime(needAttr(element, "end", null), `${label} end`),
+    offset,
+    `${label} end`
+  );
   if (end <= begin) {
     throw new ParseError(`${label} end must follow its start`);
   }
-  return { begin: begin - offset, end: end - offset };
+  return { begin, end };
+}
+
+export function shiftTime(value: number, offset: number, label: string) {
+  const shifted = value + offset;
+  if (!(Number.isSafeInteger(shifted) && shifted >= 0)) {
+    throw new ParseError(`${label} exceeds the timestamp range`);
+  }
+  return shifted;
 }
 
 export function locale(element: XmlElement) {
@@ -141,14 +157,6 @@ export function escapeText(value: string) {
 
 export function escapeAttr(value: string) {
   return escapeText(value).replaceAll('"', "&quot;").replaceAll("'", "&apos;");
-}
-
-export function sourceTime(value: number, offset: number, label: string) {
-  const source = value + offset;
-  if (!(Number.isSafeInteger(source) && source >= 0)) {
-    throw new RangeError(`${label} must resolve to a nonnegative safe integer`);
-  }
-  return source;
 }
 
 export function writeTime(milliseconds: number) {

@@ -164,9 +164,15 @@ function target(textLine: XmlElement, lineById: Map<string, LyricsLine>) {
   return line;
 }
 
+function readCreated(track: XmlElement) {
+  const value = attr(track, "automaticallyCreated", null);
+  return value === undefined ? undefined : value === "true";
+}
+
 function addTranslation(
   textLine: XmlElement,
   language: string,
+  automaticallyCreated: boolean | undefined,
   lineById: Map<string, LyricsLine>
 ) {
   if (!is(textLine, "text", itunesUri)) {
@@ -191,6 +197,7 @@ function addTranslation(
   line.translations = {
     ...line.translations,
     [language]: {
+      ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       ...(backing === undefined ? {} : { b: backing.slice(1, -1) }),
       p: untimed(runs.primary, line.agent),
     },
@@ -210,14 +217,19 @@ export function readTranslations(
           `unsupported translation element <${translation.name}>`
         );
       }
-      checkAttrs(translation, [key(null, "type"), key(xmlUri, "lang")]);
+      checkAttrs(translation, [
+        key(null, "automaticallyCreated"),
+        key(null, "type"),
+        key(xmlUri, "lang"),
+      ]);
       const kind = needAttr(translation, "type", null);
       if (kind !== "subtitle" && kind !== "replacement") {
         throw new ParseError(`unsupported ttml translation type ${kind}`);
       }
       const language = locale(translation);
+      const automaticallyCreated = readCreated(translation);
       for (const textLine of elements(translation)) {
-        addTranslation(textLine, language, lineById);
+        addTranslation(textLine, language, automaticallyCreated, lineById);
       }
     }
   }
@@ -247,6 +259,7 @@ function addPron(
   textLine: XmlElement,
   language: string,
   trackIndex: number,
+  automaticallyCreated: boolean | undefined,
   lineById: Map<string, LyricsLine>,
   offset: number
 ) {
@@ -265,6 +278,7 @@ function addPron(
   line.pronunciations = {
     ...line.pronunciations,
     [language]: {
+      ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       b:
         runs.backing === null
           ? []
@@ -289,10 +303,21 @@ export function readProns(
           `unsupported transliteration element <${transliteration.name}>`
         );
       }
-      checkAttrs(transliteration, [key(xmlUri, "lang")]);
+      checkAttrs(transliteration, [
+        key(null, "automaticallyCreated"),
+        key(xmlUri, "lang"),
+      ]);
       const language = locale(transliteration);
+      const automaticallyCreated = readCreated(transliteration);
       for (const textLine of elements(transliteration)) {
-        addPron(textLine, language, trackIndex, lineById, offset);
+        addPron(
+          textLine,
+          language,
+          trackIndex,
+          automaticallyCreated,
+          lineById,
+          offset
+        );
       }
       trackIndex += 1;
     }

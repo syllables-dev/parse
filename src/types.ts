@@ -109,6 +109,8 @@ export interface Syllable {
  * translated text associated with one lyric line.
  */
 export interface LyricsTranslation {
+  /** whether the source marked this translation track as automatically created. */
+  automaticallyCreated?: boolean;
   /** the backing-vocal translation text without serialization parentheses. */
   b?: string;
   /** the primary translation text. */
@@ -119,6 +121,8 @@ export interface LyricsTranslation {
  * timed pronunciation associated with one lyric line and language.
  */
 export interface LyricsPronunciation {
+  /** whether the source marked this pronunciation track as automatically created. */
+  automaticallyCreated?: boolean;
   /** the backing-vocal pronunciation syllables. */
   b: Syllable[];
   /** the primary pronunciation syllables. */

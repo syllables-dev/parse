@@ -63,7 +63,6 @@ export function read(
     agents: head.agents,
     lines,
     meta: {
-      ...(head.offset !== undefined && { offset: head.offset }),
       ...(head.songwriters.length > 0 && { songwriters: head.songwriters }),
     },
     timing,

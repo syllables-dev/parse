@@ -285,11 +285,7 @@ function readDiv(
     );
   }
   if (beginText !== undefined && endText !== undefined) {
-    const begin = readTime(beginText, "ttml division start");
-    const end = readTime(endText, "ttml division end");
-    if (end <= begin) {
-      throw new ParseError("ttml division end must follow its start");
-    }
+    readRange(division, 0, "ttml division");
   }
   const divAgent = agentRef(division, inheritedAgent, agentIds);
   return paragraphs.map((paragraph, index) => {
@@ -327,7 +323,7 @@ export function readBody(
   if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
     throw new ParseError("ttml line keys must be nonempty and unique");
   }
-  if (lines.some((line) => line.end + offset > duration)) {
+  if (lines.some((line) => line.end > duration)) {
     throw new ParseError("ttml body duration ends before its lyrics");
   }
   return lines;
