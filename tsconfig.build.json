@@ -4,6 +4,7 @@
     "allowImportingTsExtensions": false,
     "allowJs": false,
     "declaration": true,
+    "emitDeclarationOnly": true,
     "module": "ESNext",
     "noEmit": false,
     "noEmitOnError": true,

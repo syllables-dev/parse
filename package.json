@@ -40,10 +40,8 @@
     }
   },
   "files": ["dist", "LICENSE", "README.md"],
-  "sideEffects": false,
   "scripts": {
-    "build": "bun run build:clean && tsgo -p tsconfig.build.json",
-    "build:clean": "bun -e 'import { rm } from \"fs/promises\"; await rm(\"dist\", { force: true, recursive: true });'",
+    "build": "bun build src/index.ts src/formats/ttml/index.ts src/formats/lrc.ts src/formats/eslrc.ts src/formats/qrc.ts src/formats/yrc.ts src/formats/lys/index.ts src/formats/lqe.ts --outdir dist --target browser --format esm --minify && tsgo -p tsconfig.build.json",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "tsgo": "tsgo --noEmit"
