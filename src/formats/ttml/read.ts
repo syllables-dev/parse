@@ -1,5 +1,5 @@
 import { ParseError } from "../../errors";
-import { readXml, type XmlElement } from "../../internal/xml";
+import { type XmlElement, XmlReader } from "../../internal/xml";
 import type { LyricsDocument, ReadOptions } from "../../types";
 import { readHead, readProns, readTranslations } from "./head";
 import { readBody } from "./lines";
@@ -47,10 +47,10 @@ export function read(
   if (options.expandRepeats) {
     throw new Error("expandRepeats is available for lrc input");
   }
-  const root = readXml(textSource);
+  const root = new XmlReader(textSource).read();
   const timing = readTiming(root);
   const head = readHead(root);
-  const offset = head.offset ?? 0;
+  const offset = head.offset === undefined ? 0 : head.offset;
   const lines = readBody(
     only(root, "body", ttmlUri),
     timing,

@@ -67,12 +67,19 @@ export function readYrcWords(
   if (whitespace.test(body)) {
     return [{ begin: lineBegin, end: lineEnd, text: body }];
   }
-  const markers = [...body.matchAll(yrcStamp)];
-  if ((markers[0]?.index ?? -1) !== 0) {
+  yrcStamp.lastIndex = 0;
+  const markers: RegExpExecArray[] = [];
+  let match = yrcStamp.exec(body);
+  while (match) {
+    markers.push(match);
+    match = yrcStamp.exec(body);
+  }
+  if (markers.at(0)?.index !== 0) {
     throw new ParseError(`line ${lineNumber} must begin with a word timestamp`);
   }
 
   return markers.map((marker, index) => {
+    const next = markers[index + 1];
     const firstComma = marker[0].indexOf(",");
     const secondComma = marker[0].indexOf(",", firstComma + 1);
     if (marker[0].slice(secondComma + 1, -1) !== "0") {
@@ -95,8 +102,8 @@ export function readYrcWords(
       begin,
       end: begin + duration,
       text: body.slice(
-        (marker.index ?? 0) + marker[0].length,
-        markers[index + 1]?.index ?? body.length
+        marker.index + marker[0].length,
+        next === undefined ? body.length : next.index
       ),
     };
   });

@@ -3,12 +3,11 @@
  * transliterations to lyric lines; ttm:role="x-bg" marks backing vocals.
  */
 
+// biome-ignore-all lint/performance/noBarrelFile: this file defines the ttml public surface
 import type { FormatCapabilities } from "../../types";
-import { read as readTtml } from "./read";
-import { write as writeTtml } from "./write";
 
-export const read = readTtml;
-export const write = writeTtml;
+export { read } from "./read";
+export { write } from "./write";
 
 export const capabilities = {
   agents: true,

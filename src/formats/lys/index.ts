@@ -1,6 +1,6 @@
 /**
- * LYS (Lyricify Syllable), Lyricify's word-by-word format.
- * by Lyricify / WXRIW
+ * lys (lyricify syllable), lyricify's word-by-word format.
+ * by lyricify / wxriw
  *
  * [4]Hel(12000,400)lo (12400,300)world(12700,600)
  */
@@ -39,7 +39,6 @@ interface LysRow {
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
-const propertyAgents = [null, "v1", "v2", null, "v1", "v2", null, "v1", "v2"];
 
 export const capabilities = {
   agents: true,
@@ -98,8 +97,14 @@ function readRow(
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
   }
   const lyric = words.map((word) => word.text).join("");
+  let agent: string | null = null;
+  if (property % 3 === 1) {
+    agent = "v1";
+  } else if (property % 3 === 2) {
+    agent = "v2";
+  }
   return {
-    agent: propertyAgents[property] ?? null,
+    agent,
     begin: Math.min(...words.map((word) => word.begin)),
     end: Math.max(...words.map((word) => word.end)),
     property,
@@ -244,7 +249,12 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     if (begin !== line.begin || end !== line.end) {
       throw new Error(`lys cannot represent the range of line ${line.id}`);
     }
-    const side = propertyAgents.indexOf(line.agent);
+    let side = 0;
+    if (line.agent === "v1") {
+      side = 1;
+    } else if (line.agent === "v2") {
+      side = 2;
+    }
     return [
       ...(line.p.length > 0 ? [writeRow(side + 3, line.p, false)] : []),
       ...(line.b.length > 0 ? [writeRow(side + 6, line.b, true)] : []),

@@ -56,6 +56,33 @@ function single(children: XmlElement[], local: string) {
   return matches[0];
 }
 
+function readAudioOffset(children: XmlElement[]) {
+  const audio = single(children, "audio");
+  if (!audio) {
+    return;
+  }
+  checkAttrs(audio, [
+    key(null, "lyricOffset"),
+    key(null, "role"),
+    key(null, "spatial"),
+  ]);
+  if (elements(audio).length > 0) {
+    throw new ParseError("ttml audio metadata must be empty");
+  }
+  const lyricOffset = attr(audio, "lyricOffset", null);
+  if (lyricOffset === undefined) {
+    return;
+  }
+  const sign = lyricOffset.charAt(0);
+  return (
+    (sign === "-" ? -1 : 1) *
+    readTime(
+      sign === "-" || sign === "+" ? lyricOffset.slice(1) : lyricOffset,
+      "ttml lyric offset"
+    )
+  );
+}
+
 function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
   const apple = single(elements(metadata), "iTunesMetadata");
   if (!apple) {
@@ -88,28 +115,7 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
       return text(writer);
     }
   );
-  const audio = single(children, "audio");
-  let offset: number | undefined;
-  if (audio) {
-    checkAttrs(audio, [
-      key(null, "lyricOffset"),
-      key(null, "role"),
-      key(null, "spatial"),
-    ]);
-    if (elements(audio).length > 0) {
-      throw new ParseError("ttml audio metadata must be empty");
-    }
-    const lyricOffset = attr(audio, "lyricOffset", null);
-    if (lyricOffset !== undefined) {
-      const sign = lyricOffset.charAt(0);
-      offset =
-        (sign === "-" ? -1 : 1) *
-        readTime(
-          sign === "-" || sign === "+" ? lyricOffset.slice(1) : lyricOffset,
-          "ttml lyric offset"
-        );
-    }
-  }
+  const offset = readAudioOffset(children);
   return {
     ...(offset === undefined ? {} : { offset }),
     songwriters,

@@ -1,6 +1,6 @@
 /**
- * LRC (LyRiCs), plain line-timed lyrics.
- * by the community; de-facto standard since the late-1990s MP3 player era
+ * lrc (lyrics), plain line-timed lyrics.
+ * by the community; de-facto standard since the late-1990s mp3 player era
  *
  * [ti:Title]
  * [ar:Artist]
@@ -60,11 +60,18 @@ function readTime(marker: string) {
 }
 
 function readWords(body: string, lineEnd: number) {
-  const markers = [...body.matchAll(wordStamp)];
-  if (markers.length === 0) {
+  wordStamp.lastIndex = 0;
+  const markers: RegExpExecArray[] = [];
+  let match = wordStamp.exec(body);
+  while (match) {
+    markers.push(match);
+    match = wordStamp.exec(body);
+  }
+  const first = markers.at(0);
+  if (!first) {
     return [];
   }
-  if (markers[0]?.index !== 0) {
+  if (first.index !== 0) {
     throw new ParseError("enhanced lrc text must begin with a word timestamp");
   }
   return markers.map((marker, index) => {
@@ -73,8 +80,8 @@ function readWords(body: string, lineEnd: number) {
       begin: readTime(marker[0]),
       end: next ? readTime(next[0]) : lineEnd,
       text: body.slice(
-        (marker.index ?? 0) + marker[0].length,
-        next?.index ?? body.length
+        marker.index + marker[0].length,
+        next === undefined ? body.length : next.index
       ),
     };
   });

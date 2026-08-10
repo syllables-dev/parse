@@ -48,8 +48,8 @@ const namePart = /[-.:\p{L}\p{Nl}\p{Nd}\p{Mc}\p{Mn}\p{Pc}\u00b7_]/u;
 const xmlSpace = /[\t\n\r ]/u;
 const declarationAttrs = /^(version)(,encoding)?(,standalone)?$/u;
 const encodingName = /^[A-Za-z][A-Za-z0-9._-]*$/u;
-const decimalDigits = /^\d+$/u;
-const hexDigits = /^[\dA-Fa-f]+$/u;
+const decimalEntity = /^#\d+$/u;
+const hexEntity = /^#x[\dA-Fa-f]+$/u;
 const entities = new Map([
   ["amp", "&"],
   ["apos", "'"],
@@ -66,7 +66,7 @@ const isXmlChar = (code: number) =>
   (code >= 0xe0_00 && code <= 0xff_fd) ||
   (code >= 0x1_00_00 && code <= 0x10_ff_ff);
 
-class XmlReader {
+export class XmlReader {
   private at = 0;
   private readonly source: string;
 
@@ -94,7 +94,10 @@ class XmlReader {
     if (this.source.charCodeAt(0) === 0xfe_ff) {
       this.at = 1;
     }
-    if (this.starts("<?xml") && xmlSpace.test(this.source[this.at + 5] ?? "")) {
+    if (
+      this.starts("<?xml") &&
+      xmlSpace.test(this.source.charAt(this.at + 5))
+    ) {
       this.declaration();
     }
     this.misc();
@@ -174,7 +177,7 @@ class XmlReader {
       if (this.starts("<!--")) {
         this.comment();
       } else if (this.starts("<![CDATA[")) {
-        children.push({ kind: "text", text: this.cdata() });
+        children.push({ kind: "text", text: this.readText(true) });
       } else if (this.starts("<?")) {
         this.instruction();
       } else if (this.starts("<!")) {
@@ -182,10 +185,20 @@ class XmlReader {
       } else if (this.starts("<")) {
         children.push(this.element(start.namespaces));
       } else {
-        children.push({ kind: "text", text: this.text() });
+        children.push({ kind: "text", text: this.readText(false) });
       }
     }
-    this.end(start.name);
+    this.at += 2;
+    const { at } = this;
+    const name = this.readName();
+    this.space();
+    if (!this.starts(">")) {
+      this.fail("closing bracket expected");
+    }
+    this.at += 1;
+    if (name !== start.name) {
+      this.fail(`expected </${start.name}>`, at);
+    }
     return children;
   }
 
@@ -211,7 +224,15 @@ class XmlReader {
       }
       rawAttrs.push(this.rawAttr());
     }
-    const namespaces = this.namespaces(rawAttrs, parent);
+    const namespaces = { ...parent };
+    for (const attr of rawAttrs) {
+      const parts = this.parts(attr.name, attr.at);
+      if (attr.name === "xmlns") {
+        this.bind(namespaces, "", attr.value, attr.at);
+      } else if (parts.prefix === "xmlns") {
+        this.bind(namespaces, parts.local, attr.value, attr.at);
+      }
+    }
     const expanded = this.expand(name, namespaces, false, nameAt);
     return {
       attrs: this.attrs(rawAttrs, namespaces),
@@ -219,20 +240,6 @@ class XmlReader {
       ...expanded,
       namespaces,
     };
-  }
-
-  private end(expected: string) {
-    this.at += 2;
-    const { at } = this;
-    const name = this.readName();
-    this.space();
-    if (!this.starts(">")) {
-      this.fail("closing bracket expected");
-    }
-    this.at += 1;
-    if (name !== expected) {
-      this.fail(`expected </${expected}>`, at);
-    }
   }
 
   private rawAttr() {
@@ -260,19 +267,6 @@ class XmlReader {
     }
     this.at = end + 1;
     return { at, name, value: this.decode(raw, valueAt) };
-  }
-
-  private namespaces(attrs: RawAttr[], parent: Record<string, string>) {
-    const namespaces = { ...parent };
-    for (const attr of attrs) {
-      const parts = this.parts(attr.name, attr.at);
-      if (attr.name === "xmlns") {
-        this.bind(namespaces, "", attr.value, attr.at);
-      } else if (parts.prefix === "xmlns") {
-        this.bind(namespaces, parts.local, attr.value, attr.at);
-      }
-    }
-    return namespaces;
   }
 
   private bind(
@@ -377,28 +371,26 @@ class XmlReader {
     return this.source.slice(at, this.at);
   }
 
-  private text() {
-    const end = this.source.indexOf("<", this.at);
-    const textEnd = end < 0 ? this.source.length : end;
+  private readText(cdata: boolean) {
     const { at } = this;
+    if (cdata) {
+      this.at += 9;
+      const end = this.source.indexOf("]]>", this.at);
+      if (end < 0) {
+        this.fail("unclosed CDATA", at);
+      }
+      const text = this.source.slice(this.at, end);
+      this.at = end + 3;
+      return text;
+    }
+    const end = this.source.indexOf("<", at);
+    const textEnd = end < 0 ? this.source.length : end;
     const raw = this.source.slice(at, textEnd);
     if (raw.includes("]]>")) {
       this.fail("CDATA close outside CDATA", at + raw.indexOf("]]>"));
     }
     this.at = textEnd;
     return this.decode(raw, at);
-  }
-
-  private cdata() {
-    const { at } = this;
-    this.at += 9;
-    const end = this.source.indexOf("]]>", this.at);
-    if (end < 0) {
-      this.fail("unclosed CDATA", at);
-    }
-    const text = this.source.slice(this.at, end);
-    this.at = end + 3;
-    return text;
   }
 
   private comment() {
@@ -444,33 +436,30 @@ class XmlReader {
       if (end < 0) {
         this.fail("unclosed entity", at + amp);
       }
-      decoded +=
-        raw.slice(from, amp) + this.entity(raw.slice(amp + 1, end), at + amp);
+      const ref = raw.slice(amp + 1, end);
+      const named = entities.get(ref);
+      if (named === undefined) {
+        let code = -1;
+        if (hexEntity.test(ref)) {
+          code = Number.parseInt(ref.slice(2), 16);
+        } else if (decimalEntity.test(ref)) {
+          code = Number.parseInt(ref.slice(1), 10);
+        }
+        if (!isXmlChar(code)) {
+          this.fail(`invalid entity &${ref};`, at + amp);
+        }
+        decoded += raw.slice(from, amp) + String.fromCodePoint(code);
+      } else {
+        decoded += raw.slice(from, amp) + named;
+      }
       from = end + 1;
     }
     return decoded;
   }
 
-  private entity(ref: string, at: number) {
-    const named = entities.get(ref);
-    if (named !== undefined) {
-      return named;
-    }
-    const hex = ref.startsWith("#x");
-    const digits = ref.slice(hex ? 2 : 1);
-    const valid =
-      ref.startsWith("#") &&
-      (hex ? hexDigits.test(digits) : decimalDigits.test(digits));
-    const code = valid ? Number.parseInt(digits, hex ? 16 : 10) : -1;
-    if (!isXmlChar(code)) {
-      this.fail(`invalid entity &${ref};`, at);
-    }
-    return String.fromCodePoint(code);
-  }
-
   private space() {
     const { at } = this;
-    while (xmlSpace.test(this.source[this.at] ?? "")) {
+    while (xmlSpace.test(this.source.charAt(this.at))) {
       this.at += 1;
     }
     return this.at > at;
@@ -483,7 +472,7 @@ class XmlReader {
     }
     return first >= 0xd8_00 && first <= 0xdb_ff
       ? this.source.slice(this.at, this.at + 2)
-      : (this.source[this.at] ?? "");
+      : this.source.charAt(this.at);
   }
 
   private starts(text: string) {
@@ -497,5 +486,3 @@ class XmlReader {
     throw new ParseError(`${message} at ${line}:${column}`);
   }
 }
-
-export const readXml = (source: string) => new XmlReader(source).read();

@@ -1,6 +1,6 @@
 /**
- * ESLRC, ESLyric's word-timed LRC flavor.
- * by ESLyric (foobar2000 lyrics component)
+ * eslrc, eslyric's word-timed lrc flavor.
+ * by eslyric (foobar2000 lyrics component)
  *
  * [00:00.000]Hel[00:00.500]lo[00:01.000]
  */
@@ -28,7 +28,8 @@ interface EslrcMarker {
 }
 
 interface EslrcRow {
-  markers: EslrcMarker[];
+  first: EslrcMarker;
+  following: EslrcMarker[];
 }
 
 const stamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gu;
@@ -53,44 +54,97 @@ function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
       continue;
     }
 
-    const matches = [...physicalLine.matchAll(stamp)];
-    if (matches.length === 0) {
+    stamp.lastIndex = 0;
+    const matches: RegExpExecArray[] = [];
+    let match = stamp.exec(physicalLine);
+    while (match) {
+      matches.push(match);
+      match = stamp.exec(physicalLine);
+    }
+    const firstAt = matches.at(0)?.index;
+    const [first, ...following] = matches.map((marker, markerIndex) => {
+      const colon = marker[0].indexOf(":");
+      const dot = marker[0].indexOf(".", colon + 1);
+      const secondColon = marker[0].indexOf(":", colon + 1);
+      const fraction = dot >= 0 ? dot : secondColon;
+      const end = marker[0].length - 1;
+      const next = matches[markerIndex + 1];
+      return {
+        begin: readStamp(
+          marker[0].slice(1, colon),
+          marker[0].slice(colon + 1, fraction >= 0 ? fraction : end),
+          fraction >= 0 ? marker[0].slice(fraction + 1, end) : undefined
+        ),
+        text: physicalLine.slice(
+          marker.index + marker[0].length,
+          next === undefined ? physicalLine.length : next.index
+        ),
+      };
+    });
+    if (!first) {
       if (physicalLine.trim().length > 0 && physicalLine.startsWith("[")) {
         throw new ParseError(`malformed eslrc line ${lineIndex + 1}`);
       }
       continue;
     }
-    if (matches[0]?.index !== 0) {
+    if (firstAt !== 0) {
       throw new ParseError(
         `eslrc line ${lineIndex + 1} must start with a timestamp`
       );
     }
-    rows.push({
-      markers: matches.map((match, markerIndex) => {
-        const colon = match[0].indexOf(":");
-        const dot = match[0].indexOf(".", colon + 1);
-        const secondColon = match[0].indexOf(":", colon + 1);
-        const fraction = dot >= 0 ? dot : secondColon;
-        const end = match[0].length - 1;
-        return {
-          begin: readStamp(
-            match[0].slice(1, colon),
-            match[0].slice(colon + 1, fraction >= 0 ? fraction : end),
-            fraction >= 0 ? match[0].slice(fraction + 1, end) : undefined
-          ),
-          text: physicalLine.slice(
-            (match.index ?? 0) + match[0].length,
-            matches[markerIndex + 1]?.index ?? physicalLine.length
-          ),
-        };
-      }),
-    });
+    rows.push({ first, following });
   }
 
   if (rows.length === 0) {
     throw new ParseError("input contains no recognizable eslrc lyric lines");
   }
   return rows;
+}
+
+function makeLines(rows: EslrcRow[]) {
+  return rows.map((row, lineIndex) => {
+    const markers = [row.first, ...row.following];
+    const lastMarker = row.following.at(-1);
+    const explicitEnd =
+      lastMarker?.text.length === 0 ? lastMarker.begin : undefined;
+    const sourceEnd =
+      explicitEnd ??
+      rows[lineIndex + 1]?.first.begin ??
+      row.first.begin + lastLineMs;
+    const timedSegments = markers.flatMap((marker, markerIndex) => {
+      if (marker.text.length === 0) {
+        return [];
+      }
+      return [
+        {
+          begin: marker.begin,
+          end: markers[markerIndex + 1]?.begin ?? sourceEnd,
+          text: marker.text,
+        },
+      ];
+    });
+    const syllables =
+      timedSegments.length > 0
+        ? timedSegments
+        : [
+            {
+              begin: row.first.begin,
+              end: sourceEnd,
+              text: "",
+            },
+          ];
+    return {
+      agent: null,
+      b: [],
+      begin: row.first.begin,
+      end: sourceEnd,
+      id: `l${lineIndex}`,
+      p: syllables.map((syllable, syllableIndex) => ({
+        ...syllable,
+        id: `l${lineIndex}w${syllableIndex}`,
+      })),
+    };
+  });
 }
 
 export function read(text: string, options: ReadOptions = {}): LyricsDocument {
@@ -113,59 +167,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };
-  const lines = rows.map((row, lineIndex) => {
-    const [firstMarker] = row.markers;
-    if (!firstMarker) {
-      throw new ParseError(`eslrc line ${lineIndex + 1} has no timestamps`);
-    }
-    const lastMarker = row.markers.at(-1);
-    const explicitEnd =
-      row.markers.length > 1 && lastMarker?.text.length === 0
-        ? lastMarker.begin
-        : undefined;
-    const sourceEnd =
-      explicitEnd ??
-      rows[lineIndex + 1]?.markers[0]?.begin ??
-      firstMarker.begin + lastLineMs;
-    const timedSegments = row.markers.flatMap((marker, markerIndex) => {
-      if (marker.text.length === 0) {
-        return [];
-      }
-      return [
-        {
-          begin: marker.begin,
-          end: row.markers[markerIndex + 1]?.begin ?? sourceEnd,
-          text: marker.text,
-        },
-      ];
-    });
-    const syllables =
-      timedSegments.length > 0
-        ? timedSegments
-        : [
-            {
-              begin: firstMarker.begin,
-              end: sourceEnd,
-              text: "",
-            },
-          ];
-    return {
-      agent: null,
-      b: [],
-      begin: firstMarker.begin,
-      end: sourceEnd,
-      id: `l${lineIndex}`,
-      p: syllables.map((syllable, syllableIndex) => ({
-        ...syllable,
-        id: `l${lineIndex}w${syllableIndex}`,
-      })),
-    };
-  });
 
   return shiftTimes(
     {
       agents: [],
-      lines,
+      lines: makeLines(rows),
       meta,
       timing: "word",
       version: 1,
@@ -200,7 +206,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    `[by:${doc.meta.author ?? ""}]`,
+    `[by:${doc.meta.author === undefined ? "" : doc.meta.author}]`,
     ...(doc.meta.songwriters?.[0] === undefined
       ? []
       : [`[au:${doc.meta.songwriters[0]}]`]),

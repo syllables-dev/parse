@@ -1,6 +1,6 @@
 /**
- * YRC, NetEase Cloud Music's word-by-word lyrics format.
- * by NetEase / Cloud Music (NCM)
+ * yrc, netease cloud music's word-by-word lyrics format.
+ * by netease / cloud music (ncm)
  *
  * [12000,3320](12000,400,0)Hel(12400,300,0)lo (12700,600,0)world
  */
@@ -234,7 +234,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    `[by:${doc.meta.author ?? ""}]`,
+    `[by:${doc.meta.author === undefined ? "" : doc.meta.author}]`,
     ...(doc.meta.songwriters?.length === 1
       ? [`[au:${doc.meta.songwriters[0]}]`]
       : []),

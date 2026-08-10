@@ -93,16 +93,20 @@ export function detect(text: string): FormatId | null {
   ) {
     return "ttml";
   }
-  for (const [pattern, format] of [
-    [yrcRow, "yrc"],
-    [qrcRow, "qrc"],
-    [lysRow, "lys"],
-    [eslrcRow, "eslrc"],
-    [lrcRow, "lrc"],
-  ] as const) {
-    if (lines.some((line) => pattern.test(line))) {
-      return format;
-    }
+  if (lines.some((line) => yrcRow.test(line))) {
+    return "yrc";
+  }
+  if (lines.some((line) => qrcRow.test(line))) {
+    return "qrc";
+  }
+  if (lines.some((line) => lysRow.test(line))) {
+    return "lys";
+  }
+  if (lines.some((line) => eslrcRow.test(line))) {
+    return "eslrc";
+  }
+  if (lines.some((line) => lrcRow.test(line))) {
+    return "lrc";
   }
   return null;
 }

@@ -1,6 +1,6 @@
 /**
- * QRC, QQ Music's word-by-word lyrics format.
- * by Tencent / QQ Music
+ * qrc, qq music's word-by-word lyrics format.
+ * by tencent / qq music
  *
  * [12000,3320]Hel(12000,400)lo (12400,300)world(12700,600)
  */
@@ -85,55 +85,51 @@ function makeTrack(
   }));
 }
 
-function readRows(text: string, tags: Map<string, string>): QrcRow[] {
-  const rows: QrcRow[] = [];
-  for (const [lineIndex, raw] of splitLines(text).entries()) {
-    const tag = readTag(raw);
-    if (tag) {
-      tags.set(tag.name, tag.text);
-      continue;
+function readRow(
+  raw: string,
+  lineIndex: number,
+  tags: Map<string, string>
+): QrcRow | null {
+  const tag = readTag(raw);
+  if (tag) {
+    tags.set(tag.name, tag.text);
+    return null;
+  }
+  const header = lineHeader.exec(raw);
+  if (!header) {
+    if (raw.trim().length > 0 && raw.startsWith("[")) {
+      throw new ParseError(`malformed qrc line ${lineIndex + 1}`);
     }
-    const header = lineHeader.exec(raw);
-    if (!header) {
-      if (raw.trim().length > 0 && raw.startsWith("[")) {
-        throw new ParseError(`malformed qrc line ${lineIndex + 1}`);
-      }
-      continue;
-    }
+    return null;
+  }
 
-    const comma = header[0].indexOf(",");
-    const close = header[0].indexOf("]");
-    const begin = toInt(
-      header[0].slice(1, comma),
-      `qrc line ${lineIndex + 1} start`
+  const comma = header[0].indexOf(",");
+  const close = header[0].indexOf("]");
+  const begin = toInt(
+    header[0].slice(1, comma),
+    `qrc line ${lineIndex + 1} start`
+  );
+  const duration = toInt(
+    header[0].slice(comma + 1, close),
+    `qrc line ${lineIndex + 1} duration`
+  );
+  if (!Number.isSafeInteger(begin + duration)) {
+    throw new ParseError(
+      `qrc line ${lineIndex + 1} end exceeds the safe integer range`
     );
-    const duration = toInt(
-      header[0].slice(comma + 1, close),
-      `qrc line ${lineIndex + 1} duration`
-    );
-    if (!Number.isSafeInteger(begin + duration)) {
-      throw new ParseError(
-        `qrc line ${lineIndex + 1} end exceeds the safe integer range`
-      );
-    }
-    const words = readTimedWords(
-      header[0].slice(close + 1),
-      lineIndex + 1,
-      begin,
-      begin + duration
-    );
-    const lyric = words.map((word) => word.text).join("");
-    rows.push({
-      begin,
-      end: begin + duration,
-      words,
-      wrapped: isWrapped(lyric),
-    });
   }
-  if (rows.length === 0) {
-    throw new ParseError("input contains no recognizable qrc lyric lines");
-  }
-  return rows;
+  const words = readTimedWords(
+    header[0].slice(close + 1),
+    lineIndex + 1,
+    begin,
+    begin + duration
+  );
+  return {
+    begin,
+    end: begin + duration,
+    words,
+    wrapped: isWrapped(words.map((word) => word.text).join("")),
+  };
 }
 
 function makeLines(rows: QrcRow[]): LyricsLine[] {
@@ -143,11 +139,8 @@ function makeLines(rows: QrcRow[]): LyricsLine[] {
       row.wrapped &&
       !rows[rowIndex - 1]?.wrapped &&
       !rows[rowIndex + 1]?.wrapped;
-    if (isBacking && lines.length > 0) {
-      const mainLine = lines.at(-1);
-      if (!mainLine) {
-        throw new ParseError(`qrc line ${rowIndex + 1} has no primary line`);
-      }
+    const mainLine = lines.at(-1);
+    if (isBacking && mainLine) {
       mainLine.begin = Math.min(mainLine.begin, row.begin);
       mainLine.end = Math.max(mainLine.end, row.end);
       mainLine.b.push(...makeTrack(unwrapWords(row.words), mainLine.id, "b"));
@@ -172,7 +165,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     throw new Error("expandRepeats is available for lrc input");
   }
   const tags = new Map<string, string>();
-  const rows = readRows(text, tags);
+  const rows: QrcRow[] = [];
+  for (const [lineIndex, raw] of splitLines(text).entries()) {
+    const row = readRow(raw, lineIndex, tags);
+    if (row) {
+      rows.push(row);
+    }
+  }
+  if (rows.length === 0) {
+    throw new ParseError("input contains no recognizable qrc lyric lines");
+  }
   const album = tags.get("al");
   const artist = tags.get("ar");
   const author = tags.get("by");

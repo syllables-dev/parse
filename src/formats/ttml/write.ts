@@ -105,6 +105,33 @@ function checkIds(ids: string[], label: string) {
   }
 }
 
+function checkLines(doc: LyricsDocument, agentIds: string[]) {
+  const knownAgents = new Set(agentIds);
+  for (const line of doc.lines) {
+    checkTime(line.begin, `line ${line.id} start`);
+    checkTime(line.end, `line ${line.id} end`);
+    if (line.end <= line.begin) {
+      throw new RangeError(`line ${line.id} end must follow its start`);
+    }
+    if (line.agent !== null && !knownAgents.has(line.agent)) {
+      throw new Error(`line ${line.id} references an undeclared ttml agent`);
+    }
+    checkTrack(
+      line.p,
+      line,
+      doc.timing === "line",
+      `line ${line.id} primary track`
+    );
+    checkTrack(
+      line.b,
+      line,
+      doc.timing === "line",
+      `line ${line.id} backing track`
+    );
+    checkMaps(line, doc.timing === "line");
+  }
+}
+
 function checkDoc(doc: LyricsDocument) {
   if (doc.version !== 1 || (doc.timing !== "line" && doc.timing !== "word")) {
     throw new Error(
@@ -138,30 +165,7 @@ function checkDoc(doc: LyricsDocument) {
     doc.lines.map((line) => line.pronunciations),
     "pronunciation track"
   );
-  const knownAgents = new Set(agentIds);
-  for (const line of doc.lines) {
-    checkTime(line.begin, `line ${line.id} start`);
-    checkTime(line.end, `line ${line.id} end`);
-    if (line.end <= line.begin) {
-      throw new RangeError(`line ${line.id} end must follow its start`);
-    }
-    if (line.agent !== null && !knownAgents.has(line.agent)) {
-      throw new Error(`line ${line.id} references an undeclared ttml agent`);
-    }
-    checkTrack(
-      line.p,
-      line,
-      doc.timing === "line",
-      `line ${line.id} primary track`
-    );
-    checkTrack(
-      line.b,
-      line,
-      doc.timing === "line",
-      `line ${line.id} backing track`
-    );
-    checkMaps(line, doc.timing === "line");
-  }
+  checkLines(doc, agentIds);
 }
 
 function writeTrack(syllables: Syllable[], lineTimed: boolean, wrap: boolean) {
@@ -237,23 +241,6 @@ function writeProns(doc: LyricsDocument) {
     .join("");
 }
 
-function writeHead(doc: LyricsDocument) {
-  const agents = doc.agents
-    .map(
-      (agent) =>
-        `<ttm:agent type="${escapeAttr(agent.type)}" xml:id="${escapeAttr(agent.id)}"/>`
-    )
-    .join("");
-  const translations = writeTranslations(doc);
-  const prons = writeProns(doc);
-  const songwriters = (doc.meta.songwriters ?? [])
-    .map((writer) => `<songwriter>${escapeText(writer)}</songwriter>`)
-    .join("");
-  const transliterations =
-    prons.length === 0 ? "" : `<transliterations>${prons}</transliterations>`;
-  return `<head><metadata>${agents}<iTunesMetadata xmlns="${itunesUri}"><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters></iTunesMetadata></metadata></head>`;
-}
-
 function writeBody(doc: LyricsDocument) {
   const duration =
     doc.lines.length === 0 ? 0 : Math.max(...doc.lines.map((line) => line.end));
@@ -281,10 +268,23 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     throw new Error("ttml write options are unsupported");
   }
   checkDoc(doc);
+  const agents = doc.agents
+    .map(
+      (agent) =>
+        `<ttm:agent type="${escapeAttr(agent.type)}" xml:id="${escapeAttr(agent.id)}"/>`
+    )
+    .join("");
+  const translations = writeTranslations(doc);
+  const prons = writeProns(doc);
+  const songwriters = (doc.meta.songwriters ?? [])
+    .map((writer) => `<songwriter>${escapeText(writer)}</songwriter>`)
+    .join("");
+  const transliterations =
+    prons.length === 0 ? "" : `<transliterations>${prons}</transliterations>`;
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${doc.timing === "word" ? "Word" : "Line"}" xml:lang="und">`,
-    writeHead(doc),
+    `<head><metadata>${agents}<iTunesMetadata xmlns="${itunesUri}"><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters></iTunesMetadata></metadata></head>`,
     writeBody(doc),
     "</tt>",
   ].join("\n");

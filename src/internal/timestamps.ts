@@ -5,12 +5,8 @@ const lineBreak = /\r\n|\n|\r/u;
 const digits = /^\d+$/u;
 const signPrefix = /^[+-]/u;
 
-export function stripBom(text: string): string {
-  return text.startsWith("\uFEFF") ? text.slice(1) : text;
-}
-
 export function splitLines(text: string): string[] {
-  return stripBom(text).split(lineBreak);
+  return (text.startsWith("\uFEFF") ? text.slice(1) : text).split(lineBreak);
 }
 
 export function toInt(value: string, context: string): number {

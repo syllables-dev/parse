@@ -25,7 +25,7 @@ export type ProblemCode =
 /**
  * the editable, format-independent lyric document.
  *
- * the complete value is plain JSON and all timestamps are absolute integer
+ * the complete value is plain json and all timestamps are absolute integer
  * milliseconds. readers produce deterministic ids for identical input.
  */
 export interface LyricsDocument {
@@ -63,7 +63,7 @@ export interface LyricsMeta {
  * a vocal agent declared by the source or synthesized from its duet encoding.
  */
 export interface LyricsAgent {
-  /** the stable identifier referenced by {@link LyricsLine.agent}. */
+  /** the stable identifier referenced by the line agent field. */
   id: string;
   /** the raw source category, commonly `person`, `group`, or `other`. */
   type: string;
@@ -85,9 +85,9 @@ export interface LyricsLine {
   id: string;
   /** the primary timed syllables, including meaningful whitespace in their text. */
   p: Syllable[];
-  /** timed pronunciation tracks keyed by BCP 47 language tag. */
+  /** timed pronunciation tracks keyed by bcp 47 language tag. */
   pronunciations?: Record<string, LyricsPronunciation>;
-  /** untimed translations keyed by BCP 47 language tag. */
+  /** untimed translations keyed by bcp 47 language tag. */
   translations?: Record<string, LyricsTranslation>;
 }
 
@@ -135,7 +135,7 @@ export interface LyricsPronunciation {
 export interface Problem {
   /** the stable machine-readable problem category. */
   code: ProblemCode;
-  /** the offending {@link LyricsLine.id} or {@link Syllable.id}. */
+  /** the offending line or syllable id. */
   id: string;
   /** a concise human-readable description for diagnostics. */
   message: string;

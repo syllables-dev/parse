@@ -36,7 +36,7 @@ export function writeTags(
   if (meta.songwriters && meta.songwriters.length > 1) {
     throw new Error(`${format} cannot represent multiple songwriters`);
   }
-  const author = `[by:${meta.author ?? ""}]`;
+  const author = `[by:${meta.author === undefined ? "" : meta.author}]`;
   const fields = [
     ...(meta.title === undefined ? [] : [`[ti:${meta.title}]`]),
     ...(meta.artist === undefined ? [] : [`[ar:${meta.artist}]`]),

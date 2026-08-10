@@ -13,7 +13,7 @@ export const itunesUri = "http://music.apple.com/lyric-ttml-internal";
 export const xmlUri = "http://www.w3.org/XML/1998/namespace";
 
 export function key(uri: string | null, local: string) {
-  return `${uri ?? ""}|${local}`;
+  return `${uri === null ? "" : uri}|${local}`;
 }
 
 export function attr(element: XmlElement, local: string, uri: string | null) {

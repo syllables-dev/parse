@@ -57,19 +57,23 @@ function isSection(name: string | undefined): name is SectionKind {
   );
 }
 
+function matchHeader(line: string): [string, string] | null {
+  const header = sectionHeader.exec(line);
+  if (!header) {
+    return null;
+  }
+  return [header[0], header[0].slice(1, header[0].indexOf(":"))];
+}
+
 function readPreamble(lines: string[], firstLine: number) {
   const metadata = new Map<string, string>();
   let version: string | undefined;
-  for (
-    let lineIndex = firstLine + 1;
-    lineIndex < lines.length;
-    lineIndex += 1
-  ) {
-    const raw = lines[lineIndex] ?? "";
-    const header = sectionHeader.exec(raw.trim());
-    const name = header
-      ? header[0].slice(1, header[0].indexOf(":")).toLowerCase()
-      : undefined;
+  for (const [lineIndex, raw] of lines.entries()) {
+    if (lineIndex <= firstLine) {
+      continue;
+    }
+    const header = matchHeader(raw.trim());
+    const name = header ? header[1].toLowerCase() : undefined;
     if (isSection(name)) {
       return { lineIndex, metadata, version };
     }
@@ -77,18 +81,19 @@ function readPreamble(lines: string[], firstLine: number) {
       continue;
     }
     const tag = readTag(raw);
-    if (tag) {
-      if (tag.name === "version") {
-        if (version !== undefined) {
-          throw new ParseError("lqe contains duplicate version tags");
-        }
-        version = tag.text.trim();
-        continue;
+    if (!tag) {
+      throw new ParseError(`unsupported lqe header on line ${lineIndex + 1}`);
+    }
+    if (tag.name === "version") {
+      if (version !== undefined) {
+        throw new ParseError("lqe contains duplicate version tags");
       }
-      if (supportedMetadata.has(tag.name)) {
-        metadata.set(tag.name, tag.text);
-        continue;
-      }
+      version = tag.text.trim();
+      continue;
+    }
+    if (supportedMetadata.has(tag.name)) {
+      metadata.set(tag.name, tag.text);
+      continue;
     }
     throw new ParseError(`unsupported lqe header on line ${lineIndex + 1}`);
   }
@@ -122,12 +127,13 @@ function readSection(header: string, kind: SectionKind, lineNumber: number) {
 function readSections(lines: string[], firstLine: number) {
   const sections: LqeSection[] = [];
   let section: LqeSection | undefined;
-  for (let lineIndex = firstLine; lineIndex < lines.length; lineIndex += 1) {
-    const raw = lines[lineIndex] ?? "";
-    const header = sectionHeader.exec(raw.trim());
+  for (const [lineIndex, raw] of lines.entries()) {
+    if (lineIndex < firstLine) {
+      continue;
+    }
+    const header = matchHeader(raw.trim());
     if (header) {
-      const colon = header[0].indexOf(":");
-      const name = header[0].slice(1, colon).toLowerCase();
+      const name = header[1].toLowerCase();
       if (isSection(name)) {
         section = readSection(header[0], name, lineIndex + 1);
         sections.push(section);
@@ -160,11 +166,7 @@ function checkBody(lines: string[], row: RegExp, kind: string) {
   }
 }
 
-function addTranslation(
-  section: LqeSection,
-  targets: Map<number, TranslationTarget | null>,
-  assigned: Map<LyricsLine, Set<string>>
-) {
+function readTranslation(section: LqeSection) {
   if (
     (section.attributes.size !== 1 && section.attributes.size !== 2) ||
     section.attributes.get("format")?.toLowerCase() !== "lrc" ||
@@ -180,9 +182,19 @@ function addTranslation(
   }
   const body = section.body.filter((line) => !offsetTag.test(line.trim()));
   checkBody(body, lrcRow, "translation");
-  for (const translationLine of readLrc(body.join("\n"), {
-    expandRepeats: true,
-  }).lines) {
+  return {
+    language,
+    lines: readLrc(body.join("\n"), { expandRepeats: true }).lines,
+  };
+}
+
+function addTranslation(
+  section: LqeSection,
+  targets: Map<number, TranslationTarget | null>,
+  assigned: Map<LyricsLine, Set<string>>
+) {
+  const { language, lines } = readTranslation(section);
+  for (const translationLine of lines) {
     const target = targets.get(translationLine.begin);
     if (target === undefined) {
       throw new ParseError(
@@ -209,7 +221,7 @@ function addTranslation(
     target.line.translations = {
       ...target.line.translations,
       [language]: {
-        p: existing?.p ?? "",
+        p: existing === undefined ? "" : existing.p,
         ...(existing?.b !== undefined && { b: existing.b }),
         ...(target.track === "p"
           ? { p: text }
@@ -276,7 +288,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   }
   const lines = splitLines(text);
   const firstLine = lines.findIndex((line) => line.trim().length > 0);
-  if (firstLine < 0 || lines[firstLine]?.trim() !== containerMark) {
+  if (lines.at(firstLine)?.trim() !== containerMark) {
     throw new ParseError("input is missing the lqe container header");
   }
   const { lineIndex, metadata, version } = readPreamble(lines, firstLine);
@@ -325,30 +337,33 @@ function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
     addRow(rows, line.b, translation.b, line.id, "backing");
   }
   rows.sort((left, right) => left.begin - right.begin);
-  for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
-    if (rows[rowIndex]?.begin === rows[rowIndex - 1]?.begin) {
-      throw new Error(
-        `lqe cannot disambiguate translation tag ${rows[rowIndex]?.begin}`
-      );
+  let previousBegin: number | undefined;
+  for (const row of rows) {
+    if (row.begin === previousBegin) {
+      throw new Error(`lqe cannot disambiguate translation tag ${row.begin}`);
     }
+    previousBegin = row.begin;
   }
   return {
     agents: [],
-    lines: rows.map((row, lineIndex) => ({
-      agent: null,
-      b: [],
-      begin: row.begin,
-      end: rows[lineIndex + 1]?.begin ?? row.begin + 5000,
-      id: `l${lineIndex}`,
-      p: [
-        {
-          begin: row.begin,
-          end: rows[lineIndex + 1]?.begin ?? row.begin + 5000,
-          id: `l${lineIndex}w0`,
-          text: row.text,
-        },
-      ],
-    })),
+    lines: rows.map((row, lineIndex) => {
+      const end = rows[lineIndex + 1]?.begin ?? row.begin + 5000;
+      return {
+        agent: null,
+        b: [],
+        begin: row.begin,
+        end,
+        id: `l${lineIndex}`,
+        p: [
+          {
+            begin: row.begin,
+            end,
+            id: `l${lineIndex}w0`,
+            text: row.text,
+          },
+        ],
+      };
+    }),
     meta: {},
     timing: "line",
     version: 1,
