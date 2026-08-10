@@ -6,9 +6,15 @@
  */
 
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
+import { readTag, writeTags } from "../internal/lyric-tags";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
-import { checkTime, splitLines, toInt } from "../internal/timestamps";
+import {
+  checkTime,
+  readOffset,
+  shiftTimes,
+  splitLines,
+  toInt,
+} from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
@@ -158,6 +164,8 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   if (rows.length === 0) {
     throw new ParseError("input contains no recognizable lys lyric lines");
   }
+  const offsetText = tags.get("offset");
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lys");
   const lines = makeLines(rows);
   const album = tags.get("al");
   const artist = tags.get("ar");
@@ -178,13 +186,17 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };
-  return {
-    agents,
-    lines,
-    meta,
-    timing: "word",
-    version: 1,
-  };
+  return shiftTimes(
+    {
+      agents,
+      lines,
+      meta,
+      timing: "word",
+      version: 1,
+    },
+    offset,
+    "lys"
+  );
 }
 
 function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
@@ -250,5 +262,5 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       ...(line.b.length > 0 ? [writeRow(side + 6, line.b, true)] : []),
     ];
   });
-  return [`[by:${doc.meta.author ?? ""}]`, ...lyricRows].join("\n");
+  return [...writeTags(doc.meta, "lys"), ...lyricRows].join("\n");
 }

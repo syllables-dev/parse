@@ -6,11 +6,12 @@
  */
 
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
+import { checkMetaText, readTag } from "../internal/lyric-tags";
 import {
+  readOffset,
   readStamp,
+  shiftTimes,
   splitLines,
-  toInt,
   writeStamp,
 } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
@@ -32,7 +33,6 @@ interface EslrcRow {
 
 const stamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gu;
 const reservedStamp = /\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
-const signPrefix = /^[+-]/u;
 const lastLineMs = 5000;
 
 export const capabilities = {
@@ -103,27 +103,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const artist = tags.get("ar");
   const author = tags.get("by");
   const offsetText = tags.get("offset");
-  let offset: number | undefined;
-  if (offsetText !== undefined) {
-    const sign = offsetText.startsWith("-") ? -1 : 1;
-    offset =
-      sign *
-      toInt(
-        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
-        "eslrc offset"
-      );
-  }
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "eslrc");
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const meta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
     ...(author && { author }),
-    ...(offset !== undefined && { offset }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };
-  const shift = meta.offset ?? 0;
   const lines = rows.map((row, lineIndex) => {
     const [firstMarker] = row.markers;
     if (!firstMarker) {
@@ -144,8 +133,8 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
       }
       return [
         {
-          begin: marker.begin - shift,
-          end: (row.markers[markerIndex + 1]?.begin ?? sourceEnd) - shift,
+          begin: marker.begin,
+          end: row.markers[markerIndex + 1]?.begin ?? sourceEnd,
           text: marker.text,
         },
       ];
@@ -155,16 +144,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
         ? timedSegments
         : [
             {
-              begin: firstMarker.begin - shift,
-              end: sourceEnd - shift,
+              begin: firstMarker.begin,
+              end: sourceEnd,
               text: "",
             },
           ];
     return {
       agent: null,
       b: [],
-      begin: firstMarker.begin - shift,
-      end: sourceEnd - shift,
+      begin: firstMarker.begin,
+      end: sourceEnd,
       id: `l${lineIndex}`,
       p: syllables.map((syllable, syllableIndex) => ({
         ...syllable,
@@ -173,13 +162,17 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     };
   });
 
-  return {
-    agents: [],
-    lines,
-    meta,
-    timing: "word",
-    version: 1,
-  };
+  return shiftTimes(
+    {
+      agents: [],
+      lines,
+      meta,
+      timing: "word",
+      version: 1,
+    },
+    offset,
+    "eslrc"
+  );
 }
 
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
@@ -188,12 +181,15 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   }
   checkLines(doc, "eslrc");
   checkWrite(doc, "eslrc", capabilities);
+  checkMetaText(doc.meta, "eslrc");
   for (const line of doc.lines) {
     for (const syllable of line.p) {
       checkText(syllable.text, "eslrc", reservedStamp);
     }
   }
-  const offset = doc.meta.offset ?? 0;
+  if (doc.meta.songwriters?.length === 0) {
+    throw new Error("eslrc cannot represent an empty songwriter list");
+  }
   if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
     throw new Error("eslrc cannot represent multiple songwriters");
   }
@@ -202,7 +198,6 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
     `[by:${doc.meta.author ?? ""}]`,
-    ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
     ...(doc.meta.songwriters?.[0] === undefined
       ? []
       : [`[au:${doc.meta.songwriters[0]}]`]),
@@ -223,16 +218,16 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
         );
       }
       let currentTime = line.begin;
-      let serialized = `[${writeStamp(line.begin + offset)}]`;
+      let serialized = `[${writeStamp(line.begin)}]`;
       for (const syllable of line.p) {
         if (syllable.begin !== currentTime) {
-          serialized += `[${writeStamp(syllable.begin + offset)}]`;
+          serialized += `[${writeStamp(syllable.begin)}]`;
         }
-        serialized += `${syllable.text}[${writeStamp(syllable.end + offset)}]`;
+        serialized += `${syllable.text}[${writeStamp(syllable.end)}]`;
         currentTime = syllable.end;
       }
       if (currentTime !== line.end) {
-        serialized += `[${writeStamp(line.end + offset)}]`;
+        serialized += `[${writeStamp(line.end)}]`;
       }
       return serialized;
     }),

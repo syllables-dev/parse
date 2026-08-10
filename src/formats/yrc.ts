@@ -2,13 +2,19 @@
  * YRC, NetEase Cloud Music's word-by-word lyrics format.
  * by NetEase / Cloud Music (NCM)
  *
- * [12000,3320](12000,400,0)Hel(12400,300,0)lo(12700,600,0) world
+ * [12000,3320](12000,400,0)Hel(12400,300,0)lo (12700,600,0)world
  */
 
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
+import { checkMetaText, readTag } from "../internal/lyric-tags";
 import { readYrcWords, type TimedWord } from "../internal/timed-words";
-import { checkTime, splitLines, toInt } from "../internal/timestamps";
+import {
+  checkTime,
+  readOffset,
+  shiftTimes,
+  splitLines,
+  toInt,
+} from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
@@ -89,7 +95,7 @@ function readRows(
       continue;
     }
     const tag = readTag(raw);
-    if (tag?.name === "by") {
+    if (tag) {
       tags.set(tag.name, tag.text);
       continue;
     }
@@ -139,29 +145,48 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const songwriters: string[] = [];
   const tags = new Map<string, string>();
   const rows = readRows(text, songwriters, tags);
+  const taggedSongwriter = tags.get("au");
+  if (
+    taggedSongwriter !== undefined &&
+    !songwriters.includes(taggedSongwriter)
+  ) {
+    songwriters.push(taggedSongwriter);
+  }
+  const album = tags.get("al");
+  const artist = tags.get("ar");
   const author = tags.get("by");
-  return {
-    agents: [],
-    lines: rows.map((row, lineIndex) => ({
-      agent: null,
-      b: [],
-      begin: row.begin,
-      end: row.end,
-      id: `l${lineIndex}`,
-      p: row.words.map((word, wordIndex) => ({
-        begin: word.begin,
-        end: word.end,
-        id: `l${lineIndex}w${wordIndex}`,
-        text: word.text,
+  const offsetText = tags.get("offset");
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "yrc");
+  const title = tags.get("ti");
+  return shiftTimes(
+    {
+      agents: [],
+      lines: rows.map((row, lineIndex) => ({
+        agent: null,
+        b: [],
+        begin: row.begin,
+        end: row.end,
+        id: `l${lineIndex}`,
+        p: row.words.map((word, wordIndex) => ({
+          begin: word.begin,
+          end: word.end,
+          id: `l${lineIndex}w${wordIndex}`,
+          text: word.text,
+        })),
       })),
-    })),
-    meta: {
-      ...(author && { author }),
-      ...(songwriters.length > 0 && { songwriters }),
+      meta: {
+        ...(album !== undefined && { album }),
+        ...(artist !== undefined && { artist }),
+        ...(author && { author }),
+        ...(songwriters.length > 0 && { songwriters }),
+        ...(title !== undefined && { title }),
+      },
+      timing: "word",
+      version: 1,
     },
-    timing: "word",
-    version: 1,
-  };
+    offset,
+    "yrc"
+  );
 }
 
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
@@ -170,35 +195,49 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   }
   checkLines(doc, "yrc");
   checkWrite(doc, "yrc", capabilities);
+  checkMetaText(doc.meta, "yrc");
   for (const line of doc.lines) {
     for (const syllable of line.p) {
       checkText(syllable.text, "yrc", reservedStamp);
     }
   }
+  if (doc.meta.songwriters?.length === 0) {
+    throw new Error("yrc cannot represent an empty songwriter list");
+  }
   if (
-    doc.meta.title !== undefined ||
-    doc.meta.artist !== undefined ||
-    doc.meta.album !== undefined ||
-    doc.meta.offset !== undefined
+    doc.meta.songwriters &&
+    doc.meta.songwriters.length > 1 &&
+    doc.meta.songwriters.some(
+      (name) => name.length === 0 || name.trim() !== name || name.includes("/")
+    )
   ) {
-    throw new Error(
-      "yrc cannot represent title, artist, album, or offset metadata"
-    );
+    throw new Error("yrc cannot preserve this songwriter name");
   }
-  if (doc.meta.songwriters?.some((name) => name.includes("/"))) {
-    throw new Error("yrc cannot represent a slash inside a songwriter name");
+  if (
+    doc.meta.songwriters &&
+    doc.meta.songwriters.length > 1 &&
+    new Set(doc.meta.songwriters).size !== doc.meta.songwriters.length
+  ) {
+    throw new Error("yrc requires unique songwriter names");
   }
-  const preamble = doc.meta.songwriters?.length
-    ? [
-        JSON.stringify({
-          c: [{ tx: "作词: " }, { tx: doc.meta.songwriters.join("/") }],
-          t: 0,
-        }),
-      ]
-    : [];
+  const preamble =
+    doc.meta.songwriters && doc.meta.songwriters.length > 1
+      ? [
+          JSON.stringify({
+            c: [{ tx: "作词: " }, { tx: doc.meta.songwriters.join("/") }],
+            t: 0,
+          }),
+        ]
+      : [];
   return [
     ...preamble,
+    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
+    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
+    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
     `[by:${doc.meta.author ?? ""}]`,
+    ...(doc.meta.songwriters?.length === 1
+      ? [`[au:${doc.meta.songwriters[0]}]`]
+      : []),
     ...doc.lines.map((line) => {
       const duration = line.end - line.begin;
       checkTime(duration, `line ${line.id} duration`);

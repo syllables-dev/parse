@@ -10,11 +10,12 @@
  */
 
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
+import { readTag, writeTags } from "../internal/lyric-tags";
 import {
+  readOffset,
   readStamp,
+  shiftTimes,
   splitLines,
-  toInt,
   writeStamp,
 } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
@@ -34,7 +35,6 @@ interface LrcRow {
 const lineStamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gy;
 const wordStamp = /<(\d+):(\d{1,2})(?:[.:](\d{1,3}))?>/gu;
 const reservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
-const signPrefix = /^[+-]/u;
 const lastLineMs = 5000;
 
 export const capabilities = {
@@ -124,7 +124,7 @@ function readRows(
   return rows;
 }
 
-function makeLines(rows: LrcRow[], offset: number) {
+function makeLines(rows: LrcRow[]) {
   let wordTimed = false;
   const lines = rows.map((row, lineIndex) => {
     const sourceEnd = rows[lineIndex + 1]?.begin ?? row.begin + lastLineMs;
@@ -133,21 +133,21 @@ function makeLines(rows: LrcRow[], offset: number) {
     return {
       agent: null,
       b: [],
-      begin: row.begin - offset,
-      end: sourceEnd - offset,
+      begin: row.begin,
+      end: sourceEnd,
       id: `l${lineIndex}`,
       p:
         words.length > 0
           ? words.map((word, wordIndex) => ({
-              begin: word.begin - offset,
-              end: word.end - offset,
+              begin: word.begin,
+              end: word.end,
               id: `l${lineIndex}w${wordIndex}`,
               text: word.text,
             }))
           : [
               {
-                begin: row.begin - offset,
-                end: sourceEnd - offset,
+                begin: row.begin,
+                end: sourceEnd,
                 id: `l${lineIndex}w0`,
                 text: row.body,
               },
@@ -161,34 +161,28 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags, options.expandRepeats ?? false);
   const offsetText = tags.get("offset");
-  let offset: number | undefined;
-  if (offsetText !== undefined) {
-    const sign = offsetText.startsWith("-") ? -1 : 1;
-    offset =
-      sign *
-      toInt(
-        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
-        "lrc offset"
-      );
-  }
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lrc");
   const songwriters = tags.get("au");
   const author = tags.get("by");
   const meta = {
     ...(tags.has("al") && { album: tags.get("al") }),
     ...(tags.has("ar") && { artist: tags.get("ar") }),
     ...(author && { author }),
-    ...(offset !== undefined && { offset }),
     ...(songwriters !== undefined && { songwriters: [songwriters] }),
     ...(tags.has("ti") && { title: tags.get("ti") }),
   };
-  const { lines, wordTimed } = makeLines(rows, meta.offset ?? 0);
-  return {
-    agents: [],
-    lines,
-    meta,
-    timing: wordTimed ? "word" : "line",
-    version: 1,
-  };
+  const { lines, wordTimed } = makeLines(rows);
+  return shiftTimes(
+    {
+      agents: [],
+      lines,
+      meta,
+      timing: wordTimed ? "word" : "line",
+      version: 1,
+    },
+    offset,
+    "lrc"
+  );
 }
 
 export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
@@ -208,7 +202,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     }
   }
   return [
-    `[by:${doc.meta.author ?? ""}]`,
+    ...writeTags(doc.meta, "lrc"),
     ...doc.lines.map(
       (line) =>
         `[${writeStamp(line.begin)}]${line.p

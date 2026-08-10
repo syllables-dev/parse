@@ -1,6 +1,6 @@
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
-import { splitLines } from "../internal/timestamps";
+import { readTag, writeTags } from "../internal/lyric-tags";
+import { readOffset, shiftTimes, splitLines } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
@@ -32,7 +32,6 @@ interface TranslationRow {
 
 const containerMark = "[Lyricify Quick Export]";
 const sectionHeader = /^\[([A-Za-z]+):\s*(.*)\]$/u;
-const metadataHeader = /^\[([A-Za-z]+):(.*)\]$/u;
 const lrcRow = /^(?:\[\d+:\d{1,2}(?:[.:]\d{1,3})?\])+/u;
 const lysRow = /^\[\d+\]/u;
 const languageTag = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
@@ -82,7 +81,7 @@ function readPreamble(lines: string[], firstLine: number) {
         if (version !== undefined) {
           throw new ParseError("lqe contains duplicate version tags");
         }
-        version = tag.text;
+        version = tag.text.trim();
         continue;
       }
       if (supportedMetadata.has(tag.name)) {
@@ -154,11 +153,7 @@ function checkBody(lines: string[], row: RegExp, kind: string) {
     if (trimmed.length === 0 || row.test(trimmed)) {
       continue;
     }
-    const header = metadataHeader.exec(trimmed);
-    const tag = header
-      ? header[0].slice(1, header[0].indexOf(":")).toLowerCase()
-      : undefined;
-    if (!(tag && supportedMetadata.has(tag))) {
+    if (!offsetTag.test(trimmed)) {
       throw new ParseError(`malformed lqe ${kind} row ${lineIndex + 1}`);
     }
   }
@@ -242,7 +237,12 @@ function readTracks(
     .filter(([tag]) => tag !== "offset")
     .map(([tag, value]) => `[${tag}:${value}]`);
   checkBody(lyricSection.body, lysRow, "lyrics");
-  const doc = readLys([...metadataLines, ...lyricSection.body].join("\n"));
+  const doc = readLys(
+    [
+      ...metadataLines,
+      ...lyricSection.body.filter((line) => !offsetTag.test(line.trim())),
+    ].join("\n")
+  );
   const targets = new Map<number, TranslationTarget | null>();
   for (const line of doc.lines) {
     const primaryBegin = line.p[0]?.begin;
@@ -282,7 +282,10 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   if (version !== "1.0") {
     throw new ParseError("lqe version must be 1.0");
   }
-  return readTracks(readSections(lines, lineIndex), metadata);
+  const doc = readTracks(readSections(lines, lineIndex), metadata);
+  const offsetText = metadata.get("offset");
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lqe");
+  return shiftTimes(doc, offset, "lqe");
 }
 
 function addRow(
@@ -380,7 +383,7 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   const sections = [
     containerMark,
     "[version:1.0]",
-    `[by:${doc.meta.author ?? ""}]`,
+    ...writeTags(doc.meta, "lqe", "author-first"),
     "",
     "[lyrics: format@Lyricify Syllable]",
     writeLys({

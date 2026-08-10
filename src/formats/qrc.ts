@@ -2,13 +2,19 @@
  * QRC, QQ Music's word-by-word lyrics format.
  * by Tencent / QQ Music
  *
- * [12000,3320]Hel(12000,400)lo(12400,300) world(12700,600)
+ * [12000,3320]Hel(12000,400)lo (12400,300)world(12700,600)
  */
 
 import { ParseError } from "../errors";
-import { readTag } from "../internal/lyric-tags";
+import { readTag, writeTags } from "../internal/lyric-tags";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
-import { checkTime, splitLines, toInt } from "../internal/timestamps";
+import {
+  checkTime,
+  readOffset,
+  shiftTimes,
+  splitLines,
+  toInt,
+} from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
   FormatCapabilities,
@@ -39,7 +45,6 @@ interface QrcWriteLine {
 
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
-const signPrefix = /^[+-]/u;
 
 export const capabilities = {
   agents: false,
@@ -70,12 +75,11 @@ function unwrapWords(words: TimedWord[]): TimedWord[] {
 function makeTrack(
   words: TimedWord[],
   lineId: string,
-  track: "b" | "w",
-  offset: number
+  track: "b" | "w"
 ): Syllable[] {
   return words.map((word, wordIndex) => ({
-    begin: word.begin - offset,
-    end: word.end - offset,
+    begin: word.begin,
+    end: word.end,
     id: `${lineId}${track}${wordIndex}`,
     text: word.text,
   }));
@@ -132,7 +136,7 @@ function readRows(text: string, tags: Map<string, string>): QrcRow[] {
   return rows;
 }
 
-function makeLines(rows: QrcRow[], offset: number): LyricsLine[] {
+function makeLines(rows: QrcRow[]): LyricsLine[] {
   const lines: LyricsLine[] = [];
   for (const [rowIndex, row] of rows.entries()) {
     const isBacking =
@@ -144,24 +148,20 @@ function makeLines(rows: QrcRow[], offset: number): LyricsLine[] {
       if (!mainLine) {
         throw new ParseError(`qrc line ${rowIndex + 1} has no primary line`);
       }
-      mainLine.begin = Math.min(mainLine.begin, row.begin - offset);
-      mainLine.end = Math.max(mainLine.end, row.end - offset);
-      mainLine.b.push(
-        ...makeTrack(unwrapWords(row.words), mainLine.id, "b", offset)
-      );
+      mainLine.begin = Math.min(mainLine.begin, row.begin);
+      mainLine.end = Math.max(mainLine.end, row.end);
+      mainLine.b.push(...makeTrack(unwrapWords(row.words), mainLine.id, "b"));
       continue;
     }
 
     const lineId = `l${rowIndex}`;
     lines.push({
       agent: null,
-      b: isBacking
-        ? makeTrack(unwrapWords(row.words), lineId, "b", offset)
-        : [],
-      begin: row.begin - offset,
-      end: row.end - offset,
+      b: isBacking ? makeTrack(unwrapWords(row.words), lineId, "b") : [],
+      begin: row.begin,
+      end: row.end,
       id: lineId,
-      p: isBacking ? [] : makeTrack(row.words, lineId, "w", offset),
+      p: isBacking ? [] : makeTrack(row.words, lineId, "w"),
     });
   }
   return lines;
@@ -177,53 +177,46 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const artist = tags.get("ar");
   const author = tags.get("by");
   const offsetText = tags.get("offset");
-  let offset: number | undefined;
-  if (offsetText !== undefined) {
-    const sign = offsetText.startsWith("-") ? -1 : 1;
-    offset =
-      sign *
-      toInt(
-        signPrefix.test(offsetText) ? offsetText.slice(1) : offsetText,
-        "qrc offset"
-      );
-  }
+  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "qrc");
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const meta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
     ...(author && { author }),
-    ...(offset !== undefined && { offset }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };
-  return {
-    agents: [],
-    lines: makeLines(rows, meta.offset ?? 0),
-    meta,
-    timing: "word",
-    version: 1,
-  };
+  return shiftTimes(
+    {
+      agents: [],
+      lines: makeLines(rows),
+      meta,
+      timing: "word",
+      version: 1,
+    },
+    offset,
+    "qrc"
+  );
 }
 
 function writeRow(
   begin: number,
   end: number,
   syllables: Syllable[],
-  offset: number,
   wrap: boolean
 ): string {
   const duration = end - begin;
   checkTime(duration, "qrc line duration");
-  checkTime(begin + offset, "qrc line start");
-  return `[${begin + offset},${duration}]${syllables
+  checkTime(begin, "qrc line start");
+  return `[${begin},${duration}]${syllables
     .map((syllable, index) => {
       const syllableDuration = syllable.end - syllable.begin;
       checkTime(syllableDuration, `syllable ${syllable.id} duration`);
-      checkTime(syllable.begin + offset, `syllable ${syllable.id} start`);
+      checkTime(syllable.begin, `syllable ${syllable.id} start`);
       const prefix = wrap && index === 0 ? "(" : "";
       const suffix = wrap && index === syllables.length - 1 ? ")" : "";
-      return `${prefix}${syllable.text}${suffix}(${syllable.begin + offset},${syllableDuration})`;
+      return `${prefix}${syllable.text}${suffix}(${syllable.begin},${syllableDuration})`;
     })
     .join("")}`;
 }
@@ -267,7 +260,6 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       checkText(syllable.text, "qrc", reservedStamp);
     }
   }
-  const offset = doc.meta.offset ?? 0;
   const rowModel: QrcWriteRow[] = [];
   for (const [lineIndex, line] of doc.lines.entries()) {
     if (line.p.length > 0 || line.b.length === 0) {
@@ -286,29 +278,16 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   const lyricRows = doc.lines.flatMap((line) => {
     const rows =
       line.p.length > 0 || line.b.length === 0
-        ? [writeRow(line.begin, line.end, line.p, offset, false)]
+        ? [writeRow(line.begin, line.end, line.p, false)]
         : [];
     if (line.b.length > 0) {
       const backingBegin = Math.min(
         ...line.b.map((syllable) => syllable.begin)
       );
       const backingEnd = Math.max(...line.b.map((syllable) => syllable.end));
-      rows.push(writeRow(backingBegin, backingEnd, line.b, offset, true));
+      rows.push(writeRow(backingBegin, backingEnd, line.b, true));
     }
     return rows;
   });
-  if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
-    throw new Error("qrc cannot represent multiple songwriters");
-  }
-  return [
-    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
-    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
-    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    `[by:${doc.meta.author ?? ""}]`,
-    ...(doc.meta.offset === undefined ? [] : [`[offset:${doc.meta.offset}]`]),
-    ...(doc.meta.songwriters?.[0] === undefined
-      ? []
-      : [`[au:${doc.meta.songwriters[0]}]`]),
-    ...lyricRows,
-  ].join("\n");
+  return [...writeTags(doc.meta, "qrc"), ...lyricRows].join("\n");
 }
