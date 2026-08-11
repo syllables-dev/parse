@@ -8,7 +8,11 @@
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
 import { prepare, qrcTextLosses } from "../internal/projection";
-import { readTimedWords, type TimedWord } from "../internal/timed-words";
+import {
+  foldSpacers,
+  readTimedWords,
+  type TimedWord,
+} from "../internal/timed-words";
 import {
   checkTime,
   readOffset,
@@ -52,16 +56,15 @@ export const capabilities = {
   backing: true,
   metadata: {
     album: true,
+    apple: false,
     artist: true,
     author: true,
     songwriters: true,
     title: true,
   },
   pronunciation: false,
-  trackMetadata: {
-    pronunciation: { automaticallyCreated: false },
-    translation: { automaticallyCreated: false, kind: false },
-  },
+  trackGenerated: false,
+  trackKind: false,
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;
@@ -129,11 +132,16 @@ function readRow(
       `qrc line ${lineIndex + 1} end exceeds the safe integer range`
     );
   }
-  const words = readTimedWords(
-    header[0].slice(close + 1),
+  const words = foldSpacers(
+    readTimedWords(
+      header[0].slice(close + 1),
+      lineIndex + 1,
+      begin,
+      begin + duration
+    ),
+    "qrc",
     lineIndex + 1,
-    begin,
-    begin + duration
+    (word) => word.begin === word.end
   );
   return {
     begin,

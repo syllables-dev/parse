@@ -8,7 +8,11 @@
 import { ParseError } from "../../errors";
 import { readTag, writeTags } from "../../internal/lyric-tags";
 import { prepare } from "../../internal/projection";
-import { readTimedWords, type TimedWord } from "../../internal/timed-words";
+import {
+  foldSpacers,
+  readTimedWords,
+  type TimedWord,
+} from "../../internal/timed-words";
 import {
   checkTime,
   readOffset,
@@ -40,7 +44,6 @@ interface LysRow {
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
-const zeroTimeSeparator = /^[\p{White_Space}\p{P}]+$/u;
 const leftAgentId = "v1";
 const rightAgentId = "v2";
 
@@ -49,16 +52,15 @@ export const capabilities = {
   backing: true,
   metadata: {
     album: true,
+    apple: false,
     artist: true,
     author: true,
     songwriters: true,
     title: true,
   },
   pronunciation: false,
-  trackMetadata: {
-    pronunciation: { automaticallyCreated: false },
-    translation: { automaticallyCreated: false, kind: false },
-  },
+  trackGenerated: false,
+  trackKind: false,
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;
@@ -75,28 +77,6 @@ function makeTrack(
     id: `${lineId}${track}${firstIndex + wordIndex}`,
     text: word.text,
   }));
-}
-
-function normalizedWords(words: TimedWord[], lineIndex: number) {
-  const syllables: TimedWord[] = [];
-  for (const word of words) {
-    if (
-      word.begin === 0 &&
-      word.end === 0 &&
-      zeroTimeSeparator.test(word.text)
-    ) {
-      const previous = syllables.at(-1);
-      if (!previous) {
-        throw new ParseError(
-          `lys line ${lineIndex + 1} begins with a zero-time separator`
-        );
-      }
-      previous.text += word.text;
-      continue;
-    }
-    syllables.push(word);
-  }
-  return syllables;
 }
 
 function readRow(
@@ -128,9 +108,11 @@ function readRow(
   if (whitespace.test(body)) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
   }
-  const words = normalizedWords(
+  const words = foldSpacers(
     readTimedWords(body, lineIndex + 1, 0, 0),
-    lineIndex
+    "lys",
+    lineIndex + 1,
+    (word) => word.begin === 0 && word.end === 0
   );
   if (words.length === 0) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);

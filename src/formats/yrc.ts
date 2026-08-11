@@ -8,7 +8,11 @@
 import { ParseError } from "../errors";
 import { checkMetaText, readTag } from "../internal/lyric-tags";
 import { prepare } from "../internal/projection";
-import { readYrcWords, type TimedWord } from "../internal/timed-words";
+import {
+  foldSpacers,
+  readYrcWords,
+  type TimedWord,
+} from "../internal/timed-words";
 import {
   checkTime,
   readOffset,
@@ -39,16 +43,15 @@ export const capabilities = {
   backing: false,
   metadata: {
     album: true,
+    apple: false,
     artist: true,
     author: true,
     songwriters: true,
     title: true,
   },
   pronunciation: false,
-  trackMetadata: {
-    pronunciation: { automaticallyCreated: false },
-    translation: { automaticallyCreated: false, kind: false },
-  },
+  trackGenerated: false,
+  trackKind: false,
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;
@@ -135,11 +138,16 @@ function readRows(
     rows.push({
       begin,
       end: begin + duration,
-      words: readYrcWords(
-        header[0].slice(close + 1),
+      words: foldSpacers(
+        readYrcWords(
+          header[0].slice(close + 1),
+          lineIndex + 1,
+          begin,
+          begin + duration
+        ),
+        "yrc",
         lineIndex + 1,
-        begin,
-        begin + duration
+        (word) => word.begin === word.end
       ),
     });
   }
