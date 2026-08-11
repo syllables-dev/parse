@@ -1,33 +1,135 @@
+<div align="center">
+
 # @syllables-dev/parse
 
-Readers and writers for Apple Music TTML, LRC, ESLRC, QRC, YRC, LYS, and LQE. Every codec uses the same plain JSON `LyricsDocument` schema with absolute millisecond timestamps.
+**Readers and writers for lyric formats, built around one shared document schema.**
 
-```ts
-import { capabilities, convert, losses, parse, write } from "@syllables-dev/parse";
+Apple Music TTML &middot; LRC &middot; ESLRC &middot; QRC &middot; YRC &middot; LYS &middot; LQE
 
-const { doc, format } = parse(source);
-const lrc = convert(source, "lrc");
-const ttml = write(doc, "ttml");
-const preservesWords = capabilities(format).wordTiming;
-const preservesTitle = capabilities(format).metadata.title;
-const dropped = losses(doc, "ttml");
-const lossyTtml = write(doc, "ttml", { lossy: true });
+<sub>Zero runtime dependencies &middot; plain JSON documents &middot; absolute millisecond timestamps</sub>
+
+</div>
+
+<br>
+
+> [!NOTE]
+> Documentation is a work in progress. Everything below is accurate and covered by tests, but the package is pre-1.0 and the schema may still change between minor versions.
+
+<br>
+
+## Install
+
+```sh
+bun add @syllables-dev/parse
 ```
 
-The root exports `detect`, `parse`, `read`, `write`, `convert`, `losses`, `capabilities`, `validate`, `createDocument`, `ParseError`, and all public schema types. Detection reads content only and returns `null` for unrecognized text. Parsing and conversion throw `ParseError` when detection cannot identify a format.
+<br>
 
-Each codec also has a focused subpath that exports `read`, `write`, and `capabilities`:
+## How it works
+
+Every format reads into a plain `LyricsDocument` and writes back out from it. Codecs never import each other, so any-to-any conversion is simply `write(read(text))`.
+
+<br>
+
+## Quick start
+
+```ts
+import { convert, parse } from "@syllables-dev/parse";
+
+// detect the format and read it
+const { doc, format } = parse(source);
+
+// or go straight across
+const lrc = convert(source, "lrc");
+```
+
+<br>
+
+## Lossy conversion
+
+Formats are not equally expressive. Writing is **strict by default**, so nothing is lost silently: you either get an error or you opt in.
+
+```ts
+import { losses, read, write } from "@syllables-dev/parse";
+
+const doc = read("[0,1300]Hel(0,400)lo (400,300)world(700,600)", "qrc");
+
+losses(doc, "lrc");
+// ["wordTiming", "lineTiming"]
+
+write(doc, "lrc");
+// throws: lrc cannot represent word timing
+
+write(doc, "lrc", { lossy: true });
+// "[by:]\n[00:00.000]Hello world"
+```
+
+Call `losses(doc, format)` first to see what a target cannot hold, then pass `{ lossy: true }` when you accept it.
+
+<br>
+
+## What each format preserves
+
+<div align="center">
+
+| | word timing | backing | agents | translation | pronunciation |
+|:--|:--:|:--:|:--:|:--:|:--:|
+| **TTML** | ✓ | ✓ | identity | ✓ | ✓ |
+| **LQE** | ✓ | ✓ | alignment | ✓ | |
+| **LYS** | ✓ | ✓ | alignment | | |
+| **QRC** | ✓ | ✓ | | | |
+| **YRC** | ✓ | | | | |
+| **ESLRC** | ✓ | | | | |
+| **LRC** | | | | | |
+
+</div>
+
+`agents` is tiered: `identity` keeps opaque IDs and types, `alignment` keeps duet-side attribution but may canonicalize them. Query all of this at runtime with `capabilities(format)`.
+
+<br>
+
+## API
+
+<table>
+<tr><th align="left">Function</th><th align="left">Purpose</th></tr>
+<tr><td><code>detect(text)</code></td><td>Identify a format from content alone. Returns <code>null</code> when unrecognized.</td></tr>
+<tr><td><code>parse(text)</code></td><td>Detect and read in one step. Returns <code>{ doc, format }</code>.</td></tr>
+<tr><td><code>read(text, format)</code></td><td>Read text you already know the format of.</td></tr>
+<tr><td><code>write(doc, format)</code></td><td>Serialize a document. Throws when the format cannot represent it.</td></tr>
+<tr><td><code>convert(text, to)</code></td><td>Detect, read, and write in one step.</td></tr>
+<tr><td><code>losses(doc, format)</code></td><td>List what a target format would drop.</td></tr>
+<tr><td><code>capabilities(format)</code></td><td>What a format can preserve.</td></tr>
+<tr><td><code>validate(doc)</code></td><td>Structural problems in a document you built or edited.</td></tr>
+<tr><td><code>createDocument()</code></td><td>An empty document to build from.</td></tr>
+</table>
+
+`ParseError` and every public schema type are exported from the root.
+
+<br>
+
+### Subpath imports
+
+Pull in a single codec when you do not need detection:
 
 ```ts
 import { read, write } from "@syllables-dev/parse/ttml";
 ```
 
-Documents and IDs are deterministic for identical input. Readers and writers are pure and preserve features according to `capabilities(format)`.
+Available for `ttml`, `lrc`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
 
-Writes and conversions are strict by default. `losses(doc, format)` lists unsupported document features. `{ lossy: true }` projects them away before writing while parsing always preserves source data.
+<br>
 
-Agent capabilities are `false`, `alignment`, or `identity`; `alignment` preserves duet-side attribution and may canonicalize IDs and types, and `identity` preserves opaque IDs and types.
+## Guarantees
 
-Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Apple TTML-only fields such as agents, song parts, timing metadata, and element attributes exist only in TTML; no other format can represent them, so their absence elsewhere is not a tracked capability. `trackGenerated` covers the generated-text flag on translation and pronunciation tracks; `trackKind` covers translation subtitle and replacement behavior.
+<table>
+<tr><td><b>Deterministic</b></td><td>Identical input always produces identical documents and IDs.</td></tr>
+<tr><td><b>Pure</b></td><td>Readers and writers never mutate their input.</td></tr>
+<tr><td><b>Plain data</b></td><td>Documents are JSON-serializable. No classes, Maps, or Dates.</td></tr>
+<tr><td><b>Absolute time</b></td><td>Every timestamp is an integer millisecond offset. Source offsets are applied on read.</td></tr>
+</table>
 
-Line `translations` and `pronunciations` hold each language's lyric rows. Document-level `translationTracks` maps languages to `{ automaticallyCreated?, kind? }`; `pronunciationTracks` maps languages to `{ automaticallyCreated?, variants? }`. Repeated Apple transliterations use `variants` and `apple.pronunciationOrder` to retain source order. Nested Apple spans use `Syllable.content`. Readers apply source offsets to document timestamps and writers emit adjusted timestamps without offset tags.
+<br>
+
+## License
+
+AGPL-3.0-or-later
