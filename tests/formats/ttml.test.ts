@@ -750,6 +750,117 @@ describe("ttml writer", () => {
     expect(readLyrics(source, "ttml")).toEqual(wordDocument);
   });
 
+  test.each([
+    { backingBegin: 1100, primaryBegin: 1200, state: "earlier" },
+    { backingBegin: 1200, primaryBegin: 1200, state: "equal" },
+    { backingBegin: 1300, primaryBegin: 1200, state: "later" },
+  ])(
+    "writes $state x-bg tracks in chronological order across timed content",
+    ({ backingBegin, primaryBegin }) => {
+      const doc = {
+        agents: [],
+        lines: [
+          {
+            agent: null,
+            b: [
+              {
+                begin: backingBegin,
+                end: 1500,
+                id: "lineb0",
+                text: "Echo",
+              },
+            ],
+            begin: 1000,
+            end: 2000,
+            id: "line",
+            p: [
+              {
+                begin: primaryBegin,
+                end: 1800,
+                id: "linew0",
+                text: "Lead",
+              },
+            ],
+            pronunciations: {
+              "en-Latn": {
+                b: [
+                  {
+                    begin: backingBegin,
+                    end: 1500,
+                    id: "liner0b0",
+                    text: "echo",
+                  },
+                ],
+                p: [
+                  {
+                    begin: primaryBegin,
+                    end: 1800,
+                    id: "liner0w0",
+                    text: "lead",
+                  },
+                ],
+              },
+            },
+          },
+        ],
+        meta: {},
+        timing: "word",
+        version: 1,
+      } satisfies LyricsDocument;
+      const source = writeLyrics(doc, "ttml");
+      const body = source.slice(
+        source.indexOf('<p begin="0:01.000"'),
+        source.indexOf("</p>")
+      );
+      const pronunciation = source.slice(
+        source.indexOf('<transliteration xml:lang="en-Latn">'),
+        source.indexOf("</transliteration>")
+      );
+      const backingFirst = backingBegin < primaryBegin;
+
+      expect(
+        body.indexOf('ttm:role="x-bg"') < body.indexOf(">Lead</span>")
+      ).toBe(backingFirst);
+      expect(
+        pronunciation.indexOf('ttm:role="x-bg"') <
+          pronunciation.indexOf(">lead</span>")
+      ).toBe(backingFirst);
+      expect(readLyrics(source, "ttml")).toEqual(doc);
+    }
+  );
+
+  test("round-trips backing-only timed lines", () => {
+    const doc = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1100, end: 1800, id: "lineb0", text: "Echo" }],
+          begin: 1000,
+          end: 2000,
+          id: "line",
+          p: [],
+          pronunciations: {
+            "en-Latn": {
+              b: [{ begin: 1100, end: 1800, id: "liner0b0", text: "echo" }],
+              p: [],
+            },
+          },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    const source = writeLyrics(doc, "ttml");
+
+    expect(source).toContain(
+      '<p begin="0:01.000" end="0:02.000" itunes:key="line"><span ttm:role="x-bg"><span begin="0:01.100" end="0:01.800">(Echo)</span></span></p>'
+    );
+    expect(readLyrics(source, "ttml")).toEqual(doc);
+  });
+
   test("rejects inconsistent automaticallyCreated track states", () => {
     const laterLine = {
       ...lyricLine,
