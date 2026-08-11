@@ -36,8 +36,14 @@ const capabilityCases = [
     "lrc",
     {
       agents: false,
-      author: true,
       backing: false,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: false,
       wordTiming: false,
@@ -47,8 +53,14 @@ const capabilityCases = [
     "eslrc",
     {
       agents: false,
-      author: true,
       backing: false,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: false,
       wordTiming: true,
@@ -58,8 +70,14 @@ const capabilityCases = [
     "qrc",
     {
       agents: false,
-      author: true,
       backing: true,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: false,
       wordTiming: true,
@@ -69,8 +87,14 @@ const capabilityCases = [
     "yrc",
     {
       agents: false,
-      author: true,
       backing: false,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: false,
       wordTiming: true,
@@ -80,8 +104,14 @@ const capabilityCases = [
     "lys",
     {
       agents: true,
-      author: true,
       backing: true,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: false,
       wordTiming: true,
@@ -91,8 +121,14 @@ const capabilityCases = [
     "lqe",
     {
       agents: true,
-      author: true,
       backing: true,
+      metadata: {
+        album: true,
+        artist: true,
+        author: true,
+        songwriters: true,
+        title: true,
+      },
       pronunciation: false,
       translation: true,
       wordTiming: true,
@@ -102,8 +138,14 @@ const capabilityCases = [
     "ttml",
     {
       agents: true,
-      author: false,
       backing: true,
+      metadata: {
+        album: false,
+        artist: false,
+        author: false,
+        songwriters: true,
+        title: false,
+      },
       pronunciation: true,
       translation: true,
       wordTiming: true,
@@ -560,9 +602,12 @@ describe("public dispatch", () => {
     const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");
 
     exposed.wordTiming = true;
+    exposed.metadata.title = false;
 
     expect(capabilities("lrc")).not.toBe(exposed);
     expect(capabilities("lrc").wordTiming).toBeFalse();
+    expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
+    expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(() => write(wordTimed, "lrc")).toThrow(
       "lrc cannot represent word timing"
     );
