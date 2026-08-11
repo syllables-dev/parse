@@ -460,6 +460,157 @@ describe("public dispatch", () => {
     }
   });
 
+  test.each(["lys", "lqe"] satisfies FormatId[])(
+    "projects %s line bounds to timed syllable bounds",
+    (format) => {
+      const lyricDocument = {
+        agents: [],
+        lines: [
+          {
+            agent: null,
+            b: [{ begin: 1200, end: 1800, id: "l0b0", text: "Reply" }],
+            begin: 1000,
+            end: 2000,
+            id: "l0",
+            p: [{ begin: 1100, end: 1900, id: "l0w0", text: "Lead" }],
+          },
+        ],
+        meta: {},
+        timing: "word",
+        version: 1,
+      } satisfies LyricsDocument;
+      const before = structuredClone(lyricDocument);
+
+      expect(losses(lyricDocument, format)).toEqual(["lineTiming"]);
+      expect(() => write(lyricDocument, format)).toThrow(
+        "lys cannot represent the range of line l0"
+      );
+      expect(
+        read(write(lyricDocument, format, { lossy: true }), format).lines[0]
+      ).toMatchObject({
+        b: [{ begin: 1200, end: 1800, text: "Reply" }],
+        begin: 1100,
+        end: 1900,
+        p: [{ begin: 1100, end: 1900, text: "Lead" }],
+      });
+      expect(lyricDocument).toEqual(before);
+    }
+  );
+
+  test.each(["lys", "lqe"] satisfies FormatId[])(
+    "removes empty %s lines only during lossy writes",
+    (format) => {
+      const lyricDocument = {
+        agents: [],
+        lines: [
+          {
+            agent: null,
+            b: [],
+            begin: 1000,
+            end: 1500,
+            id: "l0",
+            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+          },
+          { agent: null, b: [], begin: 2000, end: 2500, id: "l1", p: [] },
+        ],
+        meta: {},
+        timing: "word",
+        version: 1,
+      } satisfies LyricsDocument;
+      const before = structuredClone(lyricDocument);
+
+      expect(losses(lyricDocument, format)).toEqual(["lineShape"]);
+      expect(() => write(lyricDocument, format)).toThrow(
+        "lys cannot represent empty line l1"
+      );
+      expect(
+        read(write(lyricDocument, format, { lossy: true }), format).lines
+      ).toMatchObject([{ id: "l0", p: [{ text: "Lead" }] }]);
+      expect(lyricDocument).toEqual(before);
+    }
+  );
+
+  test.each(["lys", "lqe"] satisfies FormatId[])(
+    "removes orphan backing-only %s lines only during lossy writes",
+    (format) => {
+      const lyricDocument = {
+        agents: [{ id: "v1", type: "person" }],
+        lines: [
+          {
+            agent: "v1",
+            b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
+            begin: 1000,
+            end: 1500,
+            id: "l0",
+            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+          },
+          {
+            agent: "v1",
+            b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
+            begin: 2000,
+            end: 2500,
+            id: "l1",
+            p: [],
+          },
+        ],
+        meta: {},
+        timing: "word",
+        version: 1,
+      } satisfies LyricsDocument;
+      const before = structuredClone(lyricDocument);
+
+      expect(losses(lyricDocument, format)).toEqual(["lineShape"]);
+      expect(() => write(lyricDocument, format)).toThrow(
+        `${format} cannot preserve backing-only line l1`
+      );
+      expect(
+        read(write(lyricDocument, format, { lossy: true }), format).lines
+      ).toMatchObject([
+        {
+          b: [{ begin: 1200, end: 1500, text: "Reply" }],
+          id: "l0",
+          p: [{ text: "Lead" }],
+        },
+      ]);
+      expect(lyricDocument).toEqual(before);
+    }
+  );
+
+  test("reports and removes LQE translations on orphan backing-only lines", () => {
+    const lyricDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+        },
+        {
+          agent: null,
+          b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
+          begin: 2000,
+          end: 2500,
+          id: "l1",
+          p: [],
+          translations: { fr: { b: "Écho", p: "" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lqe")).toEqual(["lineShape", "translations"]);
+    expect(
+      read(write(lyricDocument, "lqe", { lossy: true }), "lqe").lines
+    ).toMatchObject([{ id: "l0", p: [{ text: "Lead" }] }]);
+    expect(lyricDocument).toEqual(before);
+  });
+
   test("rejects undeclared lys agents through both public writers", () => {
     const lyricDocument = {
       agents: [],
@@ -810,88 +961,6 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test("drops a primary translation with no primary lyric target", () => {
-    const doc: LyricsDocument = {
-      agents: [],
-      lines: [
-        {
-          agent: null,
-          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
-          begin: 1000,
-          end: 1500,
-          id: "l0",
-          p: [],
-          translations: { fr: { p: "Bonjour" } },
-        },
-      ],
-      meta: {},
-      timing: "word",
-      version: 1,
-    };
-
-    expect(losses(doc, "lqe")).toEqual(["translations"]);
-    expect(() => write(doc, "lqe")).toThrow(
-      "lqe cannot place primary translation for line l0"
-    );
-    expect(
-      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
-    ).toBeUndefined();
-  });
-
-  test("keeps a backing translation when its primary lyric target is absent", () => {
-    const doc: LyricsDocument = {
-      agents: [],
-      lines: [
-        {
-          agent: null,
-          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
-          begin: 1000,
-          end: 1500,
-          id: "l0",
-          p: [],
-          translations: { fr: { b: "Réponse", p: "Bonjour" } },
-        },
-      ],
-      meta: {},
-      timing: "word",
-      version: 1,
-    };
-
-    expect(losses(doc, "lqe")).toEqual(["translations"]);
-    expect(
-      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
-    ).toEqual({ fr: { b: "Réponse", kind: "subtitle", p: "" } });
-  });
-
-  test("round-trips an empty primary alongside a backing translation", () => {
-    const doc: LyricsDocument = {
-      agents: [],
-      lines: [
-        {
-          agent: null,
-          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
-          begin: 1000,
-          end: 1500,
-          id: "l0",
-          p: [],
-          translations: { es: { b: "Dos", p: "" } },
-        },
-      ],
-      meta: {},
-      timing: "word",
-      version: 1,
-    };
-
-    expect(losses(doc, "lqe")).toEqual([]);
-    const restored = read(write(doc, "lqe"), "lqe");
-
-    expect(restored.lines[0]).toMatchObject({
-      b: [{ text: "Reply" }],
-      p: [],
-      translations: { es: { b: "Dos", kind: "subtitle", p: "" } },
-    });
-  });
-
   test("drops a backing translation with no backing lyric target", () => {
     const doc: LyricsDocument = {
       agents: [],
@@ -1071,7 +1140,7 @@ describe("public dispatch", () => {
   test("projects lrc implicit line ends and primary syllable ranges", () => {
     const doc = read("[00:01.000]One\n[00:03.000]Two", "lrc");
     const [firstLine, secondLine] = doc.lines;
-    if (firstLine === undefined || secondLine === undefined) {
+    if (!(firstLine && secondLine)) {
       throw new Error("lrc source must produce two lines");
     }
     const [secondSyllable] = secondLine.p;
@@ -1134,7 +1203,7 @@ describe("public dispatch", () => {
   test("projects out-of-order lrc starts into chronological line order", () => {
     const doc = read("[00:01.000]One\n[00:02.000]Two", "lrc");
     const [firstLine, secondLine] = doc.lines;
-    if (firstLine === undefined || secondLine === undefined) {
+    if (!(firstLine && secondLine)) {
       throw new Error("lrc source must produce two lines");
     }
     doc.lines = [

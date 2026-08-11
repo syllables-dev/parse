@@ -179,6 +179,21 @@ describe("lys reader", () => {
     ]);
   });
 
+  test("folds zero-time separators into the preceding timed syllable", () => {
+    const doc = read("[4]One(1000,500) (0,0),(0,0)，(0,0)Two(1500,500)");
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 1000, end: 1500, id: "l0w0", text: "One ,，" },
+      { begin: 1500, end: 2000, id: "l0w1", text: "Two" },
+    ]);
+  });
+
+  test("rejects a leading zero-time separator", () => {
+    expect(() => read("[4],(0,0)One(1000,500)")).toThrow(
+      "lys line 1 begins with a zero-time separator"
+    );
+  });
+
   test("merges explicit and inferred backing rows", () => {
     const explicit = read("[4]Lead(1000,1000)\n[7](Echo)(1200,500)");
     const inferred = read("[4]Lead(1000,1000)\n[1](Echo)(1200,500)");
@@ -330,7 +345,7 @@ describe("lys writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("preserves a leading backing-only line", () => {
+  test("rejects a leading backing-only line without mutation", () => {
     const doc = {
       agents: [{ id: "v1", type: "person" }],
       lines: [
@@ -342,7 +357,12 @@ describe("lys writer", () => {
       version: 1,
     } satisfies LyricsDocument;
 
-    expect(read(write(doc))).toEqual(doc);
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lys cannot preserve backing-only line l0"
+    );
+    expect(doc).toEqual(before);
   });
 
   test("rejects a same-agent backing-only line without mutation", () => {

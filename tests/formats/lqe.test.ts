@@ -105,6 +105,20 @@ describe("lqe reader", () => {
     expect(read(source).lines[0]).toMatchObject({ begin: 1001, end: 2002 });
   });
 
+  test("delegates zero-time separator normalization to LYS", () => {
+    const doc = read(
+      makeLqe(
+        "[lyrics: format@Lyricify Syllable]",
+        "[4]One(1000,500) (0,0),(0,0)，(0,0)Two(1500,500)"
+      )
+    );
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 1000, end: 1500, id: "l0w0", text: "One ,，" },
+      { begin: 1500, end: 2000, id: "l0w1", text: "Two" },
+    ]);
+  });
+
   test("joins primary and backing translations at their own timestamps", () => {
     const doc = read(
       makeLqe(
