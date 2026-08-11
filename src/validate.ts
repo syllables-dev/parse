@@ -53,7 +53,6 @@ function checkTrack(line: LyricsLine, syllables: Syllable[]): Problem[] {
 
 function checkTiming(
   line: LyricsLine,
-  earlierLines: LyricsLine[],
   previousBegin: number | undefined
 ): Problem[] {
   const problems: Problem[] = [];
@@ -70,18 +69,6 @@ function checkTiming(
       code: "line-out-of-order",
       id: line.id,
       message: "line starts before the preceding line",
-    });
-  }
-  if (
-    earlierLines.some(
-      (earlierLine) =>
-        line.begin < earlierLine.end && line.end > earlierLine.begin
-    )
-  ) {
-    problems.push({
-      code: "line-overlap",
-      id: line.id,
-      message: "line overlaps an earlier line",
     });
   }
   if (line.end <= line.begin) {
@@ -146,9 +133,9 @@ export function validate(doc: LyricsDocument): Problem[] {
   const problems: Problem[] = [];
   let previousBegin: number | undefined;
 
-  for (const [index, line] of doc.lines.entries()) {
+  for (const line of doc.lines) {
     problems.push(
-      ...checkTiming(line, doc.lines.slice(0, index), previousBegin),
+      ...checkTiming(line, previousBegin),
       ...checkContent(line, doc.timing),
       ...checkTrack(line, line.p),
       ...checkTrack(line, line.b)

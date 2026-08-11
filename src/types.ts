@@ -10,7 +10,6 @@ export type FormatId = "ttml" | "lrc" | "eslrc" | "qrc" | "yrc" | "lys" | "lqe";
  */
 export type ProblemCode =
   | "line-out-of-order"
-  | "line-overlap"
   | "line-invalid-time"
   | "line-invalid-range"
   | "syllable-out-of-order"

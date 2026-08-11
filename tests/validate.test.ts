@@ -19,7 +19,7 @@ function timedLine(
 }
 
 describe("validate", () => {
-  test("reports line order and overlap on the later line", () => {
+  test("reports line order on the later line", () => {
     const doc = createDocument();
     doc.lines.push(
       timedLine("first", 1000, 2000),
@@ -28,8 +28,18 @@ describe("validate", () => {
 
     expect(validate(doc).map(({ code, id }) => ({ code, id }))).toEqual([
       { code: "line-out-of-order", id: "second" },
-      { code: "line-overlap", id: "second" },
     ]);
+  });
+
+  // overlapping lines are valid layered vocals in ttml, lqe, lys, qrc, and yrc
+  test("accepts overlapping lines", () => {
+    const doc = createDocument();
+    doc.lines.push(
+      timedLine("first", 1000, 3000),
+      timedLine("second", 2000, 4000)
+    );
+
+    expect(validate(doc)).toEqual([]);
   });
 
   test("reports invalid line and syllable ranges", () => {
