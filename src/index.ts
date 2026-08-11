@@ -1,4 +1,4 @@
-// biome-ignore-all lint/performance/noBarrelFile: this file defines the package public surface
+// biome-ignore-all lint/performance/noBarrelFile: file defines package public surface
 export { capabilities, convert, detect, parse, read, write } from "./api";
 export { createDocument } from "./document";
 export { ParseError } from "./errors";
