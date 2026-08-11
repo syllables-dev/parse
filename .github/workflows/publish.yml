@@ -1,0 +1,61 @@
+name: publish
+
+on:
+  push:
+    branches: [master]
+    paths: ["package.json"]
+  workflow_dispatch:
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun run tsgo
+      - run: bun run check
+      - run: bun test
+      - run: bun run build
+
+      - id: version
+        run: |
+          local_version=$(bun --print 'require("./package.json").version')
+          published=$(npm view "@syllables-dev/parse@$local_version" version 2>/dev/null || true)
+          if [ -n "$published" ]; then
+            echo "@syllables-dev/parse@$local_version is already on npm, nothing to do"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publishing @syllables-dev/parse@$local_version"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "value=$local_version" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.version.outputs.publish == 'true'
+        run: npm publish --access public
+
+      - if: steps.version.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.version.outputs.value }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "v${{ steps.version.outputs.value }}" \
+            --generate-notes
