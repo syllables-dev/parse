@@ -193,19 +193,22 @@ function addTranslation(
     );
   }
   const runs = splitRuns(textLine, line.agent);
-  const backing =
-    runs.backing === null ? undefined : untimed(runs.backing, line.agent);
-  if (
-    backing !== undefined &&
-    !(backing.startsWith("(") && backing.endsWith(")"))
-  ) {
-    throw new ParseError("ttml backing text requires wrapping parentheses");
+  const backingRun = runs.backing;
+  let backing: string | undefined;
+  if (backingRun !== null) {
+    const backingText = untimed(backingRun.nodes, line.agent);
+    if (!(backingText.startsWith("(") && backingText.endsWith(")"))) {
+      throw new ParseError("ttml backing text requires wrapping parentheses");
+    }
+    backing = backingRun.keepParentheses
+      ? backingText
+      : backingText.slice(1, -1);
   }
   line.translations = {
     ...line.translations,
     [language]: {
       ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
-      ...(backing === undefined ? {} : { b: backing.slice(1, -1) }),
+      ...(backing === undefined ? {} : { b: backing }),
       kind,
       p: untimed(runs.primary, line.agent),
     },
@@ -261,7 +264,8 @@ function readPronTrack(
   line: LyricsLine,
   offset: number,
   idPrefix: string,
-  backing: boolean
+  backing: boolean,
+  keepParentheses = false
 ) {
   const syllables = readWords(
     nodes,
@@ -271,7 +275,7 @@ function readPronTrack(
     idPrefix,
     line.agent
   );
-  const track = backing ? unwrap(syllables) : syllables;
+  const track = backing ? unwrap(syllables, keepParentheses) : syllables;
   checkTrack(track, line);
   return track;
 }
@@ -303,7 +307,14 @@ function addPron(
       b:
         runs.backing === null
           ? []
-          : readPronTrack(runs.backing, line, offset, `${prefix}b`, true),
+          : readPronTrack(
+              runs.backing.nodes,
+              line,
+              offset,
+              `${prefix}b`,
+              true,
+              runs.backing.keepParentheses
+            ),
       p: readPronTrack(runs.primary, line, offset, `${prefix}w`, false),
     },
   };

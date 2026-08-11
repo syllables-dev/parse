@@ -17,8 +17,13 @@ import {
 } from "./profile";
 
 interface Runs {
-  backing: XmlNode[] | null;
+  backing: BackingRun | null;
   primary: XmlNode[];
+}
+
+interface BackingRun {
+  keepParentheses: boolean;
+  nodes: XmlNode[];
 }
 
 function isSpan(element: XmlElement) {
@@ -72,17 +77,32 @@ function checkSpan(element: XmlElement, lineAgent: string | null) {
   }
 }
 
+function keepsParentheses(nodes: XmlNode[]): boolean {
+  return nodes.some(
+    (node) =>
+      node.kind === "element" &&
+      (attr(node, "parenthesis", itunesUri) === "keep" ||
+        keepsParentheses(node.children))
+  );
+}
+
 export function splitRuns(parent: XmlElement, lineAgent: string | null): Runs {
   const primary: XmlNode[] = [];
-  let backing: XmlNode[] | null = null;
+  let backing: BackingRun | null = null;
   for (const child of parent.children) {
     if (child.kind === "element" && role(child) === "x-bg") {
       if (!isSpan(child) || backing !== null) {
         throw new ParseError("ttml lines support one backing-vocal span");
       }
       checkSpan(child, lineAgent);
-      backing =
+      const nodes =
         attr(child, "begin", null) === undefined ? child.children : [child];
+      backing = {
+        keepParentheses:
+          attr(child, "parenthesis", itunesUri) === "keep" ||
+          keepsParentheses(nodes),
+        nodes,
+      };
     } else {
       primary.push(child);
     }
@@ -153,10 +173,13 @@ export function readWords(
     : syllables;
 }
 
-export function unwrap(syllables: Syllable[]) {
+export function unwrap(syllables: Syllable[], keepParentheses = false) {
   const lyric = syllables.map((syllable) => syllable.text).join("");
   if (!(lyric.startsWith("(") && lyric.endsWith(")"))) {
     throw new ParseError("ttml backing vocals require wrapping parentheses");
+  }
+  if (keepParentheses) {
+    return syllables;
   }
   const first = syllables.findIndex((syllable) => syllable.text.length > 0);
   const last = syllables.findLastIndex((syllable) => syllable.text.length > 0);
@@ -238,7 +261,15 @@ function readLine(
   const range = readRange(paragraph, offset, `line ${id}`);
   const runs =
     role(paragraph) === "x-bg"
-      ? { backing: paragraph.children, primary: [] }
+      ? {
+          backing: {
+            keepParentheses:
+              attr(paragraph, "parenthesis", itunesUri) === "keep" ||
+              keepsParentheses(paragraph.children),
+            nodes: paragraph.children,
+          },
+          primary: [],
+        }
       : splitRuns(paragraph, agent);
   const line = { agent, ...range };
   const lyricLine = {
@@ -246,7 +277,10 @@ function readLine(
     b:
       runs.backing === null
         ? []
-        : unwrap(readTrack(runs.backing, line, timing, offset, `${id}b`)),
+        : unwrap(
+            readTrack(runs.backing.nodes, line, timing, offset, `${id}b`),
+            runs.backing.keepParentheses
+          ),
     ...range,
     id,
     p: readTrack(runs.primary, line, timing, offset, `${id}w`),
