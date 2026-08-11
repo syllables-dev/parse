@@ -720,6 +720,206 @@ describe("public dispatch", () => {
     expect(read(ttml, "ttml")).toEqual(doc);
   });
 
+  test("projects LQE translation metadata without losing unrelated languages", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1500, end: 2000, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 2000,
+          id: "l0",
+          p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
+          translations: {
+            fr: {
+              automaticallyCreated: true,
+              b: "Réponse",
+              kind: "replacement",
+              p: "Bonjour",
+            },
+            ja: { p: "一" },
+          },
+        },
+        {
+          agent: null,
+          b: [],
+          begin: 2000,
+          end: 2500,
+          id: "l1",
+          p: [{ begin: 2000, end: 2500, id: "l1w0", text: "Next" }],
+          translations: {
+            de: { automaticallyCreated: false, p: "Zwei" },
+            ja: { p: "二" },
+          },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(() => write(doc, "lqe")).toThrow(
+      "lqe cannot represent replacement translations"
+    );
+
+    const restored = read(write(doc, "lqe", { lossy: true }), "lqe");
+
+    expect(restored.lines.map((line) => line.translations)).toEqual([
+      {
+        fr: { b: "Réponse", kind: "subtitle", p: "Bonjour" },
+        ja: { kind: "subtitle", p: "一" },
+      },
+      {
+        de: { kind: "subtitle", p: "Zwei" },
+        ja: { kind: "subtitle", p: "二" },
+      },
+    ]);
+    expect(doc).toEqual(before);
+  });
+
+  test("drops LQE translations whose lyric starts cannot identify a track", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+          translations: { fr: { b: "Réponse", p: "Bonjour" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(() => write(doc, "lqe")).toThrow(
+      "lqe cannot disambiguate translation tag 1000"
+    );
+    expect(
+      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
+    ).toBeUndefined();
+    expect(doc).toEqual(before);
+  });
+
+  test("drops a primary translation with no primary lyric target", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [],
+          translations: { fr: { p: "Bonjour" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(() => write(doc, "lqe")).toThrow(
+      "lqe cannot place primary translation for line l0"
+    );
+    expect(
+      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
+    ).toBeUndefined();
+  });
+
+  test("keeps a backing translation when its primary lyric target is absent", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [],
+          translations: { fr: { b: "Réponse", p: "Bonjour" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(
+      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
+    ).toEqual({ fr: { b: "Réponse", kind: "subtitle", p: "" } });
+  });
+
+  test("round-trips an empty primary alongside a backing translation", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [],
+          translations: { es: { b: "Dos", p: "" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+
+    expect(losses(doc, "lqe")).toEqual([]);
+    const restored = read(write(doc, "lqe"), "lqe");
+
+    expect(restored.lines[0]).toMatchObject({
+      b: [{ text: "Reply" }],
+      p: [],
+      translations: { es: { b: "Dos", kind: "subtitle", p: "" } },
+    });
+  });
+
+  test("drops a backing translation with no backing lyric target", () => {
+    const doc: LyricsDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+          translations: { fr: { b: "Réponse", p: "Bonjour" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    };
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(() => write(doc, "lqe")).toThrow(
+      "lqe cannot place backing translation for line l0"
+    );
+    expect(
+      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
+    ).toEqual({ fr: { kind: "subtitle", p: "Bonjour" } });
+  });
+
   test.each(authorCases)(
     "rejects line breaks in $format authors",
     ({ format, source }) => {

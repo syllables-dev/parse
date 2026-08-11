@@ -437,6 +437,29 @@ describe("lqe writer", () => {
     expect(doc).toEqual(before);
   });
 
+  test.each([true, false])(
+    "rejects automaticallyCreated=%s translations without mutation",
+    (automaticallyCreated) => {
+      const doc = {
+        ...translatedDocument,
+        lines: [
+          {
+            ...translatedLine,
+            translations: {
+              ja: { automaticallyCreated, p: "こんにちは" },
+            },
+          },
+        ],
+      } satisfies LyricsDocument;
+      const before = structuredClone(doc);
+
+      expect(() => write(doc)).toThrow(
+        "lqe cannot represent automaticallyCreated translations"
+      );
+      expect(doc).toEqual(before);
+    }
+  );
+
   test("round-trips container metadata and consumes document offsets", () => {
     const written = write({
       ...translatedDocument,
