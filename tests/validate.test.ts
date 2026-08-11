@@ -91,21 +91,6 @@ describe("validate", () => {
     ]);
   });
 
-  test("finds line-only timing in a word-timed document", () => {
-    const doc = createDocument();
-    doc.timing = "word";
-    const detailed = timedLine("detailed", 1000, 2000);
-    detailed.p = [
-      { begin: 1000, end: 1400, id: "detail-w0", text: "two " },
-      { begin: 1400, end: 2000, id: "detail-w1", text: "words" },
-    ];
-    doc.lines.push(timedLine("coarse", 0, 1000), detailed);
-
-    expect(validate(doc).map(({ code, id }) => ({ code, id }))).toEqual([
-      { code: "line-without-word-timing", id: "coarse" },
-    ]);
-  });
-
   test("validates backing vocals as their own ordered track", () => {
     const doc = createDocument();
     const line = timedLine("duet", 0, 1000);

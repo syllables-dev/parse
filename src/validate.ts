@@ -82,10 +82,7 @@ function checkTiming(
   return problems;
 }
 
-function checkContent(
-  line: LyricsLine,
-  timing: LyricsDocument["timing"]
-): Problem[] {
+function checkContent(line: LyricsLine): Problem[] {
   const problems: Problem[] = [];
   const lineSyllables = [...line.p, ...line.b];
 
@@ -104,20 +101,6 @@ function checkContent(
       message: "timed line has no text",
     });
   }
-  if (
-    timing === "word" &&
-    lineSyllables.length === 1 &&
-    lineSyllables.every(
-      (syllable) => syllable.begin === line.begin && syllable.end === line.end
-    )
-  ) {
-    problems.push({
-      code: "line-without-word-timing",
-      id: line.id,
-      message: "word-timed line has only line-level timing",
-    });
-  }
-
   return problems;
 }
 
@@ -136,7 +119,7 @@ export function validate(doc: LyricsDocument): Problem[] {
   for (const line of doc.lines) {
     problems.push(
       ...checkTiming(line, previousBegin),
-      ...checkContent(line, doc.timing),
+      ...checkContent(line),
       ...checkTrack(line, line.p),
       ...checkTrack(line, line.b)
     );

@@ -18,8 +18,7 @@ export type ProblemCode =
   | "syllable-zero-length"
   | "syllable-outside-line"
   | "line-empty"
-  | "line-without-text"
-  | "line-without-word-timing";
+  | "line-without-text";
 
 /**
  * the editable, format-independent lyric document.
