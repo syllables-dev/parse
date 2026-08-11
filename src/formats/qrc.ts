@@ -7,7 +7,7 @@
 
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare } from "../internal/projection";
+import { prepare, qrcTextLosses } from "../internal/projection";
 import { readTimedWords, type TimedWord } from "../internal/timed-words";
 import {
   checkTime,
@@ -279,17 +279,22 @@ export function write(
         track: "p",
         wrapped: isWrapped(lyric),
       });
+    } else {
+      rowModel.push({ lineIndex, track: "p", wrapped: false });
     }
     if (line.b.length > 0) {
       rowModel.push({ lineIndex, track: "b", wrapped: true });
     }
+  }
+  if (qrcTextLosses(doc).size > 0) {
+    throw new Error("qrc cannot preserve lyric text");
   }
   checkRows(rowModel, doc.lines.length);
   const lyricRows = doc.lines.flatMap((line) => {
     const rows =
       line.p.length > 0 || line.b.length === 0
         ? [writeRow(line.begin, line.end, line.p, false)]
-        : [];
+        : [writeRow(line.begin, line.end, [], false)];
     if (line.b.length > 0) {
       const backingBegin = Math.min(
         ...line.b.map((syllable) => syllable.begin)
