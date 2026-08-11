@@ -5,11 +5,13 @@ import {
   capabilities,
   convert,
   detect,
+  losses,
   ParseError,
   parse,
   read,
   write,
 } from "../src";
+import { write as writeTtml } from "../src/formats/ttml";
 
 const fixtureCases = [
   ["eslrc/cjk-trailing-stamp.eslrc", "eslrc"],
@@ -469,6 +471,102 @@ describe("public dispatch", () => {
       "[by:]\n[00:01.250]One[00:02.000]\n[00:02.000]Two[00:07.000]"
     );
     expect(detect(converted)).toBe("eslrc");
+  });
+
+  test("requires an explicit lossy QRC to TTML conversion", () => {
+    const source = [
+      "[ti:Song]",
+      "[ar:Artist]",
+      "[al:Album]",
+      "[by:Writer]",
+      "[au:Composer]",
+      "[12000,3320]Hel(12000,400)lo (12400,300)world(12700,600)",
+    ].join("\n");
+    const doc = read(source, "qrc");
+    const before = structuredClone(doc);
+
+    expect(doc.meta).toEqual({
+      album: "Album",
+      artist: "Artist",
+      author: "Writer",
+      songwriters: ["Composer"],
+      title: "Song",
+    });
+    expect(
+      doc.lines
+        .flatMap((line) => line.p)
+        .map((syllable) => syllable.text)
+        .join("")
+    ).toBe("Hello world");
+    expect(losses(doc, "ttml")).toEqual([
+      "metadata.album",
+      "metadata.artist",
+      "metadata.author",
+      "metadata.title",
+    ]);
+    expect(() => convert(source, "ttml")).toThrow(
+      "ttml cannot represent a lyric file author"
+    );
+
+    const converted = convert(source, "ttml", { lossy: true });
+    const restored = read(converted, "ttml");
+
+    expect(restored.meta).toEqual({ songwriters: ["Composer"] });
+    expect(
+      restored.lines
+        .flatMap((line) => line.p)
+        .map((syllable) => syllable.text)
+        .join("")
+    ).toBe("Hello world");
+    expect(write(doc, "ttml", { lossy: true })).toBe(converted);
+    expect(writeTtml(doc, { lossy: true })).toBe(converted);
+    expect(doc).toEqual(before);
+  });
+
+  test("projects unsupported tracks, agents, and word timing when requested", () => {
+    const lyricDocument = {
+      agents: [{ id: "voice", type: "person" }],
+      lines: [
+        {
+          agent: "voice",
+          b: [{ begin: 1000, end: 1500, id: "l0b0", text: "Back" }],
+          begin: 1000,
+          end: 2000,
+          id: "l0",
+          p: [
+            { begin: 1000, end: 1500, id: "l0w0", text: "Hel" },
+            { begin: 1500, end: 2000, id: "l0w1", text: "lo" },
+          ],
+          pronunciations: { en: { automaticallyCreated: true, b: [], p: [] } },
+          translations: { fr: { automaticallyCreated: true, p: "Bonjour" } },
+        },
+        {
+          agent: "voice",
+          b: [],
+          begin: 2000,
+          end: 7000,
+          id: "l1",
+          p: [{ begin: 2000, end: 7000, id: "l1w0", text: "World" }],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    expect(losses(lyricDocument, "lrc")).toEqual([
+      "wordTiming",
+      "agents",
+      "backing",
+      "translations",
+      "pronunciations",
+    ]);
+    expect(() => write(lyricDocument, "lrc")).toThrow(
+      "lrc cannot represent word timing"
+    );
+    expect(write(lyricDocument, "lrc", { lossy: true })).toBe(
+      "[by:]\n[00:01.000]Hello\n[00:02.000]World"
+    );
   });
 
   test("expands repeated lrc timestamps only when requested", () => {
