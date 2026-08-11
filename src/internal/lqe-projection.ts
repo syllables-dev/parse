@@ -93,7 +93,13 @@ export function projectedLqeLines(
 ) {
   const shapedLines = projectedLysLines(doc);
   return shapedLines.map((line) =>
-    projectedLine(line, capabilities, wordTimed, projectedLqeTranslations(line))
+    projectedLine(
+      line,
+      capabilities,
+      wordTimed,
+      projectedLqeTranslations(line),
+      false
+    )
   );
 }
 

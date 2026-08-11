@@ -5,7 +5,6 @@ export const capabilities = {
   backing: true,
   metadata: {
     album: false,
-    apple: true,
     artist: false,
     author: false,
     songwriters: true,

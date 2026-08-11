@@ -42,7 +42,6 @@ export const capabilities = {
   backing: false,
   metadata: {
     album: true,
-    apple: false,
     artist: true,
     author: true,
     songwriters: true,

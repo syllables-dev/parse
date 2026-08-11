@@ -27,10 +27,11 @@ export function projectedLine(
   line: LyricsLine,
   capabilities: FormatCapabilities,
   wordTimed: boolean,
-  translations: LyricsLine["translations"]
+  translations: LyricsLine["translations"],
+  isAppleTarget: boolean
 ) {
   const projectedTranslations =
-    capabilities.metadata.apple || translations === undefined
+    isAppleTarget || translations === undefined
       ? translations
       : Object.fromEntries(
           Object.entries(translations).map(([language, translation]) => [

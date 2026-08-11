@@ -5,7 +5,6 @@ import type {
   LyricsDocument,
   WriteOptions,
 } from "../types";
-import { hasAppleFields } from "./apple-fields";
 import { projectedLine } from "./line-projection";
 import {
   lqeTranslationLosses,
@@ -44,11 +43,17 @@ function projectedLines(
   }
   if (format === "lys") {
     return projectedLysLines(doc).map((line) =>
-      projectedLine(line, capabilities, wordTimed, line.translations)
+      projectedLine(line, capabilities, wordTimed, line.translations, false)
     );
   }
   return doc.lines.map((line) =>
-    projectedLine(line, capabilities, wordTimed, line.translations)
+    projectedLine(
+      line,
+      capabilities,
+      wordTimed,
+      line.translations,
+      format === "ttml"
+    )
   );
 }
 
@@ -118,9 +123,6 @@ export function losses(
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
   return [
-    ...(hasAppleFields(doc) && !capabilities.metadata.apple
-      ? ["metadata.apple" as const]
-      : []),
     ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
     ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
     ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),

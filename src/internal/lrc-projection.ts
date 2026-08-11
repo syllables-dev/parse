@@ -17,7 +17,7 @@ export function projectedLrcLines(
     const end = orderedLines[lineIndex + 1]?.line.begin ?? begin + 5000;
     const p = track(line.p, { ...line, begin, end });
     return {
-      ...projectedLine(line, capabilities, wordTimed, line.translations),
+      ...projectedLine(line, capabilities, wordTimed, line.translations, false),
       begin,
       end,
       p: p.length > 0 ? p : [{ begin, end, id: `${line.id}w0`, text: "" }],

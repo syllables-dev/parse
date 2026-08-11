@@ -282,8 +282,6 @@ export interface Problem {
 export interface MetadataCapabilities {
   /** whether the format preserves the album title. */
   album: boolean;
-  /** whether the format preserves Apple Music TTML metadata and structure. */
-  apple: boolean;
   /** whether the format preserves the primary artist name. */
   artist: boolean;
   /** whether the format preserves lyric file authorship. */
@@ -297,7 +295,6 @@ export interface MetadataCapabilities {
 /** a document feature whose target representation loses fidelity. */
 export type ConversionLoss =
   | "agents"
-  | "metadata.apple"
   | "backing"
   | "metadata.album"
   | "metadata.artist"

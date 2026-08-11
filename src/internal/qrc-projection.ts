@@ -151,7 +151,8 @@ export function projectedQrcLines(
       { ...line, p },
       capabilities,
       wordTimed,
-      line.translations
+      line.translations,
+      false
     );
   });
 }
