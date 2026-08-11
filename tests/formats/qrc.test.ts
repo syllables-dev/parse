@@ -101,13 +101,25 @@ describe("qrc fixtures", () => {
   test("keeps CJK characters as separate timed syllables", async () => {
     const doc = await readFixture("cjk-per-char.qrc");
 
-    expect(doc.lines.slice(4, 5).flatMap((line) => line.p.slice(0, 3))).toEqual(
-      [
-        { begin: 13_434, end: 13_643, id: "l4w0", text: "爱" },
-        { begin: 13_643, end: 13_843, id: "l4w1", text: "上" },
-        { begin: 13_843, end: 14_227, id: "l4w2", text: "了" },
-      ]
-    );
+    expect(doc.lines.slice(4, 5).flatMap((line) => line.p)).toEqual([
+      { begin: 13_434, end: 13_643, id: "l4w0", text: "爱" },
+      { begin: 13_643, end: 13_843, id: "l4w1", text: "上" },
+      { begin: 13_843, end: 14_227, id: "l4w2", text: "了 " },
+      { begin: 14_227, end: 14_595, id: "l4w3", text: "看" },
+      { begin: 14_595, end: 14_819, id: "l4w4", text: "见" },
+      { begin: 14_819, end: 15_059, id: "l4w5", text: "你" },
+    ]);
+  });
+
+  test("keeps a real-duration space as its own syllable", async () => {
+    const doc = await readFixture("cjk-per-char.qrc");
+
+    expect(doc.lines[0]?.p[4]).toEqual({
+      begin: 836,
+      end: 1045,
+      id: "l0w4",
+      text: " ",
+    });
   });
 
   test("keeps literal parentheses inside a lyric line", () => {
@@ -226,6 +238,31 @@ describe("qrc reader", () => {
     "[1000,1000]word(1000,500)tail",
   ])("throws ParseError for unreadable input", (source) => {
     expect(() => read(source)).toThrow(ParseError);
+  });
+
+  test("folds a zero-duration whitespace spacer into the preceding syllable", () => {
+    const doc = read("[1000,1300]Hello(1000,400) (1400,0)world(1400,600)");
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 1000, end: 1400, id: "l0w0", text: "Hello " },
+      { begin: 1400, end: 2000, id: "l0w1", text: "world" },
+    ]);
+  });
+
+  test("keeps a zero-duration token with real lyric text unmerged", () => {
+    const doc = read("[1000,1300]Hello(1000,400)zap(1400,0)world(1400,600)");
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 1000, end: 1400, id: "l0w0", text: "Hello" },
+      { begin: 1400, end: 1400, id: "l0w1", text: "zap" },
+      { begin: 1400, end: 2000, id: "l0w2", text: "world" },
+    ]);
+  });
+
+  test("rejects a leading zero-duration spacer", () => {
+    expect(() => read("[1000,1000] (1000,0)Hello(1000,500)")).toThrow(
+      "qrc line 1 begins with a zero-time separator"
+    );
   });
 });
 
