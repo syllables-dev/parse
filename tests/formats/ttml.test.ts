@@ -343,17 +343,43 @@ describe("ttml reader", () => {
       'dur="13:00.000"'
     );
 
-    expect(read(source).lines[0]).toEqual({
+    const doc = read(source);
+
+    expect(doc.lines[0]).toEqual({
       agent: null,
       b: [],
       begin: 62_003,
       end: 754_567,
       id: "nested",
       p: [
-        { begin: 62_003, end: 62_100, id: "nestedw0", text: "loose A" },
-        { begin: 62_100, end: 754_567, id: "nestedw1", text: "B tail" },
+        {
+          begin: 62_003,
+          content: [
+            "loose ",
+            { begin: 62_003, end: 62_100, id: "nestedw0s0", text: "A" },
+            { begin: 62_100, end: 754_567, id: "nestedw0s1", text: "B" },
+            " tail",
+          ],
+          end: 754_567,
+          id: "nestedw0",
+          text: "loose AB tail",
+        },
       ],
     });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("round-trips nested backing text after wrapper removal", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Lead</span><span ttm:role="x-bg"><span begin="1.000" end="2.000"><span begin="1.000" end="1.500">(Ec</span>ho)</span></span></p></div>'
+    );
+    const doc = read(source);
+
+    expect(doc.lines[0]?.b[0]).toMatchObject({
+      content: [{ text: "Ec" }, "ho"],
+      text: "Echo",
+    });
+    expect(read(write(doc))).toEqual(doc);
   });
 
   test.each([
@@ -537,7 +563,7 @@ describe("ttml reader", () => {
     expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
   });
 
-  test("rejects inconsistent source translation kinds", () => {
+  test("uses the final same-language translation kind", () => {
     const apple = [
       "<itunes:iTunesMetadata><itunes:translations>",
       '<itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="first">Un</itunes:text></itunes:translation>',
@@ -549,9 +575,9 @@ describe("ttml reader", () => {
       apple
     );
 
-    expect(() => readLyrics(source, "ttml")).toThrow(
-      "ttml fr translation kind must be consistent across lines"
-    );
+    expect(readLyrics(source, "ttml")).toMatchObject({
+      translationTracks: { fr: { kind: "replacement" } },
+    });
   });
 
   test("keeps independently timed primary and backing pronunciations", () => {
@@ -581,7 +607,7 @@ describe("ttml reader", () => {
     });
   });
 
-  test("preserves QRC instant punctuation through Apple TTML", async () => {
+  test("carries a QRC spacer folded into its syllable through Apple TTML", async () => {
     const qrc = readLyrics(
       await openFile(
         new URL("../fixtures/qrc/cjk-per-char.qrc", import.meta.url)
@@ -593,17 +619,16 @@ describe("ttml reader", () => {
     const roundTripped = readLyrics(ttml, "ttml");
 
     expect(sourceLine?.p).toContainEqual({
-      begin: 14_227,
+      begin: 13_843,
       end: 14_227,
-      id: "l4w3",
-      text: " ",
+      id: "l4w2",
+      text: "了 ",
     });
-    expect(validate(qrc)).toContainEqual({
-      code: "syllable-zero-length",
-      id: "l4w3",
-      message: "syllable has zero duration",
-    });
-    expect(ttml).toContain('<span begin="0:14.227" end="0:14.227"> </span>');
+    expect(validate(qrc)).not.toContainEqual(
+      expect.objectContaining({ code: "syllable-zero-length" })
+    );
+    expect(ttml).toContain('<span begin="0:13.843" end="0:14.227">了 </span>');
+    expect(ttml).not.toContain('end="0:14.227"> </span>');
     expect(roundTripped.lines).toEqual(qrc.lines);
   });
 
@@ -707,12 +732,20 @@ describe("ttml reader", () => {
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" ttm:agent="missing"><span begin="1.000" end="2.000">Text</span></p></div>'
     ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" ttm:agent="lead"><span begin="1.000" end="2.000" ttm:agent="guest">Text</span></p></div>',
-      '<ttm:agent xml:id="lead" type="person"/><ttm:agent xml:id="guest" type="person"/>'
-    ),
-  ])("rejects unresolved and syllable-level agent changes", (source) => {
+  ])("rejects unresolved agent references", (source) => {
     expect(() => read(source)).toThrow(ParseError);
+  });
+
+  test("preserves syllable agent overrides and custom roles", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" ttm:agent="lead"><span begin="1.000" end="2.000" ttm:agent="guest" ttm:role="x-chorus">Text</span></p></div>',
+      '<ttm:agent xml:id="lead" type="person"/><ttm:agent xml:id="guest" type="person"/>'
+    );
+
+    expect(read(source).lines[0]?.p[0]).toMatchObject({
+      agent: "guest",
+      role: "x-chorus",
+    });
   });
 
   test("rejects backing-only lyric lines", () => {
@@ -734,24 +767,184 @@ describe("ttml reader", () => {
       '<ttm:agent xml:id="same" type="person"/><ttm:agent xml:id="same" type="group"/>'
     ),
     makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
-      '<itunes:iTunesMetadata><itunes:translations><itunes:translation type="subtitle" xml:lang="en"><itunes:text for="line">One</itunes:text></itunes:translation><itunes:translation type="subtitle" xml:lang="en"><itunes:text for="line">Two</itunes:text></itunes:translation></itunes:translations></itunes:iTunesMetadata>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
-      '<itunes:iTunesMetadata><itunes:transliterations><itunes:transliteration xml:lang="en"><itunes:text for="line"><span begin="1.000" end="2.000">One</span></itunes:text></itunes:transliteration><itunes:transliteration xml:lang="en"><itunes:text for="line"><span begin="1.000" end="2.000">Two</span></itunes:text></itunes:transliteration></itunes:transliterations></itunes:iTunesMetadata>'
-    ),
-    makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="1.500" ttm:role="x-bg">(One)</span><span begin="1.500" end="2.000" ttm:role="x-bg">(Two)</span></p></div>'
     ),
   ])("rejects duplicate keys, languages, and backing groups", (source) => {
     expect(() => read(source)).toThrow(ParseError);
   });
 
+  test("preserves repeated pronunciation tracks for one language", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:transliterations><itunes:transliteration xml:lang="en" automaticallyCreated="true"><itunes:text for="line"><span begin="1.000" end="2.000">One</span></itunes:text></itunes:transliteration><itunes:transliteration xml:lang="en"><itunes:text for="line"><span begin="1.000" end="2.000">Two</span></itunes:text></itunes:transliteration></itunes:transliterations></itunes:iTunesMetadata>'
+    );
+    const doc = read(source);
+
+    expect(doc.apple?.pronunciationOrder).toEqual([
+      { language: "en", variant: 0 },
+      { language: "en", variant: 1 },
+    ]);
+    expect(doc.pronunciationTracks?.en).toEqual({
+      automaticallyCreated: true,
+      variants: [{}],
+    });
+    expect(doc.lines[0]?.pronunciations?.en).toMatchObject({
+      p: [{ text: "One" }],
+      variants: [{ p: [{ text: "Two" }] }],
+    });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("keeps sparse repeated pronunciation line associations", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="one"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="two"><span begin="2.000" end="3.000">Two</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:transliterations><itunes:transliteration xml:lang="en"><itunes:text for="one"><span begin="1.000" end="2.000">One</span></itunes:text></itunes:transliteration><itunes:transliteration xml:lang="en"><itunes:text for="two"><span begin="2.000" end="3.000">Two</span></itunes:text></itunes:transliteration></itunes:transliterations></itunes:iTunesMetadata>'
+    );
+    const doc = read(source);
+
+    expect(doc.lines[1]?.pronunciations?.en).toMatchObject({
+      absent: true,
+      variants: [{ p: [{ text: "Two" }] }],
+    });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("round-trips parallel line attributes", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
+      '<ttm:agent xml:id="guest" type="person"/><itunes:iTunesMetadata><itunes:translations><itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="line" begin="1.100" end="1.900" ttm:agent="guest" ttm:role="x-note" itunes:parenthesis="keep" xml:id="translated">Texte</itunes:text></itunes:translation></itunes:translations><itunes:transliterations><itunes:transliteration xml:lang="en"><itunes:text for="line" begin="1.100" end="1.900" ttm:agent="guest" ttm:role="x-note" itunes:parenthesis="keep" xml:id="pronounced"><span begin="1.100" end="1.900">Text</span></itunes:text></itunes:transliteration></itunes:transliterations></itunes:iTunesMetadata>'
+    );
+    const doc = read(source);
+
+    expect(doc.lines[0]).toMatchObject({
+      pronunciations: {
+        en: {
+          agent: "guest",
+          begin: 1100,
+          end: 1900,
+          keepParentheses: true,
+          role: "x-note",
+          xmlId: "pronounced",
+        },
+      },
+      translations: {
+        fr: {
+          agent: "guest",
+          begin: 1100,
+          end: 1900,
+          keepParentheses: true,
+          role: "x-note",
+          xmlId: "translated",
+        },
+      },
+    });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("reads plain Apple roles on containers", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000" role="x-section"><p begin="1.000" end="2.000" itunes:key="line">Text</p></div>',
+      "",
+      "Line",
+      'dur="2.000" role="x-body"'
+    ).replace("<tt ", '<tt role="x-root" ');
+
+    expect(read(source)).toMatchObject({
+      apple: {
+        body: { role: "x-body" },
+        root: { role: "x-root" },
+        sections: [{ role: "x-section" }],
+      },
+    });
+  });
+
+  test("preserves false Apple spatial audio", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000">Text</p></div>',
+      '<itunes:iTunesMetadata><itunes:audio spatial="false"/></itunes:iTunesMetadata>',
+      "Line"
+    );
+
+    expect(read(source).apple).toMatchObject({
+      audio: { spatial: false },
+    });
+  });
+
+  test("round-trips nested timed translation words and backing text", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="4.000"><p begin="1.000" end="4.000" itunes:key="line"><span begin="1.000" end="4.000">Original</span></p></div>',
+      '<ttm:agent xml:id="guest" type="person"/><itunes:iTunesMetadata><itunes:translations><itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="line" begin="1.000" end="4.000" ttm:agent="guest" ttm:role="x-note" xml:id="translation">Avant <span begin="1.000" end="3.000">bon<span begin="2.000" end="3.000">jour</span> </span>après<span ttm:role="x-bg" itunes:parenthesis="keep"><span begin="1.500" end="3.500">(écho <span begin="2.000" end="3.000">ici</span>)</span></span></itunes:text></itunes:translation></itunes:translations></itunes:iTunesMetadata>'
+    );
+    const doc = read(source);
+    const translation = doc.lines[0]?.translations?.fr;
+    if (
+      // biome-ignore lint/suspicious/noUnnecessaryConditions: validates parsed words
+      translation === undefined ||
+      translation.pWords === undefined ||
+      translation.bWords === undefined
+    ) {
+      throw new Error("translation words did not parse");
+    }
+
+    expect(translation).toMatchObject({
+      agent: "guest",
+      b: "(écho ici)",
+      bKeepParentheses: true,
+      p: "Avant bonjour après",
+      role: "x-note",
+      xmlId: "translation",
+    });
+    expect(translation.pWords[0]).toMatchObject({
+      content: ["Avant bon", { text: "jour" }, " après"],
+      text: "Avant bonjour après",
+    });
+    expect(translation.bWords[0]).toMatchObject({
+      content: ["(écho ", { text: "ici" }, ")"],
+      text: "(écho ici)",
+    });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("round-trips nested translation spans in line timing", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="4.000"><p begin="1.000" end="4.000" itunes:key="line">Original</p></div>',
+      '<ttm:agent xml:id="guest" type="person"/><itunes:iTunesMetadata><itunes:translations><itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="line"><span ttm:agent="guest">Avant <span begin="2.000" end="3.000" ttm:role="x-note">mot</span> après</span><span ttm:role="x-bg" itunes:parenthesis="keep"><span>(écho <span begin="2.000" end="3.000">ici</span>)</span></span></itunes:text></itunes:translation></itunes:translations></itunes:iTunesMetadata>',
+      "Line"
+    );
+    const doc = read(source);
+    const translation = doc.lines[0]?.translations?.fr;
+    if (
+      // biome-ignore lint/suspicious/noUnnecessaryConditions: validates parsed words
+      translation === undefined ||
+      translation.pWords === undefined ||
+      translation.bWords === undefined
+    ) {
+      throw new Error("translation words did not parse");
+    }
+
+    expect(translation.pWords[0]).toMatchObject({
+      agent: "guest",
+      content: ["Avant ", { text: "mot", timed: true }, " après"],
+    });
+    expect(translation.bWords[0]).toMatchObject({
+      content: ["(écho ", { text: "ici", timed: true }, ")"],
+    });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("keeps the final same-language translation", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:translations><itunes:translation type="subtitle" xml:lang="en"><itunes:text for="line">One</itunes:text></itunes:translation><itunes:translation type="replacement" xml:lang="en"><itunes:text for="line">Two</itunes:text></itunes:translation></itunes:translations></itunes:iTunesMetadata>'
+    );
+
+    expect(read(source)).toMatchObject({
+      lines: [{ translations: { en: { p: "Two" } } }],
+      translationTracks: { en: { kind: "replacement" } },
+    });
+  });
+
   test.each([
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000" ttm:role="x-chorus">Text</span></p></div>'
-    ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" color="red"><span begin="1.000" end="2.000">Text</span></p></div>'
     ),
@@ -1061,6 +1254,68 @@ describe("ttml writer", () => {
     } satisfies LyricsDocument;
 
     expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
+  });
+
+  test("round-trips Apple metadata, sections, and agent details", () => {
+    const doc = {
+      agents: [
+        { artistId: "11", id: "lead", name: "Lead", type: "person" },
+        { artistId: "22", id: "guest", name: "Guest", type: "person" },
+      ],
+      apple: {
+        audio: { role: "spatial", spatial: true },
+        body: { duration: 7000 },
+        language: "ja",
+        leadingSilence: 500,
+        lyricGenerationId: "gen-7",
+        root: { agent: "lead", role: "x-song", xmlId: "root" },
+        sections: [
+          {
+            begin: 1000,
+            end: 5000,
+            lines: ["line"],
+            part: "chorus",
+            xmlId: "section",
+          },
+        ],
+      },
+      lines: [
+        {
+          agent: "lead",
+          b: [],
+          begin: 1000,
+          end: 5000,
+          id: "line",
+          p: [
+            { begin: 1000, end: 3000, id: "linew0", text: "He " },
+            {
+              agent: "guest",
+              begin: 3000,
+              end: 5000,
+              id: "linew1",
+              role: "x-chorus",
+              text: "llo",
+              xmlId: "word",
+            },
+          ],
+          role: "x-verse",
+          xmlId: "paragraph",
+        },
+      ],
+      meta: {
+        songwriterIds: ["33"],
+        songwriters: ["Writer"],
+      },
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    const source = write(doc);
+
+    expect(source).toContain('itunes:lyricGenId="gen-7"');
+    expect(source).toContain('<audio role="spatial" spatial="true"/>');
+    expect(source).toContain('artistId="33"');
+    expect(read(source)).toEqual(doc);
   });
 
   test("rejects metadata fields outside the Apple lyric profile", () => {

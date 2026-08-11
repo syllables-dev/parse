@@ -41,16 +41,15 @@ const capabilityCases = [
       backing: false,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: false,
       wordTiming: false,
     },
@@ -62,16 +61,15 @@ const capabilityCases = [
       backing: false,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: false,
       wordTiming: true,
     },
@@ -83,16 +81,15 @@ const capabilityCases = [
       backing: true,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: false,
       wordTiming: true,
     },
@@ -104,16 +101,15 @@ const capabilityCases = [
       backing: false,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: false,
       wordTiming: true,
     },
@@ -125,16 +121,15 @@ const capabilityCases = [
       backing: true,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: false,
       wordTiming: true,
     },
@@ -146,16 +141,15 @@ const capabilityCases = [
       backing: true,
       metadata: {
         album: true,
+        apple: false,
         artist: true,
         author: true,
         songwriters: true,
         title: true,
       },
       pronunciation: false,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: false },
-        translation: { automaticallyCreated: false, kind: false },
-      },
+      trackGenerated: false,
+      trackKind: false,
       translation: true,
       wordTiming: true,
     },
@@ -167,16 +161,15 @@ const capabilityCases = [
       backing: true,
       metadata: {
         album: false,
+        apple: true,
         artist: false,
         author: false,
         songwriters: true,
         title: false,
       },
       pronunciation: true,
-      trackMetadata: {
-        pronunciation: { automaticallyCreated: true },
-        translation: { automaticallyCreated: true, kind: true },
-      },
+      trackGenerated: true,
+      trackKind: true,
       translation: true,
       wordTiming: true,
     },
@@ -1269,24 +1262,15 @@ describe("public dispatch", () => {
 
     exposed.wordTiming = true;
     exposed.metadata.title = false;
-    exposed.trackMetadata.pronunciation.automaticallyCreated = true;
-    exposed.trackMetadata.translation.kind = true;
+    exposed.trackGenerated = true;
+    exposed.trackKind = true;
 
     expect(capabilities("lrc")).not.toBe(exposed);
     expect(capabilities("lrc").wordTiming).toBeFalse();
     expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
-    expect(capabilities("lrc").trackMetadata).not.toBe(exposed.trackMetadata);
-    expect(capabilities("lrc").trackMetadata.pronunciation).not.toBe(
-      exposed.trackMetadata.pronunciation
-    );
-    expect(
-      capabilities("lrc").trackMetadata.pronunciation.automaticallyCreated
-    ).toBeFalse();
-    expect(capabilities("lrc").trackMetadata.translation).not.toBe(
-      exposed.trackMetadata.translation
-    );
-    expect(capabilities("lrc").trackMetadata.translation.kind).toBeFalse();
+    expect(capabilities("lrc").trackGenerated).toBeFalse();
+    expect(capabilities("lrc").trackKind).toBeFalse();
     expect(() => write(wordTimed, "lrc")).toThrow(
       "lrc cannot represent word timing"
     );
