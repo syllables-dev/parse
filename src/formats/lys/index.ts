@@ -25,7 +25,7 @@ import type {
   Syllable,
   WriteOptions,
 } from "../../types";
-import { checkLysAgents } from "./agents";
+import { lysSideLines } from "./agents";
 
 interface LysRow {
   agent: string | null;
@@ -39,6 +39,8 @@ interface LysRow {
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
+const leftAgentId = "lys-left";
+const rightAgentId = "lys-right";
 
 export const capabilities = {
   agents: true,
@@ -98,10 +100,10 @@ function readRow(
   }
   const lyric = words.map((word) => word.text).join("");
   let agent: string | null = null;
-  if (property % 3 === 1) {
-    agent = "v1";
-  } else if (property % 3 === 2) {
-    agent = "v2";
+  if (property === 1 || property === 4 || property === 7) {
+    agent = leftAgentId;
+  } else if (property === 2 || property === 5 || property === 8) {
+    agent = rightAgentId;
   }
   return {
     agent,
@@ -179,11 +181,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const agents: LyricsDocument["agents"] = [];
-  if (lines.some((line) => line.agent === "v1")) {
-    agents.push({ id: "v1", type: "person" });
+  if (lines.some((line) => line.agent === leftAgentId)) {
+    agents.push({ id: leftAgentId, type: "group" });
   }
-  if (lines.some((line) => line.agent === "v2")) {
-    agents.push({ id: "v2", type: "person" });
+  if (lines.some((line) => line.agent === rightAgentId)) {
+    agents.push({ id: rightAgentId, type: "other" });
   }
   const meta: LyricsMeta = {
     ...(album !== undefined && { album }),
@@ -228,7 +230,6 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       checkText(syllable.text, "lys", reservedStamp);
     }
   }
-  checkLysAgents(doc, "lys");
   for (const [lineIndex, line] of doc.lines.entries()) {
     const previous = doc.lines[lineIndex - 1];
     if (
@@ -239,7 +240,8 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
       throw new Error(`lys cannot preserve backing-only line ${line.id}`);
     }
   }
-  const lyricRows = doc.lines.flatMap((line) => {
+  const lyricRows: string[] = [];
+  for (const [line, side] of lysSideLines(doc)) {
     const syllables = [...line.p, ...line.b];
     if (syllables.length === 0) {
       throw new Error(`lys cannot represent empty line ${line.id}`);
@@ -249,16 +251,12 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
     if (begin !== line.begin || end !== line.end) {
       throw new Error(`lys cannot represent the range of line ${line.id}`);
     }
-    let side = 0;
-    if (line.agent === "v1") {
-      side = 1;
-    } else if (line.agent === "v2") {
-      side = 2;
+    if (line.p.length > 0) {
+      lyricRows.push(writeRow(side + 3, line.p, false));
     }
-    return [
-      ...(line.p.length > 0 ? [writeRow(side + 3, line.p, false)] : []),
-      ...(line.b.length > 0 ? [writeRow(side + 6, line.b, true)] : []),
-    ];
-  });
+    if (line.b.length > 0) {
+      lyricRows.push(writeRow(side + 6, line.b, true));
+    }
+  }
   return [...writeTags(doc.meta, "lys"), ...lyricRows].join("\n");
 }

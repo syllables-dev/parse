@@ -1,25 +1,39 @@
-import type { FormatId, LyricsDocument } from "../../types";
+import type { LyricsDocument, LyricsLine } from "../../types";
 
-const lysAgentIds = ["v1", "v2"];
+export function* lysSideLines(
+  doc: LyricsDocument
+): Generator<[LyricsLine, number]> {
+  const agentTypes = new Map(doc.agents.map((agent) => [agent.id, agent.type]));
+  let previousPerson: string | undefined;
+  let runningSide = 0;
 
-export function checkLysAgents(
-  doc: LyricsDocument,
-  format: Extract<FormatId, "lqe" | "lys">
-): void {
-  const references = new Set(
-    doc.lines.flatMap((line) => (line.agent === null ? [] : [line.agent]))
-  );
-  const expectedIds = lysAgentIds.filter((id) => references.has(id));
-  if (
-    references.size !== expectedIds.length ||
-    doc.agents.length !== expectedIds.length ||
-    doc.agents.some(
-      (agent, index) =>
-        agent.id !== expectedIds[index] || agent.type !== "person"
-    )
-  ) {
-    throw new Error(
-      `${format} requires referenced v1 and v2 person agents in canonical order`
-    );
+  for (const line of doc.lines) {
+    if (line.agent === null) {
+      yield [line, runningSide];
+      continue;
+    }
+    const type = agentTypes.get(line.agent);
+    if (type === undefined) {
+      throw new Error(`line ${line.id} references an undeclared lys agent`);
+    }
+    switch (type) {
+      case "person":
+        if (previousPerson === undefined) {
+          runningSide = 1;
+        } else if (line.agent !== previousPerson) {
+          runningSide = runningSide === 1 ? 2 : 1;
+        }
+        previousPerson = line.agent;
+        yield [line, runningSide];
+        continue;
+      case "group":
+        yield [line, 1];
+        continue;
+      case "other":
+        yield [line, 2];
+        continue;
+      default:
+        yield [line, runningSide];
+    }
   }
 }
