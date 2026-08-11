@@ -6,8 +6,6 @@
 
 Apple Music TTML &middot; LRC &middot; ESLRC &middot; QRC &middot; YRC &middot; LYS &middot; LQE
 
-<sub>Zero runtime dependencies &middot; plain JSON documents &middot; absolute millisecond timestamps</sub>
-
 </div>
 
 <br>
