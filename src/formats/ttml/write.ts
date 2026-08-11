@@ -1,5 +1,6 @@
 import { prepare } from "../../internal/projection";
 import { checkTime } from "../../internal/timestamps";
+import { hasLyricText } from "../../internal/write-check";
 import type {
   LyricsDocument,
   LyricsElementAttributes,
@@ -638,9 +639,7 @@ function writeBody(doc: LyricsDocument) {
 }
 
 function droppingEmptyLines(doc: LyricsDocument): LyricsDocument {
-  const kept = doc.lines.filter(
-    (line) => line.p.length > 0 || line.b.length > 0
-  );
+  const kept = doc.lines.filter(hasLyricText);
   if (kept.length === doc.lines.length) {
     return doc;
   }

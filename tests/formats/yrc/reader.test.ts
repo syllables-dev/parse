@@ -44,10 +44,11 @@ describe("yrc reader", () => {
     ]);
   });
 
-  test("drops an empty line on write, keeping the whitespace-only line", () => {
-    const doc = read("[1000,1000]\n[2000,1000]   ");
+  // a whitespace-only row carries no lyric text, so it drops with empty rows
+  test("drops empty and whitespace-only lines on write", () => {
+    const doc = read("[1000,1000]\n[2000,1000]   \n[3000,1000](3000,1000,0)Hi");
 
-    expect(read(write(doc)).lines).toMatchObject([{ p: [{ text: "   " }] }]);
+    expect(read(write(doc)).lines).toMatchObject([{ p: [{ text: "Hi" }] }]);
   });
 
   test("preserves overlapping rows and exact integer word times", () => {

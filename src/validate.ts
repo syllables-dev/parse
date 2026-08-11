@@ -82,28 +82,6 @@ function checkTiming(
   return problems;
 }
 
-function checkContent(line: LyricsLine): Problem[] {
-  const problems: Problem[] = [];
-  const lineSyllables = [...line.p, ...line.b];
-
-  if (lineSyllables.length === 0) {
-    problems.push({
-      code: "line-empty",
-      id: line.id,
-      message: "timed line is empty",
-    });
-  } else if (
-    lineSyllables.every((syllable) => syllable.text.trim().length === 0)
-  ) {
-    problems.push({
-      code: "line-without-text",
-      id: line.id,
-      message: "timed line has no text",
-    });
-  }
-  return problems;
-}
-
 /**
  * reports timing and content problems without changing the document.
  *
@@ -119,7 +97,6 @@ export function validate(doc: LyricsDocument): Problem[] {
   for (const line of doc.lines) {
     problems.push(
       ...checkTiming(line, previousBegin),
-      ...checkContent(line),
       ...checkTrack(line, line.p),
       ...checkTrack(line, line.b)
     );

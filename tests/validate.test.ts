@@ -59,7 +59,6 @@ describe("validate", () => {
       { code: "syllable-invalid-range", id: "reversed" },
       { code: "syllable-zero-length", id: "zero" },
       { code: "line-invalid-range", id: "line-range" },
-      { code: "line-without-text", id: "line-range" },
       { code: "syllable-zero-length", id: "line-rangew0" },
     ]);
   });
@@ -71,23 +70,6 @@ describe("validate", () => {
     expect(validate(doc).map(({ code, id }) => ({ code, id }))).toEqual([
       { code: "line-invalid-time", id: "fractional" },
       { code: "syllable-invalid-time", id: "fractionalw0" },
-    ]);
-  });
-
-  test("distinguishes empty and textless timed lines", () => {
-    const doc = createDocument();
-    const empty = timedLine("empty", 0, 1000);
-    empty.p = [];
-    doc.lines.push(
-      empty,
-      timedLine("blank", 1000, 2000, ""),
-      timedLine("spaces", 2000, 3000, " \t")
-    );
-
-    expect(validate(doc).map(({ code, id }) => ({ code, id }))).toEqual([
-      { code: "line-empty", id: "empty" },
-      { code: "line-without-text", id: "blank" },
-      { code: "line-without-text", id: "spaces" },
     ]);
   });
 

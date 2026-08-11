@@ -20,7 +20,12 @@ import {
   splitLines,
   toInt,
 } from "../../internal/timestamps";
-import { checkLines, checkText, checkWrite } from "../../internal/write-check";
+import {
+  checkLines,
+  checkText,
+  checkWrite,
+  hasLyricText,
+} from "../../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -249,9 +254,7 @@ export function write(
   const prepared = prepare(source, capabilities, "lys", options);
   const doc = {
     ...prepared,
-    lines: prepared.lines.filter(
-      (line) => line.p.length > 0 || line.b.length > 0
-    ),
+    lines: prepared.lines.filter(hasLyricText),
   };
   checkLines(doc, "lys");
   checkWrite(doc, "lys", capabilities);

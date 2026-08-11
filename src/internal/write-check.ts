@@ -1,7 +1,20 @@
-import type { FormatCapabilities, FormatId, LyricsDocument } from "../types";
+import type {
+  FormatCapabilities,
+  FormatId,
+  LyricsDocument,
+  LyricsLine,
+} from "../types";
 import { checkTime } from "./timestamps";
 
 const lineBreak = /[\r\n]/u;
+
+// a line whose tracks hold no lyric text occupies a timing slot with nothing
+// to render, so formats that cannot encode a placeholder row drop it
+export function hasLyricText(line: LyricsLine): boolean {
+  return [...line.p, ...line.b].some(
+    (syllable) => syllable.text.trim().length > 0
+  );
+}
 
 export function checkLines(doc: LyricsDocument, format: FormatId): void {
   if (doc.lines.length === 0) {

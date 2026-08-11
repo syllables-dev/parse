@@ -16,9 +16,7 @@ export type ProblemCode =
   | "syllable-invalid-time"
   | "syllable-invalid-range"
   | "syllable-zero-length"
-  | "syllable-outside-line"
-  | "line-empty"
-  | "line-without-text";
+  | "syllable-outside-line";
 
 /**
  * the editable, format-independent lyric document.
