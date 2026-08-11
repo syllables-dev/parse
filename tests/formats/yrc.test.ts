@@ -297,8 +297,8 @@ describe("yrc writer", () => {
     });
   });
 
-  test("round-trips every single songwriter string through an au tag", () => {
-    for (const songwriter of ["", "Writer", "One/Two"]) {
+  test("round-trips every valid single songwriter string through an au tag", () => {
+    for (const songwriter of ["Writer", "One/Two"]) {
       const doc = {
         ...wordDocument,
         meta: { songwriters: [songwriter] },
@@ -313,7 +313,8 @@ describe("yrc writer", () => {
 
   test.each([
     { message: "an empty list", songwriters: [] },
-    { message: "an empty name", songwriters: ["One", ""] },
+    { message: "an empty name", songwriters: [""] },
+    { message: "an empty list member", songwriters: ["One", ""] },
     { message: "surrounding whitespace", songwriters: ["One", " Two "] },
     { message: "a slash", songwriters: ["One", "Two/Three"] },
     { message: "duplicates", songwriters: ["One", "One"] },

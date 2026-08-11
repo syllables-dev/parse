@@ -579,6 +579,7 @@ describe("public dispatch", () => {
 
     expect(losses(lyricDocument, "lrc")).toEqual([
       "wordTiming",
+      "lineTiming",
       "agents",
       "backing",
       "translations",
@@ -738,6 +739,222 @@ describe("public dispatch", () => {
     expect(() => write(doc, "ttml")).toThrow(
       "ttml cannot represent a lyric file author"
     );
+  });
+
+  test.each([
+    ["eslrc", "[00:01.000]Hello[00:02.000]"],
+    [
+      "lqe",
+      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
+    ],
+    ["lrc", "[00:01.000]Hello"],
+    ["lys", "[4]Hello(1000,1000)"],
+    ["qrc", "[1000,1000]Hello(1000,1000)"],
+  ] satisfies [FormatId, string][])(
+    "projects %s songwriter cardinality without mutation",
+    (format, source) => {
+      const doc = read(source, format);
+      doc.meta.songwriters = ["One", "Two"];
+      const before = structuredClone(doc);
+
+      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent multiple songwriters`
+      );
+      expect(
+        read(write(doc, format, { lossy: true }), format).meta.songwriters
+      ).toEqual(["One"]);
+      expect(doc).toEqual(before);
+    }
+  );
+
+  test.each([
+    ["lrc", "[00:01.000]Hello"],
+    ["yrc", "[1000,1000](1000,1000,0)Hello"],
+  ] satisfies [FormatId, string][])(
+    "omits empty %s songwriter metadata during a lossy write",
+    (format, source) => {
+      const doc = read(source, format);
+      doc.meta.songwriters = [];
+      const before = structuredClone(doc);
+
+      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent an empty songwriter list`
+      );
+      expect(
+        read(write(doc, format, { lossy: true }), format).meta.songwriters
+      ).toBeUndefined();
+      expect(doc).toEqual(before);
+    }
+  );
+
+  test.each([
+    ["eslrc", "[00:01.000]Hello[00:02.000]"],
+    [
+      "lqe",
+      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
+    ],
+    ["lrc", "[00:01.000]Hello"],
+    ["lys", "[4]Hello(1000,1000)"],
+    ["qrc", "[1000,1000]Hello(1000,1000)"],
+    ["yrc", "[1000,1000](1000,1000,0)Hello"],
+  ] satisfies [FormatId, string][])(
+    "omits empty %s songwriter names during a lossy write",
+    (format, source) => {
+      const doc = read(source, format);
+      doc.meta.songwriters = [""];
+      const before = structuredClone(doc);
+
+      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent an empty songwriter name`
+      );
+      expect(
+        read(write(doc, format, { lossy: true }), format).meta.songwriters
+      ).toBeUndefined();
+      expect(doc).toEqual(before);
+    }
+  );
+
+  test("projects invalid yrc songwriter lists in source order without mutation", () => {
+    const doc = read("[1000,1000](1000,1000,0)Hello", "yrc");
+    doc.meta.songwriters = [" One ", "Two/Three", "Good"];
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "yrc")).toEqual(["metadata.songwriters"]);
+    expect(() => write(doc, "yrc")).toThrow(
+      "yrc cannot preserve leading or trailing metadata whitespace"
+    );
+    expect(
+      read(write(doc, "yrc", { lossy: true }), "yrc").meta.songwriters
+    ).toEqual(["Good"]);
+    expect(doc).toEqual(before);
+  });
+
+  test("uses the first trimmed slash-safe yrc songwriter when none is valid", () => {
+    const doc = read("[1000,1000](1000,1000,0)Hello", "yrc");
+    doc.meta.songwriters = [" One ", "Two/Three"];
+
+    expect(
+      read(write(doc, "yrc", { lossy: true }), "yrc").meta.songwriters
+    ).toEqual(["One"]);
+  });
+
+  test("normalizes padded multiline metadata during a lossy write", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.title = " Song\nTitle ";
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lrc")).toEqual(["metadata.title"]);
+    expect(read(write(doc, "lrc", { lossy: true }), "lrc").meta.title).toBe(
+      "Song Title"
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test("omits a normalized-empty author during a lossy write", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.author = " \r\n ";
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lrc")).toEqual(["metadata.author"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent line breaks in an author"
+    );
+    expect(
+      read(write(doc, "lrc", { lossy: true }), "lrc").meta.author
+    ).toBeUndefined();
+    expect(doc).toEqual(before);
+  });
+
+  test("projects lrc implicit line ends and primary syllable ranges", () => {
+    const doc = read("[00:01.000]One\n[00:03.000]Two", "lrc");
+    const [firstLine, secondLine] = doc.lines;
+    if (firstLine === undefined || secondLine === undefined) {
+      throw new Error("lrc source must produce two lines");
+    }
+    const [secondSyllable] = secondLine.p;
+    if (secondSyllable === undefined) {
+      throw new Error("lrc source must produce a final syllable");
+    }
+    doc.lines[0] = {
+      ...firstLine,
+      end: 2600,
+      p: [
+        { begin: 1000, end: 1500, id: "l0w0", text: "O" },
+        { begin: 1500, end: 2600, id: "l0w1", text: "ne" },
+      ],
+    };
+    doc.lines[1] = {
+      ...secondLine,
+      end: 9000,
+      p: [{ ...secondSyllable, end: 9000 }],
+    };
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent the end time of line l0"
+    );
+    const restored = read(write(doc, "lrc", { lossy: true }), "lrc");
+
+    expect(restored.lines.map((line) => [line.begin, line.end])).toEqual([
+      [1000, 3000],
+      [3000, 8000],
+    ]);
+    expect(restored.lines[0]?.p).toEqual([
+      { begin: 1000, end: 3000, id: "l0w0", text: "One" },
+    ]);
+    expect(restored.lines[1]?.p).toEqual([
+      { begin: 3000, end: 8000, id: "l1w0", text: "Two" },
+    ]);
+    expect(doc).toEqual(before);
+  });
+
+  test("synthesizes an empty lrc primary syllable during a lossy write", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    const [line] = doc.lines;
+    if (line === undefined) {
+      throw new Error("lrc source must produce one line");
+    }
+    doc.lines[0] = { ...line, p: [] };
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent the primary syllable count of line l0"
+    );
+    expect(read(write(doc, "lrc", { lossy: true }), "lrc").lines[0]?.p).toEqual(
+      [{ begin: 1000, end: 6000, id: "l0w0", text: "" }]
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test("projects out-of-order lrc starts into chronological line order", () => {
+    const doc = read("[00:01.000]One\n[00:02.000]Two", "lrc");
+    const [firstLine, secondLine] = doc.lines;
+    if (firstLine === undefined || secondLine === undefined) {
+      throw new Error("lrc source must produce two lines");
+    }
+    doc.lines = [
+      { ...firstLine, begin: 3000, end: 4000 },
+      { ...secondLine, begin: 1000, end: 6000 },
+    ];
+    const before = structuredClone(doc);
+
+    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    const restored = read(write(doc, "lrc", { lossy: true }), "lrc");
+
+    expect(restored.lines.map((line) => [line.begin, line.end])).toEqual([
+      [1000, 3000],
+      [3000, 8000],
+    ]);
+    expect(restored.lines.map((line) => line.p[0]?.text)).toEqual([
+      "Two",
+      "One",
+    ]);
+    expect(doc).toEqual(before);
   });
 
   test("returns isolated capability snapshots", () => {
