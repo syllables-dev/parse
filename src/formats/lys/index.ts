@@ -44,8 +44,14 @@ const rightAgentId = "lys-right";
 
 export const capabilities = {
   agents: true,
-  author: true,
   backing: true,
+  metadata: {
+    album: true,
+    artist: true,
+    author: true,
+    songwriters: true,
+    title: true,
+  },
   pronunciation: false,
   translation: false,
   wordTiming: true,

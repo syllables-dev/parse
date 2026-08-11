@@ -35,8 +35,14 @@ const creditLabel = /^(?:作词|作詞|作曲)\s*[:：]\s*/u;
 
 export const capabilities = {
   agents: false,
-  author: true,
   backing: false,
+  metadata: {
+    album: true,
+    artist: true,
+    author: true,
+    songwriters: true,
+    title: true,
+  },
   pronunciation: false,
   translation: false,
   wordTiming: true,

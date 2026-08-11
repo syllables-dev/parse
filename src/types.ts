@@ -144,15 +144,33 @@ export interface Problem {
 }
 
 /**
+ * metadata fields a format preserves when writing.
+ *
+ * readers apply `offset` to timestamps before writing.
+ */
+export interface MetadataCapabilities {
+  /** whether the format preserves the album title. */
+  album: boolean;
+  /** whether the format preserves the primary artist name. */
+  artist: boolean;
+  /** whether the format preserves lyric file authorship. */
+  author: boolean;
+  /** whether the format preserves songwriter names. */
+  songwriters: boolean;
+  /** whether the format preserves the song title. */
+  title: boolean;
+}
+
+/**
  * the lyric features a format can preserve when writing.
  */
 export interface FormatCapabilities {
   /** whether the format preserves vocal agent attribution. */
   agents: boolean;
-  /** whether the format preserves lyric file authorship. */
-  author: boolean;
   /** whether the format preserves a separate backing-vocal track. */
   backing: boolean;
+  /** metadata fields preserved by the format writer. */
+  metadata: MetadataCapabilities;
   /** whether the format preserves timed pronunciation tracks. */
   pronunciation: boolean;
   /** whether the format preserves translated text. */

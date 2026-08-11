@@ -152,7 +152,10 @@ export function convert(
   return write(read(text, requireFormat(text), options), to);
 }
 
-/** returns the features preserved by the selected format writer. */
+/** returns an isolated snapshot of the features preserved by the selected format writer. */
 export function capabilities(format: FormatId): FormatCapabilities {
-  return { ...codecs[format].capabilities };
+  return {
+    ...codecs[format].capabilities,
+    metadata: { ...codecs[format].capabilities.metadata },
+  };
 }

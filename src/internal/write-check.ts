@@ -22,7 +22,7 @@ export function checkText(
   }
 }
 
-export function checkWrite(
+function checkMetadata(
   doc: LyricsDocument,
   format: FormatId,
   capabilities: FormatCapabilities
@@ -30,12 +30,29 @@ export function checkWrite(
   if (doc.meta.author === "") {
     throw new Error(`${format} cannot represent an empty lyric file author`);
   }
-  if (!capabilities.author && doc.meta.author !== undefined) {
-    throw new Error(`${format} cannot represent a lyric file author`);
+  const unsupported = [
+    ["album", capabilities.metadata.album, doc.meta.album],
+    ["artist", capabilities.metadata.artist, doc.meta.artist],
+    ["author", capabilities.metadata.author, doc.meta.author],
+    ["songwriter", capabilities.metadata.songwriters, doc.meta.songwriters],
+    ["title", capabilities.metadata.title, doc.meta.title],
+  ].find(
+    ([, preserved, metadataValue]) => !preserved && metadataValue !== undefined
+  );
+  if (unsupported) {
+    throw new Error(`${format} cannot represent ${unsupported[0]} metadata`);
   }
   if (doc.meta.author !== undefined && lineBreak.test(doc.meta.author)) {
     throw new Error(`${format} cannot represent line breaks in an author`);
   }
+}
+
+export function checkWrite(
+  doc: LyricsDocument,
+  format: FormatId,
+  capabilities: FormatCapabilities
+): void {
+  checkMetadata(doc, format, capabilities);
   if (!capabilities.wordTiming && doc.timing === "word") {
     throw new Error(`${format} cannot represent word timing`);
   }

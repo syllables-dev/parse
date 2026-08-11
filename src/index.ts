@@ -11,6 +11,7 @@ export type {
   LyricsMeta,
   LyricsPronunciation,
   LyricsTranslation,
+  MetadataCapabilities,
   ParseResult,
   Problem,
   ProblemCode,
