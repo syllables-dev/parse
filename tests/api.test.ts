@@ -519,7 +519,7 @@ describe("public dispatch", () => {
   );
 
   test.each(["lys", "lqe"] satisfies FormatId[])(
-    "removes empty %s lines only during lossy writes",
+    "silently drops empty %s lines without reporting a loss",
     (format) => {
       const lyricDocument = {
         agents: [],
@@ -540,13 +540,10 @@ describe("public dispatch", () => {
       } satisfies LyricsDocument;
       const before = structuredClone(lyricDocument);
 
-      expect(losses(lyricDocument, format)).toEqual(["lineShape"]);
-      expect(() => write(lyricDocument, format)).toThrow(
-        "lys cannot represent empty line l1"
-      );
-      expect(
-        read(write(lyricDocument, format, { lossy: true }), format).lines
-      ).toMatchObject([{ id: "l0", p: [{ text: "Lead" }] }]);
+      expect(losses(lyricDocument, format)).toEqual([]);
+      expect(read(write(lyricDocument, format), format).lines).toMatchObject([
+        { id: "l0", p: [{ text: "Lead" }] },
+      ]);
       expect(lyricDocument).toEqual(before);
     }
   );
@@ -580,7 +577,7 @@ describe("public dispatch", () => {
       } satisfies LyricsDocument;
       const before = structuredClone(lyricDocument);
 
-      expect(losses(lyricDocument, format)).toEqual(["lineShape"]);
+      expect(losses(lyricDocument, format)).toEqual(["backing"]);
       expect(() => write(lyricDocument, format)).toThrow(
         `${format} cannot preserve backing-only line l1`
       );
@@ -625,7 +622,7 @@ describe("public dispatch", () => {
     } satisfies LyricsDocument;
     const before = structuredClone(lyricDocument);
 
-    expect(losses(lyricDocument, "lqe")).toEqual(["lineShape", "translations"]);
+    expect(losses(lyricDocument, "lqe")).toEqual(["backing", "translations"]);
     expect(
       read(write(lyricDocument, "lqe", { lossy: true }), "lqe").lines
     ).toMatchObject([{ id: "l0", p: [{ text: "Lead" }] }]);
@@ -945,11 +942,13 @@ describe("public dispatch", () => {
 
     expect(restored.lines.map((line) => line.translations)).toEqual([
       {
+        de: { p: "" },
         fr: { b: "Réponse", p: "Bonjour" },
         ja: { p: "一" },
       },
       {
         de: { p: "Zwei" },
+        fr: { p: "" },
         ja: { p: "二" },
       },
     ]);
@@ -961,7 +960,7 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test("drops LQE translations whose lyric starts cannot identify a track", () => {
+  test("binds same-timestamp primary and backing translations by track order", () => {
     const doc: LyricsDocument = {
       agents: [],
       lines: [
@@ -981,13 +980,10 @@ describe("public dispatch", () => {
     };
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lqe")).toEqual(["translations"]);
-    expect(() => write(doc, "lqe")).toThrow(
-      "lqe cannot disambiguate translation tag 1000"
-    );
-    expect(
-      read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
-    ).toBeUndefined();
+    expect(losses(doc, "lqe")).toEqual([]);
+    expect(read(write(doc, "lqe"), "lqe").lines[0]?.translations).toEqual({
+      fr: { b: "Réponse", p: "Bonjour" },
+    });
     expect(doc).toEqual(before);
   });
 
@@ -1211,7 +1207,7 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test("synthesizes an empty lrc primary syllable during a lossy write", () => {
+  test("keeps an empty lrc line as a positional placeholder without loss", () => {
     const doc = read("[00:01.000]Hello", "lrc");
     const [line] = doc.lines;
     if (line === undefined) {
@@ -1220,13 +1216,10 @@ describe("public dispatch", () => {
     doc.lines[0] = { ...line, p: [] };
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
-    expect(() => write(doc, "lrc")).toThrow(
-      "lrc cannot represent the primary syllable count of line l0"
-    );
-    expect(read(write(doc, "lrc", { lossy: true }), "lrc").lines[0]?.p).toEqual(
-      [{ begin: 1000, end: 6000, id: "l0w0", text: "" }]
-    );
+    expect(losses(doc, "lrc")).toEqual([]);
+    expect(read(write(doc, "lrc"), "lrc").lines[0]?.p).toEqual([
+      { begin: 1000, end: 6000, id: "l0w0", text: "" },
+    ]);
     expect(doc).toEqual(before);
   });
 

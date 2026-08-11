@@ -277,7 +277,7 @@ describe("lqe reader", () => {
     expect(() => read(source)).toThrow(ParseError);
   });
 
-  test("rejects missing and ambiguous translation targets", () => {
+  test("rejects a translation tag with no matching lyric track", () => {
     expect(() =>
       read(
         makeLqe(
@@ -288,18 +288,38 @@ describe("lqe reader", () => {
         )
       )
     ).toThrow("lqe translation tag 2000 has no lyric track");
+  });
 
-    expect(() =>
-      read(
-        makeLqe(
-          "[lyrics: format@Lyricify Syllable]",
-          "[4]Lead(1000,500)",
-          "[7](Echo)(1000,500)",
-          "[translation: format@LRC]",
-          "[00:01.000]ambiguous"
-        )
+  test("binds a same-timestamp primary and backing track by source order", () => {
+    const doc = read(
+      makeLqe(
+        "[lyrics: format@Lyricify Syllable]",
+        "[4]Lead(1000,500)",
+        "[7](Echo)(1000,500)",
+        "[translation: format@LRC]",
+        "[00:01.000]first"
       )
-    ).toThrow("lqe translation tag 1000 is ambiguous");
+    );
+
+    expect(doc.lines[0]?.translations).toEqual({ und: { p: "first" } });
+  });
+
+  test("binds two same-timestamp lyric lines to two translation rows by source order", () => {
+    const doc = read(
+      makeLqe(
+        "[lyrics: format@Lyricify Syllable]",
+        "[4]First(1000,500)",
+        "[4]Second(1000,500)",
+        "[translation: format@LRC]",
+        "[00:01.000]one",
+        "[00:01.000]two"
+      )
+    );
+
+    expect(doc.lines).toMatchObject([
+      { p: [{ text: "First" }], translations: { und: { p: "one" } } },
+      { p: [{ text: "Second" }], translations: { und: { p: "two" } } },
+    ]);
   });
 });
 
@@ -438,6 +458,60 @@ describe("lqe writer", () => {
       "[translation: language@zh-Hans, format@LRC]",
     ]);
     expect(read(written)).toEqual(translatedDocument);
+  });
+
+  test("emits an empty translation row for a line with no translation, keeping alignment", () => {
+    const doc = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 5000,
+          end: 7000,
+          id: "l0",
+          p: [{ begin: 5000, end: 7000, id: "l0w0", text: "First" }],
+          translations: { en: { p: "trans A" } },
+        },
+        {
+          agent: null,
+          b: [],
+          begin: 7000,
+          end: 9000,
+          id: "l1",
+          p: [{ begin: 7000, end: 9000, id: "l1w0", text: "Second" }],
+        },
+        {
+          agent: null,
+          b: [],
+          begin: 9000,
+          end: 11_000,
+          id: "l2",
+          p: [{ begin: 9000, end: 11_000, id: "l2w0", text: "Third" }],
+          translations: { en: { p: "trans C" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      translationTracks: { en: {} },
+      version: 1,
+    } satisfies LyricsDocument;
+
+    const written = write(doc);
+    const translationIndex = written
+      .split("\n")
+      .findIndex((line) => line.startsWith("[translation:"));
+
+    expect(written.split("\n").slice(translationIndex + 1)).toEqual([
+      "[00:05.000]trans A",
+      "[00:07.000]",
+      "[00:09.000]trans C",
+    ]);
+    expect(read(written).lines.map((line) => line.translations)).toEqual([
+      { en: { p: "trans A" } },
+      { en: { p: "" } },
+      { en: { p: "trans C" } },
+    ]);
   });
 
   test("rejects replacement translations without mutation", () => {
