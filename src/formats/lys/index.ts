@@ -188,11 +188,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const agents: LyricsDocument["agents"] = [];
-  if (lines.some((line) => line.agent === leftAgentId)) {
-    agents.push({ id: leftAgentId, type: "group" });
+  const hasLeftAgent = lines.some((line) => line.agent === leftAgentId);
+  const hasRightAgent = lines.some((line) => line.agent === rightAgentId);
+  if (hasLeftAgent) {
+    agents.push({ id: leftAgentId, type: "person" });
   }
-  if (lines.some((line) => line.agent === rightAgentId)) {
-    agents.push({ id: rightAgentId, type: "other" });
+  if (hasRightAgent) {
+    agents.push({
+      id: rightAgentId,
+      type: hasLeftAgent ? "person" : "other",
+    });
   }
   const meta: LyricsMeta = {
     ...(album !== undefined && { album }),
