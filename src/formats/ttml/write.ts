@@ -201,6 +201,25 @@ function writeTrack(syllables: Syllable[], lineTimed: boolean, wrap: boolean) {
     .join("");
 }
 
+function writeTracks(
+  primary: Syllable[],
+  backing: Syllable[],
+  lineTimed: boolean
+) {
+  const primaryMarkup = writeTrack(primary, lineTimed, false);
+  if (backing.length === 0) {
+    return primaryMarkup;
+  }
+  const backingMarkup = `<span ttm:role="x-bg">${writeTrack(backing, lineTimed, true)}</span>`;
+  const backingStartsFirst =
+    !lineTimed &&
+    Math.min(...backing.map((syllable) => syllable.begin)) <
+      Math.min(...primary.map((syllable) => syllable.begin));
+  return backingStartsFirst
+    ? backingMarkup + primaryMarkup
+    : primaryMarkup + backingMarkup;
+}
+
 function writeTranslations(doc: LyricsDocument) {
   const languages = createdByLanguage(
     doc.lines.map((line) => line.translations),
@@ -245,16 +264,12 @@ function writeProns(doc: LyricsDocument) {
       });
       const automatic = createdAttr(created);
       const texts = pronounced.map(({ line, pronunciation }) => {
-        const primary = writeTrack(
+        const tracks = writeTracks(
           pronunciation.p,
-          doc.timing === "line",
-          false
+          pronunciation.b,
+          doc.timing === "line"
         );
-        const backing =
-          pronunciation.b.length === 0
-            ? ""
-            : `<span ttm:role="x-bg">${writeTrack(pronunciation.b, doc.timing === "line", true)}</span>`;
-        return `<text for="${escapeAttr(line.id)}">${primary}${backing}</text>`;
+        return `<text for="${escapeAttr(line.id)}">${tracks}</text>`;
       });
       return `<transliteration xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</transliteration>`;
     })
@@ -272,12 +287,8 @@ function writeBody(doc: LyricsDocument) {
     .map((line) => {
       const agent =
         line.agent === null ? "" : ` ttm:agent="${escapeAttr(line.agent)}"`;
-      const primary = writeTrack(line.p, doc.timing === "line", false);
-      const backing =
-        line.b.length === 0
-          ? ""
-          : `<span ttm:role="x-bg">${writeTrack(line.b, doc.timing === "line", true)}</span>`;
-      return `<p begin="${writeTime(line.begin)}" end="${writeTime(line.end)}" itunes:key="${escapeAttr(line.id)}"${agent}>${primary}${backing}</p>`;
+      const tracks = writeTracks(line.p, line.b, doc.timing === "line");
+      return `<p begin="${writeTime(line.begin)}" end="${writeTime(line.end)}" itunes:key="${escapeAttr(line.id)}"${agent}>${tracks}</p>`;
     })
     .join("");
   return `<body dur="${writeTime(duration)}"><div begin="${writeTime(begin)}" end="${writeTime(duration)}">${paragraphs}</div></body>`;

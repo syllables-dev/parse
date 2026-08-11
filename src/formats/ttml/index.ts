@@ -1,9 +1,11 @@
 /**
- * apple music's ttml profile uses itunes:key to link translations and
- * transliterations to lyric lines; ttm:role="x-bg" marks backing vocals.
+ * ttml (timed text markup language), Apple Music's lyric profile.
+ * by Apple
+ *
+ * <span ttm:role="x-bg">(backing vocal)</span>
  */
 
-// biome-ignore-all lint/performance/noBarrelFile: this file defines the ttml public surface
+// biome-ignore-all lint/performance/noBarrelFile: file defines ttml public surface
 import type { FormatCapabilities } from "../../types";
 
 export { read } from "./read";
