@@ -47,6 +47,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: false,
       wordTiming: false,
     },
@@ -64,6 +68,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: false,
       wordTiming: true,
     },
@@ -81,6 +89,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: false,
       wordTiming: true,
     },
@@ -98,6 +110,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: false,
       wordTiming: true,
     },
@@ -115,6 +131,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: false,
       wordTiming: true,
     },
@@ -132,6 +152,10 @@ const capabilityCases = [
         title: true,
       },
       pronunciation: false,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: false },
+        translation: { automaticallyCreated: false, kind: false },
+      },
       translation: true,
       wordTiming: true,
     },
@@ -149,6 +173,10 @@ const capabilityCases = [
         title: false,
       },
       pronunciation: true,
+      trackMetadata: {
+        pronunciation: { automaticallyCreated: true },
+        translation: { automaticallyCreated: true, kind: true },
+      },
       translation: true,
       wordTiming: true,
     },
@@ -711,8 +739,8 @@ describe("public dispatch", () => {
             { begin: 1000, end: 1500, id: "l0w0", text: "Hel" },
             { begin: 1500, end: 2000, id: "l0w1", text: "lo" },
           ],
-          pronunciations: { en: { automaticallyCreated: true, b: [], p: [] } },
-          translations: { fr: { automaticallyCreated: true, p: "Bonjour" } },
+          pronunciations: { en: { b: [], p: [] } },
+          translations: { fr: { p: "Bonjour" } },
         },
         {
           agent: "voice",
@@ -724,7 +752,9 @@ describe("public dispatch", () => {
         },
       ],
       meta: {},
+      pronunciationTracks: { en: { automaticallyCreated: true } },
       timing: "word",
+      translationTracks: { fr: { automaticallyCreated: true } },
       version: 1,
     } satisfies LyricsDocument;
 
@@ -864,9 +894,9 @@ describe("public dispatch", () => {
     const ttml = write(doc, "ttml");
 
     expect(doc.lines[0]?.translations?.fr).toEqual({
-      kind: "subtitle",
       p: "Bonjour",
     });
+    expect(doc.translationTracks).toEqual({ fr: { kind: "subtitle" } });
     expect(ttml).toContain('<translation type="subtitle" xml:lang="fr">');
     expect(read(ttml, "ttml")).toEqual(doc);
   });
@@ -884,9 +914,7 @@ describe("public dispatch", () => {
           p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
           translations: {
             fr: {
-              automaticallyCreated: true,
               b: "Réponse",
-              kind: "replacement",
               p: "Bonjour",
             },
             ja: { p: "一" },
@@ -900,13 +928,17 @@ describe("public dispatch", () => {
           id: "l1",
           p: [{ begin: 2000, end: 2500, id: "l1w0", text: "Next" }],
           translations: {
-            de: { automaticallyCreated: false, p: "Zwei" },
+            de: { p: "Zwei" },
             ja: { p: "二" },
           },
         },
       ],
       meta: {},
       timing: "word",
+      translationTracks: {
+        de: { automaticallyCreated: false },
+        fr: { automaticallyCreated: true, kind: "replacement" },
+      },
       version: 1,
     };
     const before = structuredClone(doc);
@@ -920,14 +952,19 @@ describe("public dispatch", () => {
 
     expect(restored.lines.map((line) => line.translations)).toEqual([
       {
-        fr: { b: "Réponse", kind: "subtitle", p: "Bonjour" },
-        ja: { kind: "subtitle", p: "一" },
+        fr: { b: "Réponse", p: "Bonjour" },
+        ja: { p: "一" },
       },
       {
-        de: { kind: "subtitle", p: "Zwei" },
-        ja: { kind: "subtitle", p: "二" },
+        de: { p: "Zwei" },
+        ja: { p: "二" },
       },
     ]);
+    expect(restored.translationTracks).toEqual({
+      de: { kind: "subtitle" },
+      fr: { kind: "subtitle" },
+      ja: { kind: "subtitle" },
+    });
     expect(doc).toEqual(before);
   });
 
@@ -986,7 +1023,7 @@ describe("public dispatch", () => {
     );
     expect(
       read(write(doc, "lqe", { lossy: true }), "lqe").lines[0]?.translations
-    ).toEqual({ fr: { kind: "subtitle", p: "Bonjour" } });
+    ).toEqual({ fr: { p: "Bonjour" } });
   });
 
   test.each(authorCases)(
@@ -1232,11 +1269,24 @@ describe("public dispatch", () => {
 
     exposed.wordTiming = true;
     exposed.metadata.title = false;
+    exposed.trackMetadata.pronunciation.automaticallyCreated = true;
+    exposed.trackMetadata.translation.kind = true;
 
     expect(capabilities("lrc")).not.toBe(exposed);
     expect(capabilities("lrc").wordTiming).toBeFalse();
     expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
+    expect(capabilities("lrc").trackMetadata).not.toBe(exposed.trackMetadata);
+    expect(capabilities("lrc").trackMetadata.pronunciation).not.toBe(
+      exposed.trackMetadata.pronunciation
+    );
+    expect(
+      capabilities("lrc").trackMetadata.pronunciation.automaticallyCreated
+    ).toBeFalse();
+    expect(capabilities("lrc").trackMetadata.translation).not.toBe(
+      exposed.trackMetadata.translation
+    );
+    expect(capabilities("lrc").trackMetadata.translation.kind).toBeFalse();
     expect(() => write(wordTimed, "lrc")).toThrow(
       "lrc cannot represent word timing"
     );

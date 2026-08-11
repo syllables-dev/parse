@@ -31,9 +31,9 @@ const translatedLine = {
   id: "l0",
   p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
   translations: {
-    ja: { kind: "subtitle", p: "こんにちは" },
-    und: { b: "", kind: "subtitle", p: "" },
-    "zh-Hans": { b: "回声", kind: "subtitle", p: "你好" },
+    ja: { p: "こんにちは" },
+    und: { b: "", p: "" },
+    "zh-Hans": { b: "回声", p: "你好" },
   },
 } satisfies LyricsLine;
 
@@ -42,6 +42,11 @@ const translatedDocument = {
   lines: [translatedLine],
   meta: {},
   timing: "word",
+  translationTracks: {
+    ja: { kind: "subtitle" },
+    und: { kind: "subtitle" },
+    "zh-Hans": { kind: "subtitle" },
+  },
   version: 1,
 } satisfies LyricsDocument;
 
@@ -92,7 +97,7 @@ describe("lqe fixtures", () => {
     expect(doc.lines[29]?.p[0]?.begin).toBe(104_014);
     expect(doc.lines[29]?.b[0]?.begin).toBe(105_519);
     expect(doc.lines[37]?.translations).toEqual({
-      und: { b: "", kind: "subtitle", p: "等待好日子到来" },
+      und: { b: "", p: "等待好日子到来" },
     });
   });
 });
@@ -136,7 +141,7 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.p[0]?.begin).toBe(1000);
     expect(doc.lines[0]?.b[0]?.begin).toBe(1200);
     expect(doc.lines[0]?.translations).toEqual({
-      "zh-Hans": { b: "回声", kind: "subtitle", p: "你好" },
+      "zh-Hans": { b: "回声", p: "你好" },
     });
   });
 
@@ -154,7 +159,7 @@ describe("lqe reader", () => {
     );
 
     expect(doc.lines[0]?.translations).toEqual({
-      und: { b: "", kind: "subtitle", p: "" },
+      und: { b: "", p: "" },
     });
   });
 
@@ -191,7 +196,7 @@ describe("lqe reader", () => {
     expect(doc.lines[0]).toMatchObject({ begin: 1900, end: 2400 });
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 1900, end: 2400 });
     expect(doc.lines[0]?.translations).toEqual({
-      und: { kind: "subtitle", p: "Meaning" },
+      und: { p: "Meaning" },
     });
     expect(doc.lines[0]?.pronunciations).toBeUndefined();
   });
@@ -230,7 +235,7 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 975, end: 1475 });
     expect(doc.lines[0]?.b[0]).toMatchObject({ begin: 1175, end: 1675 });
     expect(doc.lines[0]?.translations).toEqual({
-      und: { b: "Reply", kind: "subtitle", p: "Meaning" },
+      und: { b: "Reply", p: "Meaning" },
     });
   });
 
@@ -318,6 +323,7 @@ describe("lqe writer", () => {
             })),
           },
         ],
+        translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
       message: "line breaks in lyric text",
     },
@@ -333,6 +339,7 @@ describe("lqe writer", () => {
             })),
           },
         ],
+        translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
       message: "reserved lyric marks",
     },
@@ -345,6 +352,7 @@ describe("lqe writer", () => {
             translations: { ja: { p: "meaning\rreply" } },
           },
         ],
+        translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
       message: "line breaks in translation text",
     },
@@ -359,6 +367,7 @@ describe("lqe writer", () => {
             },
           },
         ],
+        translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
       message: "reserved translation marks",
     },
@@ -385,6 +394,7 @@ describe("lqe writer", () => {
           translations: { ja: { p: "意味 <verse> [note]" } },
         },
       ],
+      translationTracks: { ja: { kind: "subtitle" } },
     } satisfies LyricsDocument;
     const restored = read(write(doc));
 
@@ -438,10 +448,11 @@ describe("lqe writer", () => {
           ...translatedLine,
           translations: {
             ...translatedLine.translations,
-            ja: { kind: "replacement", p: "こんにちは" },
+            ja: { p: "こんにちは" },
           },
         },
       ],
+      translationTracks: { ja: { kind: "replacement" } },
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
@@ -456,14 +467,7 @@ describe("lqe writer", () => {
     (automaticallyCreated) => {
       const doc = {
         ...translatedDocument,
-        lines: [
-          {
-            ...translatedLine,
-            translations: {
-              ja: { automaticallyCreated, p: "こんにちは" },
-            },
-          },
-        ],
+        translationTracks: { ja: { automaticallyCreated } },
       } satisfies LyricsDocument;
       const before = structuredClone(doc);
 
@@ -473,6 +477,25 @@ describe("lqe writer", () => {
       expect(doc).toEqual(before);
     }
   );
+
+  test("drops an empty translation track during a lossy write", () => {
+    const doc = {
+      ...translatedDocument,
+      translationTracks: {
+        fr: { kind: "subtitle" },
+        ja: { kind: "subtitle" },
+        und: { kind: "subtitle" },
+        "zh-Hans": { kind: "subtitle" },
+      },
+    } satisfies LyricsDocument;
+
+    expect(() => write(doc)).toThrow(
+      "lqe cannot represent an empty translation track"
+    );
+    expect(read(write(doc, { lossy: true })).translationTracks).toEqual(
+      translatedDocument.translationTracks
+    );
+  });
 
   test("round-trips container metadata and consumes document offsets", () => {
     const written = write({
@@ -547,6 +570,7 @@ describe("lqe writer", () => {
             translations: { "zh!": { p: "invalid" } },
           },
         ],
+        translationTracks: { "zh!": { kind: "subtitle" } },
       })
     ).toThrow("invalid lqe translation language zh!");
 

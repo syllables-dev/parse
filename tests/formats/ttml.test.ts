@@ -524,8 +524,12 @@ describe("ttml reader", () => {
     const doc = readLyrics(source, "ttml");
 
     expect(doc.lines[0]?.translations).toEqual({
-      "fr-CA": { b: "Écho ", kind: "subtitle", p: "Salut " },
-      "yue-Hant-HK": { kind: "replacement", p: "你好" },
+      "fr-CA": { b: "Écho ", p: "Salut " },
+      "yue-Hant-HK": { p: "你好" },
+    });
+    expect(doc.translationTracks).toEqual({
+      "fr-CA": { kind: "subtitle" },
+      "yue-Hant-HK": { kind: "replacement" },
     });
     expect(writeLyrics(doc, "ttml")).toContain(
       '<translation type="replacement" xml:lang="yue-Hant-HK">'
@@ -642,12 +646,9 @@ describe("ttml reader", () => {
         created === undefined ? {} : { automaticallyCreated: created };
 
       expect(doc.lines[0]?.translations?.fr).toEqual({
-        ...createdField,
-        kind: "subtitle",
         p: "Bonjour le monde",
       });
       expect(doc.lines[0]?.pronunciations?.["en-Latn"]).toEqual({
-        ...createdField,
         b: [],
         p: [
           {
@@ -657,6 +658,12 @@ describe("ttml reader", () => {
             text: "hello world",
           },
         ],
+      });
+      expect(doc.translationTracks).toEqual({
+        fr: { ...createdField, kind: "subtitle" },
+      });
+      expect(doc.pronunciationTracks).toEqual({
+        "en-Latn": createdField,
       });
 
       const written = writeLyrics(doc, "ttml");
@@ -706,6 +713,16 @@ describe("ttml reader", () => {
     ),
   ])("rejects unresolved and syllable-level agent changes", (source) => {
     expect(() => read(source)).toThrow(ParseError);
+  });
+
+  test("rejects backing-only lyric lines", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span ttm:role="x-bg"><span begin="1.100" end="1.800">(Echo)</span></span></p></div>'
+    );
+
+    expect(() => read(source)).toThrow(
+      "ttml backing track requires primary text on line L1"
+    );
   });
 
   test.each([
@@ -824,14 +841,15 @@ describe("ttml writer", () => {
           translations: {
             "fr-CA": {
               b: "Écho &",
-              kind: "subtitle",
               p: "Une <ligne>",
             },
           },
         },
       ],
       meta: { songwriters: ["Writer & Partner"] },
+      pronunciationTracks: { "ja-Latn": {} },
       timing: "word",
+      translationTracks: { "fr-CA": { kind: "subtitle" } },
       version: 1,
     } satisfies LyricsDocument;
 
@@ -908,6 +926,7 @@ describe("ttml writer", () => {
           },
         ],
         meta: {},
+        pronunciationTracks: { "en-Latn": {} },
         timing: "word",
         version: 1,
       } satisfies LyricsDocument;
@@ -933,7 +952,7 @@ describe("ttml writer", () => {
     }
   );
 
-  test("round-trips backing-only timed lines", () => {
+  test("rejects backing-only timed lines", () => {
     const doc = {
       agents: [],
       lines: [
@@ -957,15 +976,12 @@ describe("ttml writer", () => {
       version: 1,
     } satisfies LyricsDocument;
 
-    const source = writeLyrics(doc, "ttml");
-
-    expect(source).toContain(
-      '<p begin="0:01.000" end="0:02.000" itunes:key="line"><span ttm:role="x-bg"><span begin="0:01.100" end="0:01.800">(Echo)</span></span></p>'
+    expect(() => writeLyrics(doc, "ttml")).toThrow(
+      "ttml backing track requires primary text on line line"
     );
-    expect(readLyrics(source, "ttml")).toEqual(doc);
   });
 
-  test("rejects inconsistent automaticallyCreated track states", () => {
+  test("writes track states once per language", () => {
     const laterLine = {
       ...lyricLine,
       begin: 4000,
@@ -974,57 +990,27 @@ describe("ttml writer", () => {
       p: [{ begin: 4000, end: 6000, id: "laterw0", text: "Again" }],
     } satisfies LyricsLine;
 
-    expect(() =>
-      writeLyrics(
+    const doc = {
+      ...wordDocument,
+      lines: [
         {
-          ...wordDocument,
-          lines: [
-            {
-              ...lyricLine,
-              translations: {
-                fr: { automaticallyCreated: true, p: "Bonjour" },
-              },
-            },
-            {
-              ...laterLine,
-              translations: {
-                fr: { automaticallyCreated: false, p: "Encore" },
-              },
-            },
-          ],
+          ...lyricLine,
+          translations: { fr: { p: "Bonjour" } },
         },
-        "ttml"
-      )
-    ).toThrow("inconsistent automaticallyCreated values");
-    expect(() =>
-      writeLyrics(
         {
-          ...wordDocument,
-          lines: [
-            {
-              ...lyricLine,
-              pronunciations: {
-                "en-Latn": {
-                  automaticallyCreated: false,
-                  b: [],
-                  p: lyricLine.p,
-                },
-              },
-            },
-            {
-              ...laterLine,
-              pronunciations: {
-                "en-Latn": { b: [], p: laterLine.p },
-              },
-            },
-          ],
+          ...laterLine,
+          translations: { fr: { p: "Encore" } },
         },
-        "ttml"
-      )
-    ).toThrow("inconsistent automaticallyCreated values");
+      ],
+      translationTracks: { fr: { automaticallyCreated: true } },
+    } satisfies LyricsDocument;
+
+    expect(
+      writeLyrics(doc, "ttml").match(/automaticallyCreated=/gu)
+    ).toHaveLength(1);
   });
 
-  test("rejects inconsistent translation kinds across one language", () => {
+  test("stores one translation kind for each language", () => {
     const laterLine = {
       ...lyricLine,
       begin: 4000,
@@ -1037,20 +1023,19 @@ describe("ttml writer", () => {
       lines: [
         {
           ...lyricLine,
-          translations: { fr: { kind: "subtitle", p: "Bonjour" } },
+          translations: { fr: { p: "Bonjour" } },
         },
         {
           ...laterLine,
-          translations: { fr: { kind: "replacement", p: "Encore" } },
+          translations: { fr: { p: "Encore" } },
         },
       ],
+      translationTracks: { fr: { kind: "replacement" } },
     } satisfies LyricsDocument;
-    const before = structuredClone(doc);
 
-    expect(() => writeLyrics(doc, "ttml")).toThrow(
-      "ttml fr translation kind must be consistent across lines"
+    expect(writeLyrics(doc, "ttml")).toContain(
+      '<translation type="replacement" xml:lang="fr">'
     );
-    expect(doc).toEqual(before);
   });
 
   test("defaults an omitted translation kind to subtitle", () => {
