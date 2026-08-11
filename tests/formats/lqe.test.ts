@@ -7,15 +7,15 @@ const containerMark = "[Lyricify Quick Export]";
 
 const fixtureCases = [
   {
-    agents: [{ id: "v1", type: "person" }],
+    agents: [{ id: "lys-left", type: "group" }],
     fileName: "translation-by-tag.lqe",
     firstText: "なんでもかんでも みんな",
     firstTranslation: "世间万物 统统",
   },
   {
     agents: [
-      { id: "v1", type: "person" },
-      { id: "v2", type: "person" },
+      { id: "lys-left", type: "group" },
+      { id: "lys-right", type: "other" },
     ],
     fileName: "translation.lqe",
     firstText: "I've been feeling lonely",
@@ -24,7 +24,7 @@ const fixtureCases = [
 ];
 
 const translatedLine = {
-  agent: "v1",
+  agent: "lys-left",
   b: [{ begin: 1200, end: 1700, id: "l0b0", text: "Echo" }],
   begin: 1000,
   end: 2000,
@@ -38,7 +38,7 @@ const translatedLine = {
 } satisfies LyricsLine;
 
 const translatedDocument = {
-  agents: [{ id: "v1", type: "person" }],
+  agents: [{ id: "lys-left", type: "group" }],
   lines: [translatedLine],
   meta: {},
   timing: "word",
@@ -386,7 +386,7 @@ describe("lqe writer", () => {
       lines: [
         translatedLine,
         {
-          agent: "v1",
+          agent: "lys-left",
           b: [{ begin: 3000, end: 3500, id: "l1b0", text: "Reply" }],
           begin: 3000,
           end: 3500,
@@ -436,63 +436,6 @@ describe("lqe writer", () => {
     );
     expect(doc).toEqual(before);
   });
-
-  test.each([
-    {
-      createAgentDocument: () =>
-        ({
-          ...translatedDocument,
-          agents: [{ id: "lead", type: "person" }],
-          lines: [{ ...translatedLine, agent: "lead" }],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...translatedDocument,
-          agents: [{ id: "v1", type: "other" }],
-          lines: [translatedLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...translatedDocument,
-          agents: [
-            { id: "v1", type: "person" },
-            { id: "v2", type: "person" },
-          ],
-          lines: [translatedLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...translatedDocument,
-          agents: [],
-          lines: [translatedLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...translatedDocument,
-          agents: [],
-          lines: [{ ...translatedLine, agent: "guest" }],
-        }) satisfies LyricsDocument,
-    },
-  ])(
-    "rejects a lossy agent model without mutation",
-    ({ createAgentDocument }) => {
-      const agentDocument = createAgentDocument();
-      const before = structuredClone(agentDocument);
-
-      expect(() => write(agentDocument)).toThrow(
-        "lqe requires referenced v1 and v2 person agents in canonical order"
-      );
-      expect(agentDocument).toEqual(before);
-    }
-  );
 
   test("round-trips container metadata and consumes document offsets", () => {
     const written = write({

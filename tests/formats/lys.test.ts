@@ -6,15 +6,15 @@ import { read, write } from "../../src/formats/lys";
 const fixtureCases = [
   {
     agents: [
-      { id: "v1", type: "person" },
-      { id: "v2", type: "person" },
+      { id: "lys-left", type: "group" },
+      { id: "lys-right", type: "other" },
     ],
     fileName: "duet-values.lys",
     firstText: "Through the rose-colored lenses",
     lineCount: 50,
   },
   {
-    agents: [{ id: "v1", type: "person" }],
+    agents: [{ id: "lys-left", type: "group" }],
     fileName: "primary-background.lys",
     firstText: "Tryna feel something real",
     lineCount: 57,
@@ -22,7 +22,7 @@ const fixtureCases = [
 ];
 
 const lyricLine = {
-  agent: "v1",
+  agent: "lys-left",
   b: [],
   begin: 1001,
   end: 2503,
@@ -34,7 +34,7 @@ const lyricLine = {
 } satisfies LyricsLine;
 
 const wordDocument = {
-  agents: [{ id: "v1", type: "person" }],
+  agents: [{ id: "lys-left", type: "group" }],
   lines: [lyricLine],
   meta: {},
   timing: "word",
@@ -57,7 +57,7 @@ function makeLine(id: string, begin: number, text: string, track: "b" | "p") {
     text,
   };
   return {
-    agent: "v1",
+    agent: "lys-left",
     b: track === "b" ? [syllable] : [],
     begin,
     end: begin + 500,
@@ -88,7 +88,7 @@ describe("lys fixtures", () => {
     const doc = await readFixture("primary-background.lys");
 
     expect(doc.lines[20]).toMatchObject({
-      agent: "v1",
+      agent: "lys-left",
       begin: 71_459,
       end: 72_967,
       id: "l20",
@@ -125,8 +125,8 @@ describe("lys reader", () => {
     );
 
     expect(doc.agents).toEqual([
-      { id: "v1", type: "person" },
-      { id: "v2", type: "person" },
+      { id: "lys-left", type: "group" },
+      { id: "lys-right", type: "other" },
     ]);
     expect(
       doc.lines.map((line) => ({
@@ -135,14 +135,14 @@ describe("lys reader", () => {
       }))
     ).toEqual([
       { agent: null, track: "primary" },
-      { agent: "v1", track: "primary" },
-      { agent: "v2", track: "primary" },
+      { agent: "lys-left", track: "primary" },
+      { agent: "lys-right", track: "primary" },
       { agent: null, track: "primary" },
-      { agent: "v1", track: "primary" },
-      { agent: "v2", track: "primary" },
+      { agent: "lys-left", track: "primary" },
+      { agent: "lys-right", track: "primary" },
       { agent: null, track: "backing" },
-      { agent: "v1", track: "backing" },
-      { agent: "v2", track: "backing" },
+      { agent: "lys-left", track: "backing" },
+      { agent: "lys-right", track: "backing" },
     ]);
   });
 
@@ -286,12 +286,12 @@ describe("lys writer", () => {
     expect(read(write(doc)).lines[0]?.p[0]?.text).toBe("Hel (live) [mix]");
   });
 
-  test("round-trips a canonical v2 declaration", () => {
+  test("round-trips a canonical right-side carrier", () => {
     const doc = {
-      agents: [{ id: "v2", type: "person" }],
+      agents: [{ id: "lys-right", type: "other" }],
       lines: [
         {
-          agent: "v2",
+          agent: "lys-right",
           b: [],
           begin: 1000,
           end: 1500,
@@ -308,87 +308,9 @@ describe("lys writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test.each([
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [{ id: "lead", type: "person" }],
-          lines: [{ ...lyricLine, agent: "lead" }],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [{ id: "v1", type: "group" }],
-          lines: [lyricLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [
-            { id: "v1", type: "person" },
-            { id: "v2", type: "person" },
-          ],
-          lines: [lyricLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [],
-          lines: [lyricLine],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [],
-          lines: [{ ...lyricLine, agent: "guest" }],
-        }) satisfies LyricsDocument,
-    },
-    {
-      createAgentDocument: () =>
-        ({
-          ...wordDocument,
-          agents: [
-            { id: "v2", type: "person" },
-            { id: "v1", type: "person" },
-          ],
-          lines: [
-            lyricLine,
-            {
-              ...lyricLine,
-              agent: "v2",
-              begin: 3000,
-              end: 3500,
-              id: "l1",
-              p: [{ begin: 3000, end: 3500, id: "l1w0", text: "Reply" }],
-            },
-          ],
-        }) satisfies LyricsDocument,
-    },
-  ])(
-    "rejects a lossy agent model without mutation",
-    ({ createAgentDocument }) => {
-      const agentDocument = createAgentDocument();
-      const before = structuredClone(agentDocument);
-
-      expect(() => write(agentDocument)).toThrow(
-        "lys requires referenced v1 and v2 person agents in canonical order"
-      );
-      expect(agentDocument).toEqual(before);
-    }
-  );
-
   test("preserves a leading backing-only line", () => {
     const doc = {
-      agents: [{ id: "v1", type: "person" }],
+      agents: [{ id: "lys-left", type: "group" }],
       lines: [
         makeLine("l0", 1000, "Echo", "b"),
         makeLine("l1", 2000, "Lead", "p"),
@@ -403,7 +325,7 @@ describe("lys writer", () => {
 
   test("rejects a same-agent backing-only line without mutation", () => {
     const doc = {
-      agents: [{ id: "v1", type: "person" }],
+      agents: [{ id: "lys-left", type: "group" }],
       lines: [
         makeLine("l0", 1000, "Lead", "p"),
         makeLine("l1", 2000, "Echo", "b"),
