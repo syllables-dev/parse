@@ -113,7 +113,7 @@ function readWord(
 ) {
   checkSpan(element, lineAgent);
   const id = `${idPrefix}${syllables.length}`;
-  const range = readRange(element, offset, `syllable ${id}`);
+  const range = readRange(element, offset, `syllable ${id}`, true);
   if (element.children.every((child) => child.kind === "text")) {
     syllables.push({ ...range, id, text: leading + text(element) });
     return;

@@ -111,7 +111,12 @@ export function readTime(value: string, label: string) {
   return stamp;
 }
 
-export function readRange(element: XmlElement, offset: number, label: string) {
+export function readRange(
+  element: XmlElement,
+  offset: number,
+  label: string,
+  allowEqual = false
+) {
   const begin = shiftTime(
     readTime(needAttr(element, "begin", null), `${label} start`),
     offset,
@@ -122,7 +127,7 @@ export function readRange(element: XmlElement, offset: number, label: string) {
     offset,
     `${label} end`
   );
-  if (end <= begin) {
+  if (end < begin || (!allowEqual && end === begin)) {
     throw new ParseError(`${label} end must follow its start`);
   }
   return { begin, end };

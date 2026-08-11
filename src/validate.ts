@@ -31,6 +31,7 @@ function checkTrack(line: LyricsLine, syllables: Syllable[]): Problem[] {
         message: "syllable ends before it begins",
       });
     } else if (syllable.end === syllable.begin) {
+      // word codecs preserve punctuation at an instantaneous timestamp
       problems.push({
         code: "syllable-zero-length",
         id: syllable.id,

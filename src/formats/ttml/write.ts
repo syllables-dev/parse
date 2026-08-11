@@ -29,8 +29,10 @@ function checkTrack(
   for (const syllable of syllables) {
     checkTime(syllable.begin, `syllable ${syllable.id} start`);
     checkTime(syllable.end, `syllable ${syllable.id} end`);
-    if (syllable.end <= syllable.begin) {
-      throw new RangeError(`syllable ${syllable.id} end must follow its start`);
+    if (syllable.end < syllable.begin) {
+      throw new RangeError(
+        `syllable ${syllable.id} end must not precede its start`
+      );
     }
     if (syllable.begin < line.begin || syllable.end > line.end) {
       throw new RangeError(
