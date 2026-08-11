@@ -103,7 +103,7 @@ const capabilityCases = [
   [
     "lys",
     {
-      agents: true,
+      agents: "alignment",
       backing: true,
       metadata: {
         album: true,
@@ -120,7 +120,7 @@ const capabilityCases = [
   [
     "lqe",
     {
-      agents: true,
+      agents: "alignment",
       backing: true,
       metadata: {
         album: true,
@@ -137,7 +137,7 @@ const capabilityCases = [
   [
     "ttml",
     {
-      agents: true,
+      agents: "identity",
       backing: true,
       metadata: {
         album: false,
@@ -305,18 +305,18 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test("maps arbitrary agent ids to lys and lqe duet views", () => {
+  test("projects arbitrary ttml person ids into lys and lqe alignment sides", () => {
     const lyricDocument = {
       agents: [
-        { id: "lead-singer", type: "person" },
-        { id: "guest-singer", type: "person" },
+        { id: "voice-401", type: "person" },
+        { id: "guest-92", type: "person" },
         { id: "chorus", type: "group" },
         { id: "reply", type: "other" },
         { id: "unclassified", type: "character" },
       ],
       lines: [
         {
-          agent: "lead-singer",
+          agent: "voice-401",
           b: [],
           begin: 1000,
           end: 1500,
@@ -324,7 +324,7 @@ describe("public dispatch", () => {
           p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
         },
         {
-          agent: "lead-singer",
+          agent: "voice-401",
           b: [],
           begin: 2000,
           end: 2500,
@@ -332,7 +332,7 @@ describe("public dispatch", () => {
           p: [{ begin: 2000, end: 2500, id: "l1w0", text: "Lead again" }],
         },
         {
-          agent: "guest-singer",
+          agent: "guest-92",
           b: [],
           begin: 3000,
           end: 3500,
@@ -340,57 +340,79 @@ describe("public dispatch", () => {
           p: [{ begin: 3000, end: 3500, id: "l2w0", text: "Guest" }],
         },
         {
-          agent: "chorus",
-          b: [{ begin: 4200, end: 4500, id: "l3b0", text: "Echo" }],
+          agent: null,
+          b: [],
           begin: 4000,
           end: 4500,
           id: "l3",
-          p: [{ begin: 4000, end: 4500, id: "l3w0", text: "Chorus" }],
+          p: [{ begin: 4000, end: 4500, id: "l3w0", text: "Inherited" }],
         },
         {
-          agent: null,
+          agent: "chorus",
           b: [],
           begin: 5000,
           end: 5500,
           id: "l4",
-          p: [{ begin: 5000, end: 5500, id: "l4w0", text: "Inherited" }],
-        },
-        {
-          agent: "unclassified",
-          b: [],
-          begin: 6000,
-          end: 6500,
-          id: "l5",
-          p: [{ begin: 6000, end: 6500, id: "l5w0", text: "Unknown" }],
+          p: [{ begin: 5000, end: 5500, id: "l4w0", text: "Chorus" }],
         },
         {
           agent: "reply",
           b: [],
+          begin: 6000,
+          end: 6500,
+          id: "l5",
+          p: [{ begin: 6000, end: 6500, id: "l5w0", text: "Reply" }],
+        },
+        {
+          agent: "unclassified",
+          b: [],
           begin: 7000,
           end: 7500,
           id: "l6",
-          p: [{ begin: 7000, end: 7500, id: "l6w0", text: "Reply" }],
+          p: [{ begin: 7000, end: 7500, id: "l6w0", text: "Unknown" }],
         },
       ],
       meta: {},
       timing: "word",
       version: 1,
     } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+    const ttml = write(lyricDocument, "ttml");
     const expectedRows = [
       "[4]Lead(1000,500)",
       "[4]Lead again(2000,500)",
       "[5]Guest(3000,500)",
-      "[4]Chorus(4000,500)",
-      "[7](Echo)(4200,300)",
-      "[5]Inherited(5000,500)",
-      "[5]Unknown(6000,500)",
-      "[5]Reply(7000,500)",
+      "[5]Inherited(4000,500)",
+      "[4]Chorus(5000,500)",
+      "[5]Reply(6000,500)",
+      "[5]Unknown(7000,500)",
     ];
+    const lys = convert(ttml, "lys");
+    const lqe = convert(ttml, "lqe");
 
-    expect(write(lyricDocument, "lys").split("\n").slice(1)).toEqual(
-      expectedRows
-    );
-    expect(write(lyricDocument, "lqe")).toContain(expectedRows.join("\n"));
+    expect(lys).toBe(`[by:]\n${expectedRows.join("\n")}`);
+    expect(lqe).toContain(expectedRows.join("\n"));
+    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
+      const aligned = read(format === "lys" ? lys : lqe, format);
+
+      expect(aligned.agents).toEqual([
+        { id: "lys-left", type: "group" },
+        { id: "lys-right", type: "other" },
+      ]);
+      expect(aligned.lines.map((line) => line.agent)).toEqual([
+        "lys-left",
+        "lys-left",
+        "lys-right",
+        "lys-right",
+        "lys-left",
+        "lys-right",
+        "lys-right",
+      ]);
+    }
+    expect(capabilities("ttml").agents).toBe("identity");
+    expect(capabilities("lys").agents).toBe("alignment");
+    expect(capabilities("lqe").agents).toBe("alignment");
+    expect(lyricDocument).toEqual(before);
   });
 
   test("uses fixed synthetic agents for lys side-only rows", () => {
