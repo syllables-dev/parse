@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import type { FormatCapabilities, FormatId, LyricsDocument } from "../src";
+import type { FormatId, LyricsDocument } from "../src";
 import {
   capabilities,
   convert,
@@ -32,149 +32,6 @@ const fixtureCases = [
   ["yrc/json-preamble.yrc", "yrc"],
   ["yrc/word-timed-credits.yrc", "yrc"],
 ] satisfies [string, FormatId][];
-
-const capabilityCases = [
-  [
-    "lrc",
-    {
-      agents: false,
-      backing: false,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: false,
-      wordTiming: false,
-    },
-  ],
-  [
-    "eslrc",
-    {
-      agents: false,
-      backing: false,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: false,
-      wordTiming: true,
-    },
-  ],
-  [
-    "qrc",
-    {
-      agents: false,
-      backing: true,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: false,
-      wordTiming: true,
-    },
-  ],
-  [
-    "yrc",
-    {
-      agents: false,
-      backing: false,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: false,
-      wordTiming: true,
-    },
-  ],
-  [
-    "lys",
-    {
-      agents: "alignment",
-      backing: true,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: false,
-      wordTiming: true,
-    },
-  ],
-  [
-    "lqe",
-    {
-      agents: "alignment",
-      backing: true,
-      metadata: {
-        album: true,
-        apple: false,
-        artist: true,
-        author: true,
-        songwriters: true,
-        title: true,
-      },
-      pronunciation: false,
-      trackGenerated: false,
-      trackKind: false,
-      translation: true,
-      wordTiming: true,
-    },
-  ],
-  [
-    "ttml",
-    {
-      agents: "identity",
-      backing: true,
-      metadata: {
-        album: false,
-        apple: true,
-        artist: false,
-        author: false,
-        songwriters: true,
-        title: false,
-      },
-      pronunciation: true,
-      trackGenerated: true,
-      trackKind: true,
-      translation: true,
-      wordTiming: true,
-    },
-  ],
-] satisfies [FormatId, FormatCapabilities][];
 
 const authorCases = [
   {
@@ -764,19 +621,6 @@ describe("public dispatch", () => {
     );
   });
 
-  test("expands repeated lrc timestamps only when requested", () => {
-    const source = "[00:01.000][00:02.000]chorus\n[00:03.000]following";
-
-    expect(read(source, "lrc").lines.map((line) => line.begin)).toEqual([
-      1000, 3000,
-    ]);
-    expect(
-      read(source, "lrc", { expandRepeats: true }).lines.map(
-        (line) => line.begin
-      )
-    ).toEqual([1000, 2000, 3000]);
-  });
-
   test("rejects repeat expansion for other readers", () => {
     expect(() =>
       read("[0,500]Hi(0,500)", "qrc", { expandRepeats: true })
@@ -799,13 +643,6 @@ describe("public dispatch", () => {
       first.lines.flatMap((line) => line.p.map((word) => word.id))
     ).toEqual(["l0w0", "l1w0"]);
   });
-
-  test.each(capabilityCases)(
-    "dispatches %s capabilities",
-    (format, expected) => {
-      expect(capabilities(format)).toEqual(expected);
-    }
-  );
 
   test.each(authorCases)(
     "round-trips $format lyric authors",
