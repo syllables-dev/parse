@@ -22,6 +22,14 @@ export function checkMetaText(meta: LyricsMeta, format: FormatId): void {
   ) {
     throw new Error(`${format} cannot represent line breaks in metadata`);
   }
+  if (
+    fields.some((text) => text !== undefined && text.trim() !== text) ||
+    meta.songwriters?.some((name) => name.trim() !== name)
+  ) {
+    throw new Error(
+      `${format} cannot preserve leading or trailing metadata whitespace`
+    );
+  }
 }
 
 export function writeTags(

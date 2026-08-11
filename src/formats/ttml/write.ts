@@ -99,6 +99,24 @@ function createdAttr(created: boolean | undefined) {
   return created === undefined ? "" : ` automaticallyCreated="${created}"`;
 }
 
+function kindsByLanguage(doc: LyricsDocument) {
+  const kinds = new Map<string, "subtitle" | "replacement">();
+  for (const line of doc.lines) {
+    for (const [language, translation] of Object.entries(
+      line.translations ?? {}
+    )) {
+      const kind = translation.kind ?? "subtitle";
+      if (kinds.has(language) && kinds.get(language) !== kind) {
+        throw new Error(
+          `ttml ${language} translation kind must be consistent across lines`
+        );
+      }
+      kinds.set(language, kind);
+    }
+  }
+  return kinds;
+}
+
 function checkIds(ids: string[], label: string) {
   if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
     throw new Error(`ttml ${label} must be nonempty and unique`);
@@ -161,6 +179,7 @@ function checkDoc(doc: LyricsDocument) {
     doc.lines.map((line) => line.translations),
     "translation track"
   );
+  kindsByLanguage(doc);
   createdByLanguage(
     doc.lines.map((line) => line.pronunciations),
     "pronunciation track"
@@ -187,8 +206,9 @@ function writeTranslations(doc: LyricsDocument) {
     doc.lines.map((line) => line.translations),
     "translation track"
   );
-  return [...languages]
-    .map(([language, created]) => {
+  const kinds = kindsByLanguage(doc);
+  return [...kinds]
+    .map(([language, kind]) => {
       const translated = doc.lines.flatMap((line) => {
         const translation = line.translations?.[language];
         if (!translation) {
@@ -196,7 +216,7 @@ function writeTranslations(doc: LyricsDocument) {
         }
         return [{ line, translation }];
       });
-      const automatic = createdAttr(created);
+      const automatic = createdAttr(languages.get(language));
       const texts = translated.map(({ line, translation }) => {
         const backing =
           translation.b === undefined
@@ -204,7 +224,7 @@ function writeTranslations(doc: LyricsDocument) {
             : `<span ttm:role="x-bg">(${escapeText(translation.b)})</span>`;
         return `<text for="${escapeAttr(line.id)}">${escapeText(translation.p)}${backing}</text>`;
       });
-      return `<translation type="subtitle" xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</translation>`;
+      return `<translation type="${kind}" xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</translation>`;
     })
     .join("");
 }

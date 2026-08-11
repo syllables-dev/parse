@@ -221,6 +221,7 @@ function addTranslation(
     target.line.translations = {
       ...target.line.translations,
       [language]: {
+        kind: "subtitle",
         p: existing === undefined ? "" : existing.p,
         ...(existing?.b !== undefined && { b: existing.b }),
         ...(target.track === "p"
@@ -377,6 +378,15 @@ export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
   checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
   checkLysAgents(doc, "lqe");
+  if (
+    doc.lines.some((line) =>
+      Object.values(line.translations ?? {}).some(
+        (translation) => translation.kind === "replacement"
+      )
+    )
+  ) {
+    throw new Error("lqe cannot represent replacement translations");
+  }
   for (const line of doc.lines) {
     for (const syllable of [...line.p, ...line.b]) {
       checkText(syllable.text, "lqe", lysReservedStamp);

@@ -178,6 +178,7 @@ function readCreated(track: XmlElement) {
 function addTranslation(
   textLine: XmlElement,
   language: string,
+  kind: "subtitle" | "replacement",
   automaticallyCreated: boolean | undefined,
   lineById: Map<string, LyricsLine>
 ) {
@@ -205,6 +206,7 @@ function addTranslation(
     [language]: {
       ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       ...(backing === undefined ? {} : { b: backing.slice(1, -1) }),
+      kind,
       p: untimed(runs.primary, line.agent),
     },
   };
@@ -215,6 +217,7 @@ export function readTranslations(
   lines: LyricsLine[]
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
+  const kinds = new Map<string, "subtitle" | "replacement">();
   for (const container of containers) {
     checkAttrs(container, []);
     for (const translation of elements(container)) {
@@ -233,9 +236,21 @@ export function readTranslations(
         throw new ParseError(`unsupported ttml translation type ${kind}`);
       }
       const language = locale(translation);
+      if (kinds.has(language) && kinds.get(language) !== kind) {
+        throw new ParseError(
+          `ttml ${language} translation kind must be consistent across lines`
+        );
+      }
+      kinds.set(language, kind);
       const automaticallyCreated = readCreated(translation);
       for (const textLine of elements(translation)) {
-        addTranslation(textLine, language, automaticallyCreated, lineById);
+        addTranslation(
+          textLine,
+          language,
+          kind,
+          automaticallyCreated,
+          lineById
+        );
       }
     }
   }

@@ -113,6 +113,8 @@ export interface LyricsTranslation {
   automaticallyCreated?: boolean;
   /** the backing-vocal translation text without serialization parentheses. */
   b?: string;
+  /** the apple ttml translation type; omission defaults to subtitle. */
+  kind?: "subtitle" | "replacement";
   /** the primary translation text. */
   p: string;
 }
