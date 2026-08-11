@@ -34,7 +34,7 @@ import {
   write as writeYrc,
   capabilities as yrcCapabilities,
 } from "./formats/yrc";
-import { losses as findLosses } from "./internal/projection";
+import { losses as findLosses } from "./internal/projections";
 import type {
   ConversionLoss,
   ConvertOptions,

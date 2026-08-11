@@ -4,19 +4,22 @@ import type {
   FormatId,
   LyricsDocument,
   WriteOptions,
-} from "../types";
-import { projectedLine } from "./line-projection";
+} from "../../types";
+import { projectedLine } from "./line";
 import {
   lqeTranslationLosses,
   projectedLqeLines,
   projectedPronunciationTracks,
   projectedTranslationTracks,
   trackMetadataLosses,
-} from "./lqe-projection";
-import { projectedLrcLines } from "./lrc-projection";
-import { lineLosses, projectedLysLines } from "./lys-projection";
-import { formatMetadataLosses, projectedMeta } from "./metadata-projection";
-import { projectedQrcLines, qrcTextLosses } from "./qrc-projection";
+} from "./lqe";
+import { projectedLrcLines } from "./lrc";
+import { lineLosses, projectedLysLines } from "./lys";
+import { formatMetadataLosses, projectedMeta } from "./metadata";
+import { projectedQrcLines, qrcTextLosses } from "./qrc";
+
+// biome-ignore lint/performance/noBarrelFile: re-exports qrc's loss detector so codecs have one entry point into this folder
+export { qrcTextLosses } from "./qrc";
 
 function lost(
   field: ConversionLoss,

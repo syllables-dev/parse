@@ -1,5 +1,5 @@
-import type { FormatCapabilities, LyricsDocument } from "../types";
-import { projectedLine, track } from "./line-projection";
+import type { FormatCapabilities, LyricsDocument } from "../../types";
+import { projectedLine, track } from "./line";
 
 export function projectedLrcLines(
   doc: LyricsDocument,

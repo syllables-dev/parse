@@ -4,9 +4,9 @@ import type {
   LyricsDocument,
   LyricsLine,
   LyricsTranslationTrack,
-} from "../types";
-import { projectedLine } from "./line-projection";
-import { projectedLysLines } from "./lys-projection";
+} from "../../types";
+import { projectedLine } from "./line";
+import { projectedLysLines } from "./lys";
 
 function lqeTranslationMetadataLoss(metadata: {
   automaticallyCreated?: boolean;

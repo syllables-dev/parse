@@ -1,4 +1,4 @@
-import { prepare } from "../../internal/projection";
+import { prepare } from "../../internal/projections";
 import { checkTime } from "../../internal/timestamps";
 import { hasLyricText } from "../../internal/write-check";
 import type {

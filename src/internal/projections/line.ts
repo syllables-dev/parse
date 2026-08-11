@@ -1,4 +1,4 @@
-import type { FormatCapabilities, LyricsLine, Syllable } from "../types";
+import type { FormatCapabilities, LyricsLine, Syllable } from "../../types";
 
 export function track(syllables: Syllable[], line: LyricsLine) {
   const [first] = syllables;
