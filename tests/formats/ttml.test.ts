@@ -429,6 +429,86 @@ describe("ttml reader", () => {
     });
   });
 
+  test("keeps Apple backing parentheses as literal timed text", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="kept"><span begin="1.000" end="3.000">Lead</span><span ttm:role="x-bg" itunes:parenthesis="keep"><span begin="1.200" end="1.800">(（Echo</span><span begin="1.800" end="2.700">）)</span></span></p></div>'
+    );
+    const doc = readLyrics(source, "ttml");
+    const original = structuredClone(doc);
+
+    expect(doc.lines[0]?.b).toEqual([
+      { begin: 1200, end: 1800, id: "keptb0", text: "(（Echo" },
+      { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
+    ]);
+
+    for (const format of ["ttml", "qrc", "lys", "lqe"] as const) {
+      const written = writeLyrics(doc, format);
+      expect(written).toContain("((（Echo");
+      expect(written).toContain("）))");
+      expect(
+        readLyrics(written, format)
+          .lines.at(0)
+          ?.b.map(({ begin, end, text }) => ({
+            begin,
+            end,
+            text,
+          }))
+      ).toEqual(
+        doc.lines.at(0)?.b.map(({ begin, end, text }) => ({ begin, end, text }))
+      );
+    }
+    expect(doc).toEqual(original);
+  });
+
+  test("keeps Apple backing parentheses as literal line-timed text", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="kept">Lead<span ttm:role="x-bg" itunes:parenthesis="keep">(（Echo）)</span></p></div>',
+      "",
+      "Line"
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]?.b).toEqual([
+      { begin: 1000, end: 3000, id: "keptb0", text: "(（Echo）)" },
+    ]);
+    expect(writeLyrics(doc, "ttml")).toContain("((（Echo）))");
+    expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
+  });
+
+  test("removes ordinary Apple backing wrappers while preserving full-width text", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="ordinary"><span begin="1.000" end="3.000">Lead</span><span ttm:role="x-bg"><span begin="1.200" end="2.700">(（Echo）)</span></span></p></div>'
+    );
+
+    expect(readLyrics(source, "ttml").lines[0]?.b).toEqual([
+      { begin: 1200, end: 2700, id: "ordinaryb0", text: "（Echo）" },
+    ]);
+  });
+
+  test("keeps Apple translation and pronunciation backing parentheses", () => {
+    const metadata = [
+      "<itunes:iTunesMetadata>",
+      "<itunes:translations>",
+      '<itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="kept">Salut<span ttm:role="x-bg" itunes:parenthesis="keep">(（Écho）)</span></itunes:text></itunes:translation>',
+      "</itunes:translations>",
+      "<itunes:transliterations>",
+      '<itunes:transliteration xml:lang="en-Latn"><itunes:text for="kept"><span begin="1.000" end="3.000">lead</span><span ttm:role="x-bg" itunes:parenthesis="keep"><span begin="1.200" end="2.700">(（echo）)</span></span></itunes:text></itunes:transliteration>',
+      "</itunes:transliterations>",
+      "</itunes:iTunesMetadata>",
+    ].join("");
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000" itunes:key="kept"><span begin="1.000" end="3.000">Lead</span></p></div>',
+      metadata
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines.at(0)?.translations?.fr?.b).toBe("(（Écho）)");
+    expect(doc.lines.at(0)?.pronunciations?.["en-Latn"]?.b).toEqual([
+      { begin: 1200, end: 2700, id: "keptr0b0", text: "(（echo）)" },
+    ]);
+    expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
+  });
+
   test("round-trips subtitle and replacement translations", () => {
     const apple = [
       "<itunes:iTunesMetadata><itunes:translations>",
