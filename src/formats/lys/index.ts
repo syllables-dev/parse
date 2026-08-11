@@ -40,8 +40,8 @@ interface LysRow {
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
-const leftAgentId = "lys-left";
-const rightAgentId = "lys-right";
+const leftAgentId = "v1";
+const rightAgentId = "v2";
 
 export const capabilities = {
   agents: "alignment",
