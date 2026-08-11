@@ -207,6 +207,9 @@ export function write(
   if (doc.meta.songwriters?.length === 0) {
     throw new Error("eslrc cannot represent an empty songwriter list");
   }
+  if (doc.meta.songwriters?.some((songwriter) => songwriter.length === 0)) {
+    throw new Error("eslrc cannot represent an empty songwriter name");
+  }
   if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
     throw new Error("eslrc cannot represent multiple songwriters");
   }

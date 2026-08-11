@@ -9,6 +9,9 @@ import type {
   WriteOptions,
 } from "../types";
 
+const lineBreak = /\r|\n/u;
+const lineBreakRun = /[\r\n]+/gu;
+
 function track(syllables: Syllable[], line: LyricsLine) {
   const [first] = syllables;
   if (first === undefined) {
@@ -40,6 +43,116 @@ function lost(
   return value !== undefined && !preserved ? [field] : [];
 }
 
+function usesLyricTags(format: FormatId) {
+  return (
+    format === "eslrc" ||
+    format === "lqe" ||
+    format === "lrc" ||
+    format === "lys" ||
+    format === "qrc"
+  );
+}
+
+function malformedText(text: string | undefined) {
+  return text !== undefined && (lineBreak.test(text) || text.trim() !== text);
+}
+
+function normalizedText(text: string) {
+  return text.trim().replace(lineBreakRun, " ");
+}
+
+function validYrcSongwriters(songwriters: string[]) {
+  return (
+    songwriters.length > 1 &&
+    songwriters.every(
+      (songwriter) =>
+        songwriter.length > 0 &&
+        songwriter.trim() === songwriter &&
+        !songwriter.includes("/")
+    ) &&
+    new Set(songwriters).size === songwriters.length
+  );
+}
+
+function projectedSongwriters(
+  songwriters: string[] | undefined,
+  format: FormatId
+) {
+  if (
+    songwriters === undefined ||
+    (!usesLyricTags(format) && format !== "yrc")
+  ) {
+    return songwriters;
+  }
+  if (songwriters.length === 0) {
+    return;
+  }
+  const [first] = songwriters;
+  if (first === undefined) {
+    return;
+  }
+  if (usesLyricTags(format)) {
+    const songwriter = normalizedText(first);
+    return songwriter.length === 0 ? undefined : [songwriter];
+  }
+  if (songwriters.length === 1) {
+    const songwriter = normalizedText(first);
+    return songwriter.length === 0 ? undefined : [songwriter];
+  }
+  if (validYrcSongwriters(songwriters)) {
+    return songwriters;
+  }
+  const songwriter = songwriters.find(
+    (name) =>
+      name.length > 0 &&
+      name.trim() === name &&
+      !name.includes("/") &&
+      !lineBreak.test(name)
+  );
+  const selected = normalizedText(songwriter ?? first).replaceAll("/", "");
+  return selected.length === 0 ? undefined : [selected];
+}
+
+function formatMetadataLosses(
+  meta: LyricsMeta,
+  format: FormatId,
+  capabilities: FormatCapabilities
+) {
+  if (!usesLyricTags(format) && format !== "yrc") {
+    return [];
+  }
+  const features: ConversionLoss[] = [];
+  if (malformedText(meta.album)) {
+    features.push("metadata.album");
+  }
+  if (malformedText(meta.artist)) {
+    features.push("metadata.artist");
+  }
+  if (malformedText(meta.author)) {
+    features.push("metadata.author");
+  }
+  if (
+    capabilities.metadata.songwriters &&
+    meta.songwriters !== undefined &&
+    (meta.songwriters.some(
+      (songwriter) => songwriter.length === 0 || malformedText(songwriter)
+    ) ||
+      (usesLyricTags(format)
+        ? meta.songwriters.length !== 1
+        : meta.songwriters.length !== 1 &&
+          !validYrcSongwriters(meta.songwriters)))
+  ) {
+    features.push("metadata.songwriters");
+  }
+  if (malformedText(meta.title)) {
+    features.push("metadata.title");
+  }
+  if (meta.author === "") {
+    features.push("metadata.author");
+  }
+  return features;
+}
+
 function projectedLine(
   line: LyricsLine,
   capabilities: FormatCapabilities,
@@ -60,34 +173,75 @@ function projectedLine(
   };
 }
 
-function projectedMeta(meta: LyricsMeta, capabilities: FormatCapabilities) {
+function projectedLrcLines(
+  doc: LyricsDocument,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+) {
+  const orderedLines = doc.lines
+    .map((line, order) => ({ line, order }))
+    .sort(
+      (left, right) =>
+        left.line.begin - right.line.begin || left.order - right.order
+    );
+  return orderedLines.map(({ line }, lineIndex) => {
+    const { begin } = line;
+    const end = orderedLines[lineIndex + 1]?.line.begin ?? begin + 5000;
+    const p = track(line.p, { ...line, begin, end });
+    return {
+      ...projectedLine(line, capabilities, wordTimed),
+      begin,
+      end,
+      p: p.length > 0 ? p : [{ begin, end, id: `${line.id}w0`, text: "" }],
+    };
+  });
+}
+
+function projectedText(text: string | undefined, format: FormatId) {
+  return text !== undefined && (usesLyricTags(format) || format === "yrc")
+    ? normalizedText(text)
+    : text;
+}
+
+function projectedMeta(
+  meta: LyricsMeta,
+  format: FormatId,
+  capabilities: FormatCapabilities
+) {
+  const album = projectedText(meta.album, format);
+  const artist = projectedText(meta.artist, format);
+  const author = projectedText(meta.author, format);
+  const songwriters = projectedSongwriters(meta.songwriters, format);
+  const title = projectedText(meta.title, format);
   return {
     ...(capabilities.metadata.album &&
-      meta.album !== undefined && {
-        album: meta.album,
+      album !== undefined && {
+        album,
       }),
     ...(capabilities.metadata.artist &&
-      meta.artist !== undefined && {
-        artist: meta.artist,
+      artist !== undefined && {
+        artist,
       }),
     ...(capabilities.metadata.author &&
-      meta.author !== undefined && {
-        author: meta.author,
+      author !== undefined &&
+      author.length > 0 && {
+        author,
       }),
     ...(meta.offset !== undefined && { offset: meta.offset }),
     ...(capabilities.metadata.songwriters &&
-      meta.songwriters !== undefined && {
-        songwriters: meta.songwriters,
+      songwriters !== undefined && {
+        songwriters,
       }),
     ...(capabilities.metadata.title &&
-      meta.title !== undefined && {
-        title: meta.title,
+      title !== undefined && {
+        title,
       }),
   };
 }
 
 export function losses(
   doc: LyricsDocument,
+  format: FormatId,
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
   const features = [
@@ -100,9 +254,26 @@ export function losses(
       capabilities.metadata.songwriters
     ),
     ...lost("metadata.title", doc.meta.title, capabilities.metadata.title),
+    ...formatMetadataLosses(doc.meta, format, capabilities),
   ];
   if (!capabilities.wordTiming && doc.timing === "word") {
     features.push("wordTiming");
+  }
+  if (
+    format === "lrc" &&
+    doc.lines.some((line, lineIndex) => {
+      const earlier = doc.lines[lineIndex - 1];
+      const end = doc.lines[lineIndex + 1]?.begin ?? line.begin + 5000;
+      return (
+        (earlier !== undefined && line.begin <= earlier.begin) ||
+        line.end !== end ||
+        line.p.length !== 1 ||
+        line.p[0]?.begin !== line.begin ||
+        line.p[0]?.end !== line.end
+      );
+    })
+  ) {
+    features.push("lineTiming");
   }
   if (
     capabilities.agents === false &&
@@ -130,19 +301,21 @@ export function losses(
 
 export function project(
   doc: LyricsDocument,
+  format: FormatId,
   capabilities: FormatCapabilities
 ): LyricsDocument {
-  if (losses(doc, capabilities).length === 0) {
+  if (losses(doc, format, capabilities).length === 0) {
     return doc;
   }
   const wordTimed = capabilities.wordTiming || doc.timing === "line";
   return {
     ...doc,
     agents: capabilities.agents === false ? [] : doc.agents,
-    lines: doc.lines.map((line) =>
-      projectedLine(line, capabilities, wordTimed)
-    ),
-    meta: projectedMeta(doc.meta, capabilities),
+    lines:
+      format === "lrc"
+        ? projectedLrcLines(doc, capabilities, wordTimed)
+        : doc.lines.map((line) => projectedLine(line, capabilities, wordTimed)),
+    meta: projectedMeta(doc.meta, format, capabilities),
     timing: wordTimed ? doc.timing : "line",
   };
 }
@@ -156,5 +329,5 @@ export function prepare(
   if (Object.keys(options).some((key) => key !== "lossy")) {
     throw new Error(`${format} write options are unsupported`);
   }
-  return options.lossy ? project(doc, capabilities) : doc;
+  return options.lossy ? project(doc, format, capabilities) : doc;
 }

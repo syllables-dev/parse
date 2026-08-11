@@ -44,15 +44,18 @@ export function writeTags(
   if (meta.songwriters && meta.songwriters.length > 1) {
     throw new Error(`${format} cannot represent multiple songwriters`);
   }
+  if (meta.songwriters?.some((songwriter) => songwriter.length === 0)) {
+    throw new Error(`${format} cannot represent an empty songwriter name`);
+  }
   const author = `[by:${meta.author === undefined ? "" : meta.author}]`;
   const fields = [
     ...(meta.title === undefined ? [] : [`[ti:${meta.title}]`]),
     ...(meta.artist === undefined ? [] : [`[ar:${meta.artist}]`]),
     ...(meta.album === undefined ? [] : [`[al:${meta.album}]`]),
   ];
-  const songwriter =
+  const songwriterTag =
     meta.songwriters === undefined ? [] : [`[au:${meta.songwriters[0]}]`];
   return order === "author-first"
-    ? [author, ...fields, ...songwriter]
-    : [...fields, author, ...songwriter];
+    ? [author, ...fields, ...songwriterTag]
+    : [...fields, author, ...songwriterTag];
 }

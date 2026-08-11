@@ -155,12 +155,12 @@ export function convert(
   return write(read(text, requireFormat(text), options), to, options);
 }
 
-/** lists document features removed by an explicit lossy write. */
+/** lists document features whose target representation loses fidelity. */
 export function losses(
   doc: LyricsDocument,
   format: FormatId
 ): ConversionLoss[] {
-  return findLosses(doc, codecs[format].capabilities);
+  return findLosses(doc, format, codecs[format].capabilities);
 }
 
 /** returns an isolated snapshot of the features preserved by the selected format writer. */

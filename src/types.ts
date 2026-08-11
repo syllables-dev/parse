@@ -161,7 +161,7 @@ export interface MetadataCapabilities {
   title: boolean;
 }
 
-/** a document feature removed by an explicit lossy conversion. */
+/** a document feature whose target representation loses fidelity. */
 export type ConversionLoss =
   | "agents"
   | "backing"
@@ -172,6 +172,7 @@ export type ConversionLoss =
   | "metadata.title"
   | "pronunciations"
   | "translations"
+  | "lineTiming"
   | "wordTiming";
 
 /**
@@ -213,7 +214,7 @@ export interface ReadOptions {
  * set `lossy` to remove features unsupported by the output format.
  */
 export interface WriteOptions {
-  /** allows a writer to remove features listed by {@link losses}. */
+  /** enables deterministic projections for features listed by {@link losses}. */
   lossy?: boolean;
 }
 
