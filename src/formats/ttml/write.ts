@@ -80,45 +80,32 @@ function checkMaps(line: LyricsLine, lineTimed: boolean) {
   }
 }
 
-function createdByLanguage(
-  tracks: Array<Record<string, { automaticallyCreated?: boolean }> | undefined>,
-  label: string
-) {
-  const byLanguage = new Map<string, boolean | undefined>();
-  for (const track of tracks) {
-    for (const [language, textTrack] of Object.entries(track ?? {})) {
-      const created = textTrack.automaticallyCreated;
-      if (byLanguage.has(language) && byLanguage.get(language) !== created) {
-        throw new Error(
-          `ttml ${language} ${label} has inconsistent automaticallyCreated values`
-        );
-      }
-      byLanguage.set(language, created);
-    }
-  }
-  return byLanguage;
-}
-
 function createdAttr(created: boolean | undefined) {
   return created === undefined ? "" : ` automaticallyCreated="${created}"`;
 }
 
-function kindsByLanguage(doc: LyricsDocument) {
-  const kinds = new Map<string, "subtitle" | "replacement">();
+function translationTracks(doc: LyricsDocument) {
+  const tracks = new Map(Object.entries(doc.translationTracks ?? {}));
   for (const line of doc.lines) {
-    for (const [language, translation] of Object.entries(
-      line.translations ?? {}
-    )) {
-      const kind = translation.kind ?? "subtitle";
-      if (kinds.has(language) && kinds.get(language) !== kind) {
-        throw new Error(
-          `ttml ${language} translation kind must be consistent across lines`
-        );
+    for (const language of Object.keys(line.translations ?? {})) {
+      if (!tracks.has(language)) {
+        tracks.set(language, {});
       }
-      kinds.set(language, kind);
     }
   }
-  return kinds;
+  return tracks;
+}
+
+function pronunciationTracks(doc: LyricsDocument) {
+  const tracks = new Map(Object.entries(doc.pronunciationTracks ?? {}));
+  for (const line of doc.lines) {
+    for (const language of Object.keys(line.pronunciations ?? {})) {
+      if (!tracks.has(language)) {
+        tracks.set(language, {});
+      }
+    }
+  }
+  return tracks;
 }
 
 function checkIds(ids: string[], label: string) {
@@ -137,6 +124,11 @@ function checkLines(doc: LyricsDocument, agentIds: string[]) {
     }
     if (line.agent !== null && !knownAgents.has(line.agent)) {
       throw new Error(`line ${line.id} references an undeclared ttml agent`);
+    }
+    if (line.p.length === 0 && line.b.length > 0) {
+      throw new Error(
+        `ttml backing track requires primary text on line ${line.id}`
+      );
     }
     checkTrack(
       line.p,
@@ -179,15 +171,23 @@ function checkDoc(doc: LyricsDocument) {
     doc.lines.map((line) => line.id),
     "line ids"
   );
-  createdByLanguage(
-    doc.lines.map((line) => line.translations),
-    "translation track"
-  );
-  kindsByLanguage(doc);
-  createdByLanguage(
-    doc.lines.map((line) => line.pronunciations),
-    "pronunciation track"
-  );
+  for (const [language, track] of translationTracks(doc)) {
+    if (!validLanguage(language)) {
+      throw new Error(`invalid ttml translation language ${language}`);
+    }
+    if (
+      track.kind !== undefined &&
+      track.kind !== "subtitle" &&
+      track.kind !== "replacement"
+    ) {
+      throw new Error(`invalid ttml translation kind ${track.kind}`);
+    }
+  }
+  for (const language of pronunciationTracks(doc).keys()) {
+    if (!validLanguage(language)) {
+      throw new Error(`invalid ttml pronunciation language ${language}`);
+    }
+  }
   checkLines(doc, agentIds);
 }
 
@@ -225,13 +225,8 @@ function writeTracks(
 }
 
 function writeTranslations(doc: LyricsDocument) {
-  const languages = createdByLanguage(
-    doc.lines.map((line) => line.translations),
-    "translation track"
-  );
-  const kinds = kindsByLanguage(doc);
-  return [...kinds]
-    .map(([language, kind]) => {
+  return [...translationTracks(doc)]
+    .map(([language, track]) => {
       const translated = doc.lines.flatMap((line) => {
         const translation = line.translations?.[language];
         if (!translation) {
@@ -239,7 +234,7 @@ function writeTranslations(doc: LyricsDocument) {
         }
         return [{ line, translation }];
       });
-      const automatic = createdAttr(languages.get(language));
+      const automatic = createdAttr(track.automaticallyCreated);
       const texts = translated.map(({ line, translation }) => {
         const backing =
           translation.b === undefined
@@ -247,17 +242,13 @@ function writeTranslations(doc: LyricsDocument) {
             : `<span ttm:role="x-bg">(${escapeText(translation.b)})</span>`;
         return `<text for="${escapeAttr(line.id)}">${escapeText(translation.p)}${backing}</text>`;
       });
-      return `<translation type="${kind}" xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</translation>`;
+      return `<translation type="${track.kind ?? "subtitle"}" xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</translation>`;
     })
     .join("");
 }
 
 function writeProns(doc: LyricsDocument) {
-  const languages = createdByLanguage(
-    doc.lines.map((line) => line.pronunciations),
-    "pronunciation track"
-  );
-  return [...languages]
+  return [...pronunciationTracks(doc)]
     .map(([language, created]) => {
       const pronounced = doc.lines.flatMap((line) => {
         const pronunciation = line.pronunciations?.[language];
@@ -266,7 +257,7 @@ function writeProns(doc: LyricsDocument) {
         }
         return [{ line, pronunciation }];
       });
-      const automatic = createdAttr(created);
+      const automatic = createdAttr(created.automaticallyCreated);
       const texts = pronounced.map(({ line, pronunciation }) => {
         const tracks = writeTracks(
           pronunciation.p,

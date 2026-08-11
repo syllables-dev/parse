@@ -168,5 +168,13 @@ export function capabilities(format: FormatId): FormatCapabilities {
   return {
     ...codecs[format].capabilities,
     metadata: { ...codecs[format].capabilities.metadata },
+    trackMetadata: {
+      pronunciation: {
+        ...codecs[format].capabilities.trackMetadata.pronunciation,
+      },
+      translation: {
+        ...codecs[format].capabilities.trackMetadata.translation,
+      },
+    },
   };
 }

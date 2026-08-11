@@ -20,13 +20,16 @@ export type {
   LyricsLine,
   LyricsMeta,
   LyricsPronunciation,
+  LyricsPronunciationTrack,
   LyricsTranslation,
+  LyricsTranslationTrack,
   MetadataCapabilities,
   ParseResult,
   Problem,
   ProblemCode,
   ReadOptions,
   Syllable,
+  TrackMetadataCapabilities,
   WriteOptions,
 } from "./types";
 export { validate } from "./validate";

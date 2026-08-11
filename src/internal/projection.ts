@@ -6,6 +6,7 @@ import type {
   LyricsLine,
   LyricsMeta,
   LyricsTranslation,
+  LyricsTranslationTrack,
   Syllable,
   WriteOptions,
 } from "../types";
@@ -398,11 +399,33 @@ function lqeTranslationRows(line: LyricsLine, translation: LyricsTranslation) {
   return rows;
 }
 
-function lqeTranslationMetadataLoss(translation: LyricsTranslation) {
+function lqeTranslationMetadataLoss(metadata: {
+  automaticallyCreated?: boolean;
+  kind?: "subtitle" | "replacement";
+}) {
   return (
-    translation.automaticallyCreated !== undefined ||
-    translation.kind === "replacement"
+    metadata.automaticallyCreated !== undefined ||
+    metadata.kind === "replacement"
   );
+}
+
+function trackMetadataLosses(
+  doc: LyricsDocument,
+  capabilities: FormatCapabilities
+) {
+  const translation = Object.values(doc.translationTracks ?? {}).some(
+    (metadata) =>
+      (metadata.automaticallyCreated !== undefined &&
+        !capabilities.trackMetadata.translation.automaticallyCreated) ||
+      (metadata.kind === "replacement" &&
+        !capabilities.trackMetadata.translation.kind)
+  );
+  const pronunciation = Object.values(doc.pronunciationTracks ?? {}).some(
+    (metadata) =>
+      metadata.automaticallyCreated !== undefined &&
+      !capabilities.trackMetadata.pronunciation.automaticallyCreated
+  );
+  return { pronunciation, translation };
 }
 
 function lqeTimestampLoss(
@@ -420,15 +443,27 @@ function lqeTimestampLoss(
 }
 
 function lqeTranslationLosses(doc: LyricsDocument) {
+  const languages = new Set(
+    doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
+  );
+  if (
+    Object.keys(doc.translationTracks ?? {}).some(
+      (language) => !languages.has(language)
+    )
+  ) {
+    return true;
+  }
+  if (
+    Object.values(doc.translationTracks ?? {}).some(lqeTranslationMetadataLoss)
+  ) {
+    return true;
+  }
   const starts = lqeTranslationStarts(doc);
   const timestamps = new Map<string, Set<number>>();
   for (const line of doc.lines) {
     for (const [language, translation] of Object.entries(
       line.translations ?? {}
     )) {
-      if (lqeTranslationMetadataLoss(translation)) {
-        return true;
-      }
       const primary = line.p.at(0);
       const backing = line.b.at(0);
       if (
@@ -507,11 +542,8 @@ function projectedLqeTranslation(
   if (keepBacking && backing) {
     timestamps.add(backing.begin);
   }
-  const kind =
-    translation.kind === "replacement" ? "subtitle" : translation.kind;
   return {
     ...(keepBacking && { b: translation.b }),
-    ...(kind === undefined ? {} : { kind }),
     p: keepPrimary ? translation.p : "",
   };
 }
@@ -551,6 +583,38 @@ function projectedLqeLines(
       projectedLqeTranslations(line, starts, timestamps)
     )
   );
+}
+
+function projectedTranslationTracks(
+  doc: LyricsDocument,
+  lines: LyricsLine[],
+  format: FormatId,
+  capabilities: FormatCapabilities
+) {
+  if (!capabilities.translation) {
+    return;
+  }
+  if (format !== "lqe") {
+    return doc.translationTracks;
+  }
+  const languages = [
+    ...new Set(lines.flatMap((line) => Object.keys(line.translations ?? {}))),
+  ];
+  if (languages.length === 0) {
+    return;
+  }
+  const tracks: Record<string, LyricsTranslationTrack> = {};
+  for (const language of languages) {
+    tracks[language] = { kind: "subtitle" };
+  }
+  return tracks;
+}
+
+function projectedPronunciationTracks(
+  doc: LyricsDocument,
+  capabilities: FormatCapabilities
+) {
+  return capabilities.pronunciation ? doc.pronunciationTracks : undefined;
 }
 
 function projectedLrcLines(
@@ -644,23 +708,12 @@ function projectedLines(
   );
 }
 
-export function losses(
+function basicLosses(
   doc: LyricsDocument,
   format: FormatId,
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
-  const features = [
-    ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
-    ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
-    ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),
-    ...lost(
-      "metadata.songwriters",
-      doc.meta.songwriters,
-      capabilities.metadata.songwriters
-    ),
-    ...lost("metadata.title", doc.meta.title, capabilities.metadata.title),
-    ...formatMetadataLosses(doc.meta, format, capabilities),
-  ];
+  const features: ConversionLoss[] = [];
   if (!capabilities.wordTiming && doc.timing === "word") {
     features.push("wordTiming");
   }
@@ -674,18 +727,26 @@ export function losses(
   if (!capabilities.backing && doc.lines.some((line) => line.b.length > 0)) {
     features.push("backing");
   }
+  return features;
+}
+
+function trackLossFeatures(
+  doc: LyricsDocument,
+  format: FormatId,
+  capabilities: FormatCapabilities
+) {
+  const features: ConversionLoss[] = [];
+  const tracks = trackMetadataLosses(doc, capabilities);
   if (
-    !capabilities.translation &&
-    doc.lines.some((line) => line.translations !== undefined)
-  ) {
-    features.push("translations");
-  }
-  if (
-    format === "lqe" &&
-    (doc.lines.some(
-      (line) => line.p.length === 0 && line.translations !== undefined
-    ) ||
-      lqeTranslationLosses({ ...doc, lines: projectedLysLines(doc) }))
+    (!capabilities.translation &&
+      (doc.translationTracks !== undefined ||
+        doc.lines.some((line) => line.translations !== undefined))) ||
+    (capabilities.translation && tracks.translation) ||
+    (format === "lqe" &&
+      (doc.lines.some(
+        (line) => line.p.length === 0 && line.translations !== undefined
+      ) ||
+        lqeTranslationLosses({ ...doc, lines: projectedLysLines(doc) })))
   ) {
     features.push("translations");
   }
@@ -693,12 +754,35 @@ export function losses(
     features.push("lyricText");
   }
   if (
-    !capabilities.pronunciation &&
-    doc.lines.some((line) => line.pronunciations !== undefined)
+    (!capabilities.pronunciation &&
+      (doc.pronunciationTracks !== undefined ||
+        doc.lines.some((line) => line.pronunciations !== undefined))) ||
+    (capabilities.pronunciation && tracks.pronunciation)
   ) {
     features.push("pronunciations");
   }
   return features;
+}
+
+export function losses(
+  doc: LyricsDocument,
+  format: FormatId,
+  capabilities: FormatCapabilities
+): ConversionLoss[] {
+  return [
+    ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
+    ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
+    ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),
+    ...lost(
+      "metadata.songwriters",
+      doc.meta.songwriters,
+      capabilities.metadata.songwriters
+    ),
+    ...lost("metadata.title", doc.meta.title, capabilities.metadata.title),
+    ...formatMetadataLosses(doc.meta, format, capabilities),
+    ...basicLosses(doc, format, capabilities),
+    ...trackLossFeatures(doc, format, capabilities),
+  ];
 }
 
 export function project(
@@ -710,12 +794,22 @@ export function project(
     return doc;
   }
   const wordTimed = capabilities.wordTiming || doc.timing === "line";
+  const lines = projectedLines(doc, format, capabilities, wordTimed);
+  const pronunciationTracks = projectedPronunciationTracks(doc, capabilities);
+  const translationTracks = projectedTranslationTracks(
+    doc,
+    lines,
+    format,
+    capabilities
+  );
   return {
-    ...doc,
     agents: capabilities.agents === false ? [] : doc.agents,
-    lines: projectedLines(doc, format, capabilities, wordTimed),
+    lines,
     meta: projectedMeta(doc.meta, format, capabilities),
+    ...(pronunciationTracks === undefined ? {} : { pronunciationTracks }),
     timing: wordTimed ? doc.timing : "line",
+    ...(translationTracks === undefined ? {} : { translationTracks }),
+    version: doc.version,
   };
 }
 

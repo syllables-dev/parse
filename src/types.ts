@@ -35,8 +35,12 @@ export interface LyricsDocument {
   lines: LyricsLine[];
   /** song metadata available from the source document. */
   meta: LyricsMeta;
+  /** metadata for timed pronunciation tracks keyed by BCP 47 language tag. */
+  pronunciationTracks?: Record<string, LyricsPronunciationTrack>;
   /** the finest timing carried by the source document. */
   timing: "line" | "word";
+  /** metadata for untimed translation tracks keyed by BCP 47 language tag. */
+  translationTracks?: Record<string, LyricsTranslationTrack>;
   /** the persisted schema version. */
   version: 1;
 }
@@ -109,26 +113,34 @@ export interface Syllable {
  * translated text associated with one lyric line.
  */
 export interface LyricsTranslation {
-  /** whether the source marked this translation track as automatically created. */
-  automaticallyCreated?: boolean;
   /** the backing-vocal translation text without serialization parentheses. */
   b?: string;
-  /** the Apple TTML translation type; omission defaults to subtitle. */
-  kind?: "subtitle" | "replacement";
   /** the primary translation text. */
   p: string;
+}
+
+/** metadata shared by every line in one translation language track. */
+export interface LyricsTranslationTrack {
+  /** whether the source marked this translation track as automatically created. */
+  automaticallyCreated?: boolean;
+  /** the Apple TTML translation type; omission defaults to subtitle. */
+  kind?: "subtitle" | "replacement";
 }
 
 /**
  * timed pronunciation associated with one lyric line and language.
  */
 export interface LyricsPronunciation {
-  /** whether the source marked this pronunciation track as automatically created. */
-  automaticallyCreated?: boolean;
   /** the backing-vocal pronunciation syllables. */
   b: Syllable[];
   /** the primary pronunciation syllables. */
   p: Syllable[];
+}
+
+/** metadata shared by every line in one pronunciation language track. */
+export interface LyricsPronunciationTrack {
+  /** whether the source marked this pronunciation track as automatically created. */
+  automaticallyCreated?: boolean;
 }
 
 /**
@@ -159,6 +171,22 @@ export interface MetadataCapabilities {
   songwriters: boolean;
   /** whether the format preserves the song title. */
   title: boolean;
+}
+
+/** per-language track attributes a format preserves. */
+export interface TrackMetadataCapabilities {
+  /** transliteration container attributes. */
+  pronunciation: {
+    /** whether the format preserves the generated-text flag. */
+    automaticallyCreated: boolean;
+  };
+  /** translation container attributes. */
+  translation: {
+    /** whether the format preserves the generated-text flag. */
+    automaticallyCreated: boolean;
+    /** whether the format preserves subtitle and replacement behavior. */
+    kind: boolean;
+  };
 }
 
 /** a document feature whose target representation loses fidelity. */
@@ -192,6 +220,8 @@ export interface FormatCapabilities {
   metadata: MetadataCapabilities;
   /** whether the format preserves timed pronunciation tracks. */
   pronunciation: boolean;
+  /** per-language translation and pronunciation metadata preserved by the writer. */
+  trackMetadata: TrackMetadataCapabilities;
   /** whether the format preserves translated text. */
   translation: boolean;
   /** whether the format preserves individual word or syllable timing. */

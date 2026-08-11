@@ -11,6 +11,10 @@ export const capabilities = {
     title: false,
   },
   pronunciation: true,
+  trackMetadata: {
+    pronunciation: { automaticallyCreated: true },
+    translation: { automaticallyCreated: true, kind: true },
+  },
   translation: true,
   wordTiming: true,
 } satisfies FormatCapabilities;

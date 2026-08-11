@@ -1,6 +1,11 @@
 import { ParseError } from "../../errors";
 import type { XmlElement, XmlNode } from "../../internal/xml";
-import type { LyricsDocument, LyricsLine } from "../../types";
+import type {
+  LyricsDocument,
+  LyricsLine,
+  LyricsPronunciationTrack,
+  LyricsTranslationTrack,
+} from "../../types";
 import { checkTrack, readWords, splitRuns, untimed, unwrap } from "./lines";
 import {
   attr,
@@ -178,8 +183,6 @@ function readCreated(track: XmlElement) {
 function addTranslation(
   textLine: XmlElement,
   language: string,
-  kind: "subtitle" | "replacement",
-  automaticallyCreated: boolean | undefined,
   lineById: Map<string, LyricsLine>
 ) {
   if (!is(textLine, "text", itunesUri)) {
@@ -207,9 +210,7 @@ function addTranslation(
   line.translations = {
     ...line.translations,
     [language]: {
-      ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       ...(backing === undefined ? {} : { b: backing }),
-      kind,
       p: untimed(runs.primary, line.agent),
     },
   };
@@ -221,6 +222,7 @@ export function readTranslations(
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
   const kinds = new Map<string, "subtitle" | "replacement">();
+  const tracks: Record<string, LyricsTranslationTrack> = {};
   for (const container of containers) {
     checkAttrs(container, []);
     for (const translation of elements(container)) {
@@ -246,17 +248,16 @@ export function readTranslations(
       }
       kinds.set(language, kind);
       const automaticallyCreated = readCreated(translation);
+      tracks[language] = {
+        ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
+        kind,
+      };
       for (const textLine of elements(translation)) {
-        addTranslation(
-          textLine,
-          language,
-          kind,
-          automaticallyCreated,
-          lineById
-        );
+        addTranslation(textLine, language, lineById);
       }
     }
   }
+  return tracks;
 }
 
 function readPronTrack(
@@ -284,7 +285,6 @@ function addPron(
   textLine: XmlElement,
   language: string,
   trackIndex: number,
-  automaticallyCreated: boolean | undefined,
   lineById: Map<string, LyricsLine>,
   offset: number
 ) {
@@ -303,7 +303,6 @@ function addPron(
   line.pronunciations = {
     ...line.pronunciations,
     [language]: {
-      ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       b:
         runs.backing === null
           ? []
@@ -326,6 +325,7 @@ export function readProns(
   offset: number
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
+  const tracks: Record<string, LyricsPronunciationTrack> = {};
   let trackIndex = 0;
   for (const container of containers) {
     checkAttrs(container, []);
@@ -341,17 +341,14 @@ export function readProns(
       ]);
       const language = locale(transliteration);
       const automaticallyCreated = readCreated(transliteration);
+      tracks[language] = {
+        ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
+      };
       for (const textLine of elements(transliteration)) {
-        addPron(
-          textLine,
-          language,
-          trackIndex,
-          automaticallyCreated,
-          lineById,
-          offset
-        );
+        addPron(textLine, language, trackIndex, lineById, offset);
       }
       trackIndex += 1;
     }
   }
+  return tracks;
 }

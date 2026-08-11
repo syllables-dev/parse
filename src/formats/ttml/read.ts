@@ -57,15 +57,19 @@ export function read(
     head.agents,
     offset
   );
-  readTranslations(head.translations, lines);
-  readProns(head.transliterations, lines, offset);
+  const translationTracks = readTranslations(head.translations, lines);
+  const pronunciationTracks = readProns(head.transliterations, lines, offset);
   return {
     agents: head.agents,
     lines,
     meta: {
       ...(head.songwriters.length > 0 && { songwriters: head.songwriters }),
     },
+    ...(Object.keys(pronunciationTracks).length > 0 && {
+      pronunciationTracks,
+    }),
     timing,
+    ...(Object.keys(translationTracks).length > 0 && { translationTracks }),
     version: 1,
   };
 }

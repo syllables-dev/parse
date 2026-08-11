@@ -285,6 +285,11 @@ function readLine(
     id,
     p: readTrack(runs.primary, line, timing, offset, `${id}w`),
   };
+  if (lyricLine.p.length === 0 && lyricLine.b.length > 0) {
+    throw new ParseError(
+      `ttml backing track requires primary text on line ${id}`
+    );
+  }
   checkTrack(lyricLine.p, lyricLine);
   checkTrack(lyricLine.b, lyricLine);
   return lyricLine;

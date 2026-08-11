@@ -53,6 +53,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  trackMetadata: {
+    pronunciation: { automaticallyCreated: false },
+    translation: { automaticallyCreated: false, kind: false },
+  },
   translation: true,
   wordTiming: true,
 } satisfies FormatCapabilities;
@@ -227,7 +231,6 @@ function addTranslation(
     target.line.translations = {
       ...target.line.translations,
       [language]: {
-        kind: "subtitle",
         p: existing === undefined ? "" : existing.p,
         ...(existing?.b !== undefined && { b: existing.b }),
         ...(target.track === "p"
@@ -286,7 +289,19 @@ function readTracks(
       addTranslation(section, targets, assigned);
     }
   }
-  return doc;
+  const languages = [
+    ...new Set(
+      doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
+    ),
+  ];
+  return {
+    ...doc,
+    ...(languages.length > 0 && {
+      translationTracks: Object.fromEntries(
+        languages.map((language) => [language, { kind: "subtitle" }])
+      ),
+    }),
+  };
 }
 
 export function read(text: string, options: ReadOptions = {}): LyricsDocument {
@@ -378,30 +393,30 @@ function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
   };
 }
 
-export function write(
-  source: LyricsDocument,
-  options: WriteOptions = {}
-): string {
-  const doc = prepare(source, capabilities, "lqe", options);
+function checkDoc(doc: LyricsDocument) {
   checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
   if (
-    doc.lines.some((line) =>
-      Object.values(line.translations ?? {}).some(
-        (translation) => translation.kind === "replacement"
-      )
+    Object.values(doc.translationTracks ?? {}).some(
+      (track) => track.kind === "replacement"
     )
   ) {
     throw new Error("lqe cannot represent replacement translations");
   }
   if (
-    doc.lines.some((line) =>
-      Object.values(line.translations ?? {}).some(
-        (translation) => translation.automaticallyCreated !== undefined
-      )
+    Object.values(doc.translationTracks ?? {}).some(
+      (track) => track.automaticallyCreated !== undefined
     )
   ) {
     throw new Error("lqe cannot represent automaticallyCreated translations");
+  }
+  if (
+    Object.keys(doc.translationTracks ?? {}).some(
+      (language) =>
+        !doc.lines.some((line) => line.translations?.[language] !== undefined)
+    )
+  ) {
+    throw new Error("lqe cannot represent an empty translation track");
   }
   for (const line of doc.lines) {
     for (const syllable of [...line.p, ...line.b]) {
@@ -413,12 +428,18 @@ export function write(
         checkText(translation.b, "lqe", lrcReservedStamp);
       }
     }
-  }
-  for (const line of doc.lines) {
     if (line.p.length === 0 && line.b.length > 0) {
       throw new Error(`lqe cannot preserve backing-only line ${line.id}`);
     }
   }
+}
+
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "lqe", options);
+  checkDoc(doc);
   const sections = [
     containerMark,
     "[version:1.0]",

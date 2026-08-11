@@ -28,4 +28,6 @@ Writes and conversions are strict by default. `losses(doc, format)` lists unsupp
 
 Agent capabilities are `false`, `alignment`, or `identity`; `alignment` preserves duet-side attribution and may canonicalize IDs and types, and `identity` preserves opaque IDs and types.
 
-Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Readers apply source offsets to document timestamps.
+Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Track metadata capabilities cover `translation.automaticallyCreated`, `translation.kind`, and `pronunciation.automaticallyCreated`.
+
+Line `translations` and `pronunciations` hold each language's lyric rows. Document-level `translationTracks` maps languages to `{ automaticallyCreated?, kind? }`; `pronunciationTracks` maps languages to `{ automaticallyCreated? }`. Readers apply source offsets to document timestamps.

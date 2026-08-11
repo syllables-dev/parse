@@ -49,6 +49,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  trackMetadata: {
+    pronunciation: { automaticallyCreated: false },
+    translation: { automaticallyCreated: false, kind: false },
+  },
   translation: false,
   wordTiming: false,
 } satisfies FormatCapabilities;
