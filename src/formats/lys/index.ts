@@ -43,7 +43,7 @@ const leftAgentId = "lys-left";
 const rightAgentId = "lys-right";
 
 export const capabilities = {
-  agents: true,
+  agents: "alignment",
   backing: true,
   metadata: {
     album: true,

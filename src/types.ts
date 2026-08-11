@@ -165,8 +165,11 @@ export interface MetadataCapabilities {
  * the lyric features a format can preserve when writing.
  */
 export interface FormatCapabilities {
-  /** whether the format preserves vocal agent attribution. */
-  agents: boolean;
+  /**
+   * agent capability tier. `identity` preserves opaque ids and types.
+   * `alignment` preserves duet-side attribution and may canonicalize ids and types.
+   */
+  agents: false | "alignment" | "identity";
   /** whether the format preserves a separate backing-vocal track. */
   backing: boolean;
   /** metadata fields preserved by the format writer. */

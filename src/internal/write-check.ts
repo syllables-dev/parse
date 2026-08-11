@@ -57,7 +57,7 @@ export function checkWrite(
     throw new Error(`${format} cannot represent word timing`);
   }
   if (
-    !capabilities.agents &&
+    capabilities.agents === false &&
     (doc.agents.length > 0 || doc.lines.some((line) => line.agent !== null))
   ) {
     throw new Error(`${format} cannot represent vocal agents`);

@@ -12,7 +12,7 @@ export { read } from "./read";
 export { write } from "./write";
 
 export const capabilities = {
-  agents: true,
+  agents: "identity",
   backing: true,
   metadata: {
     album: false,

@@ -42,7 +42,7 @@ const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
 const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
 
 export const capabilities = {
-  agents: true,
+  agents: "alignment",
   backing: true,
   metadata: {
     album: true,
