@@ -57,9 +57,7 @@ describe("validate", () => {
       { code: "syllable-outside-line", id: "outside" },
       { code: "syllable-out-of-order", id: "reversed" },
       { code: "syllable-invalid-range", id: "reversed" },
-      { code: "syllable-zero-length", id: "zero" },
       { code: "line-invalid-range", id: "line-range" },
-      { code: "syllable-zero-length", id: "line-rangew0" },
     ]);
   });
 
@@ -84,7 +82,6 @@ describe("validate", () => {
 
     expect(validate(doc).map(({ code, id }) => ({ code, id }))).toEqual([
       { code: "syllable-out-of-order", id: "backing-early" },
-      { code: "syllable-zero-length", id: "backing-early" },
     ]);
   });
 

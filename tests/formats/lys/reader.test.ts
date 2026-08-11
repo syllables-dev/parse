@@ -85,6 +85,14 @@ describe("lys reader", () => {
     ]);
   });
 
+  test("folds a zero-duration token with real lyric text into its left neighbor", () => {
+    const doc = read("[4]Hello(120,1250)there(1370,0)");
+
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 120, end: 1370, id: "l0w0", text: "Hellothere" },
+    ]);
+  });
+
   test("rejects a leading zero-time separator", () => {
     expect(() => read("[4],(0,0)One(1000,500)")).toThrow(
       "lys line 1 begins with a zero-time separator"

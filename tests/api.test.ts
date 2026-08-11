@@ -1044,19 +1044,23 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test("keeps an empty lrc line as a positional placeholder without loss", () => {
-    const doc = read("[00:01.000]Hello", "lrc");
-    const [line] = doc.lines;
-    if (line === undefined) {
-      throw new Error("lrc source must produce one line");
+  test("drops an empty lrc line rather than keeping a placeholder", () => {
+    const doc = read("[00:01.000]One\n[00:02.000]Two", "lrc");
+    const [firstLine, secondLine] = doc.lines;
+    if (!(firstLine && secondLine)) {
+      throw new Error("lrc source must produce two lines");
     }
-    doc.lines[0] = { ...line, p: [] };
+    doc.lines[0] = { ...firstLine, end: 2000, p: [] };
     const before = structuredClone(doc);
 
     expect(losses(doc, "lrc")).toEqual([]);
-    expect(read(write(doc, "lrc"), "lrc").lines[0]?.p).toEqual([
-      { begin: 1000, end: 6000, id: "l0w0", text: "" },
-    ]);
+    expect(
+      read(write(doc, "lrc"), "lrc").lines.map((line) => [
+        line.begin,
+        line.end,
+        line.p.map((syllable) => syllable.text),
+      ])
+    ).toEqual([[2000, 7000, ["Two"]]]);
     expect(doc).toEqual(before);
   });
 

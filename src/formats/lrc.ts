@@ -19,7 +19,12 @@ import {
   splitLines,
   writeStamp,
 } from "../internal/timestamps";
-import { checkLines, checkText, checkWrite } from "../internal/write-check";
+import {
+  checkLines,
+  checkText,
+  checkWrite,
+  hasLyricText,
+} from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -201,11 +206,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-export function write(
-  source: LyricsDocument,
-  options: WriteOptions = {}
-): string {
-  const doc = prepare(source, capabilities, "lrc", options);
+function serialize(doc: LyricsDocument): string {
   checkLines(doc, "lrc");
   checkWrite(doc, "lrc", capabilities);
   for (const [lineIndex, line] of doc.lines.entries()) {
@@ -241,4 +242,24 @@ export function write(
           .join("")}`
     ),
   ].join("\n");
+}
+
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const prepared = prepare(source, capabilities, "lrc", options);
+  return serialize({
+    ...prepared,
+    lines: prepared.lines.filter(hasLyricText),
+  });
+}
+
+/**
+ * writes LQE's positionally-aligned LRC translation rows.
+ * unlike {@link write}, empty rows are kept so each row still lines up with
+ * its LYS lyric line.
+ */
+export function writeAlignedRows(doc: LyricsDocument): string {
+  return serialize(doc);
 }

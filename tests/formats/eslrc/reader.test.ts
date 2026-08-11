@@ -26,14 +26,23 @@ describe("eslrc reader", () => {
     ]);
   });
 
-  test("preserves empty and whitespace-only lyric lines", () => {
-    const doc = read("[00:01.000][00:02.000]\n[00:03.000]   [00:04.000]");
+  test("reads empty and whitespace-only lyric lines, but drops them on write", () => {
+    const doc = read(
+      "[00:01.000][00:02.000]\n[00:03.000]   [00:04.000]\n[00:05.000]Real[00:06.000]"
+    );
 
     expect(doc.lines.map((line) => line.p)).toEqual([
       [{ begin: 1000, end: 2000, id: "l0w0", text: "" }],
       [{ begin: 3000, end: 4000, id: "l1w0", text: "   " }],
+      [{ begin: 5000, end: 6000, id: "l2w0", text: "Real" }],
     ]);
-    expect(read(write(doc))).toEqual(doc);
+    expect(
+      read(write(doc)).lines.map((line) => [
+        line.begin,
+        line.end,
+        line.p.map((syllable) => syllable.text),
+      ])
+    ).toEqual([[5000, 6000, ["Real"]]]);
   });
 
   test("reads metadata and consumes a negative offset", () => {

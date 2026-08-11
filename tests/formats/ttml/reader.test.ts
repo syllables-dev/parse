@@ -356,9 +356,7 @@ describe("ttml reader", () => {
       id: "l4w2",
       text: "了 ",
     });
-    expect(validate(qrc)).not.toContainEqual(
-      expect.objectContaining({ code: "syllable-zero-length" })
-    );
+    expect(validate(qrc)).toEqual([]);
     expect(ttml).toContain('<span begin="0:13.843" end="0:14.227">了 </span>');
     expect(ttml).not.toContain('end="0:14.227"> </span>');
     expect(roundTripped.lines).toEqual(qrc.lines);

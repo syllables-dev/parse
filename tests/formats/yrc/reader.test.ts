@@ -157,16 +157,15 @@ describe("yrc reader", () => {
     ]);
   });
 
-  test("keeps a zero-duration token with real lyric text unmerged", () => {
+  test("folds a zero-duration token with real lyric text into its left neighbor", () => {
     const doc = read(
       "[1000,1300](1000,400,0)Hel(1400,400,0)lo(1800,0,0)zap(1800,500,0)world"
     );
 
     expect(doc.lines[0]?.p).toEqual([
       { begin: 1000, end: 1400, id: "l0w0", text: "Hel" },
-      { begin: 1400, end: 1800, id: "l0w1", text: "lo" },
-      { begin: 1800, end: 1800, id: "l0w2", text: "zap" },
-      { begin: 1800, end: 2300, id: "l0w3", text: "world" },
+      { begin: 1400, end: 1800, id: "l0w1", text: "lozap" },
+      { begin: 1800, end: 2300, id: "l0w2", text: "world" },
     ]);
   });
 

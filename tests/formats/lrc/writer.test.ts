@@ -135,13 +135,35 @@ describe("lrc writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("keeps an empty line as a positional placeholder", () => {
-    const doc = { ...lineDocument, lines: [{ ...lyricLine, p: [] }] };
+  test("drops a line with no lyric text instead of keeping a placeholder", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        {
+          ...lyricLine,
+          begin: 1000,
+          end: 3000,
+          id: "one",
+          p: [{ begin: 1000, end: 3000, id: "onew0", text: "One" }],
+        },
+        {
+          ...lyricLine,
+          begin: 2000,
+          end: 3000,
+          id: "empty",
+          p: [{ begin: 2000, end: 3000, id: "emptyw0", text: "" }],
+        },
+        {
+          ...lyricLine,
+          begin: 3000,
+          end: 8000,
+          id: "three",
+          p: [{ begin: 3000, end: 8000, id: "threew0", text: "Three" }],
+        },
+      ],
+    } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe("[by:]\n[00:01.000]");
-    expect(read(write(doc))).toMatchObject({
-      lines: [{ p: [{ text: "" }] }],
-    });
+    expect(write(doc)).toBe("[by:]\n[00:01.000]One\n[00:03.000]Three");
   });
 
   test.each([

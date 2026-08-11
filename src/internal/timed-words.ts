@@ -10,7 +10,6 @@ export interface TimedWord {
 const suffixStamp = /\((\d+),(\d+)\)/gu;
 const yrcStamp = /\((\d+),(\d+),(-?\d+)\)/gu;
 const whitespace = /^\s+$/u;
-const spacerText = /^[\p{White_Space}\p{P}]+$/u;
 
 export function readTimedWords(
   body: string,
@@ -111,10 +110,9 @@ export function readYrcWords(
 }
 
 /**
- * bad TTML-to-X converters emit a zero-length spacer token to represent a
- * space between words (lys `(0,0)`, qrc/yrc a marker where begin === end).
- * `isSpacer` tells this apart from a legitimate zero-duration lyric token by
- * checking timing; text is always checked against punctuation/whitespace.
+ * a zero-duration token is never meaningful on its own (lys `(0,0)`, qrc/yrc
+ * a marker where begin === end); it always folds into the syllable to its
+ * left, regardless of what text it carries.
  */
 export function foldSpacers(
   words: TimedWord[],
@@ -124,7 +122,7 @@ export function foldSpacers(
 ): TimedWord[] {
   const syllables: TimedWord[] = [];
   for (const word of words) {
-    if (isSpacer(word) && spacerText.test(word.text)) {
+    if (isSpacer(word)) {
       const previous = syllables.at(-1);
       if (!previous) {
         throw new ParseError(

@@ -15,7 +15,12 @@ import {
   splitLines,
   writeStamp,
 } from "../internal/timestamps";
-import { checkLines, checkText, checkWrite } from "../internal/write-check";
+import {
+  checkLines,
+  checkText,
+  checkWrite,
+  hasLyricText,
+} from "../internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -194,7 +199,8 @@ export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "eslrc", options);
+  const prepared = prepare(source, capabilities, "eslrc", options);
+  const doc = { ...prepared, lines: prepared.lines.filter(hasLyricText) };
   checkLines(doc, "eslrc");
   checkWrite(doc, "eslrc", capabilities);
   checkMetaText(doc.meta, "eslrc");

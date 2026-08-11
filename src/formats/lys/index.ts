@@ -116,7 +116,7 @@ function readRow(
     readTimedWords(body, lineIndex + 1, 0, 0),
     "lys",
     lineIndex + 1,
-    (word) => word.begin === 0 && word.end === 0
+    (word) => word.begin === word.end
   );
   if (words.length === 0) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);

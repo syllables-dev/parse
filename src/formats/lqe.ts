@@ -10,7 +10,7 @@ import type {
   ReadOptions,
   WriteOptions,
 } from "../types";
-import { read as readLrc, write as writeLrc } from "./lrc";
+import { read as readLrc, writeAlignedRows } from "./lrc";
 import { read as readLys, write as writeLys } from "./lys";
 
 type SectionKind = "lyrics" | "pronunciation" | "translation";
@@ -458,7 +458,10 @@ export function write(
       `[translation: ${
         language === "und" ? "" : `language@${language}, `
       }format@LRC]`,
-      writeLrc(translationDoc(doc, language)).split("\n").slice(1).join("\n")
+      writeAlignedRows(translationDoc(doc, language))
+        .split("\n")
+        .slice(1)
+        .join("\n")
     );
   }
   return sections.join("\n");

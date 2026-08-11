@@ -15,7 +15,6 @@ export type ProblemCode =
   | "syllable-out-of-order"
   | "syllable-invalid-time"
   | "syllable-invalid-range"
-  | "syllable-zero-length"
   | "syllable-outside-line";
 
 /**
