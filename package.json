@@ -41,9 +41,10 @@
   },
   "files": ["dist", "LICENSE", "README.md"],
   "scripts": {
-    "build": "bun build src/index.ts src/formats/ttml/index.ts src/formats/lrc.ts src/formats/eslrc.ts src/formats/qrc.ts src/formats/yrc.ts src/formats/lys/index.ts src/formats/lqe.ts --outdir dist --target browser --format esm --minify && tsgo -p tsconfig.build.json",
+    "build": "bun scripts/build.ts",
     "check": "ultracite check",
     "fix": "ultracite fix",
+    "test": "bun test",
     "tsgo": "tsgo --noEmit"
   },
   "peerDependencies": {

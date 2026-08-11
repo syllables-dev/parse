@@ -9,5 +9,8 @@
       "!tests/fixtures"
     ]
   },
-  "extends": ["ultracite/biome/core"]
+  "extends": ["ultracite/biome/core"],
+  "javascript": {
+    "globals": ["Bun"]
+  }
 }
