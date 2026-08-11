@@ -6,6 +6,7 @@ import {
   type LyricsLine,
   ParseError,
   read as readLyrics,
+  validate,
   write as writeLyrics,
 } from "../../src";
 import { read, write } from "../../src/formats/ttml";
@@ -496,6 +497,32 @@ describe("ttml reader", () => {
     });
   });
 
+  test("preserves QRC instant punctuation through Apple TTML", async () => {
+    const qrc = readLyrics(
+      await openFile(
+        new URL("../fixtures/qrc/cjk-per-char.qrc", import.meta.url)
+      ).text(),
+      "qrc"
+    );
+    const [, , , , sourceLine] = qrc.lines;
+    const ttml = writeLyrics(qrc, "ttml", { lossy: true });
+    const roundTripped = readLyrics(ttml, "ttml");
+
+    expect(sourceLine?.p).toContainEqual({
+      begin: 14_227,
+      end: 14_227,
+      id: "l4w3",
+      text: " ",
+    });
+    expect(validate(qrc)).toContainEqual({
+      code: "syllable-zero-length",
+      id: "l4w3",
+      message: "syllable has zero duration",
+    });
+    expect(ttml).toContain('<span begin="0:14.227" end="0:14.227"> </span>');
+    expect(roundTripped.lines).toEqual(qrc.lines);
+  });
+
   test.each([
     {
       attribute: ' automaticallyCreated="true"',
@@ -638,9 +665,6 @@ describe("ttml reader", () => {
   test.each([
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="2.000" end="1.000"><span begin="1.000" end="2.000">Text</span></p></div>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.500" end="1.500">Text</span></p></div>'
     ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="0.500" end="1.500">Text</span></p></div>'
@@ -1028,7 +1052,7 @@ describe("ttml writer", () => {
         lines: [
           {
             ...lyricLine,
-            p: [{ begin: 1500, end: 1500, id: "empty", text: "Text" }],
+            p: [{ begin: 1500, end: 1400, id: "reversed", text: "Text" }],
           },
         ],
       })
