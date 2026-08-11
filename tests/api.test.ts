@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import type { FormatId, LyricsDocument } from "../src";
+import { write as writeTtml } from "@/formats/ttml";
+import type { FormatId, LyricsDocument } from "@/index";
 import {
   capabilities,
   convert,
@@ -10,8 +11,7 @@ import {
   parse,
   read,
   write,
-} from "../src";
-import { write as writeTtml } from "../src/formats/ttml";
+} from "@/index";
 
 const fixtureCases = [
   ["eslrc/cjk-trailing-stamp.eslrc", "eslrc"],

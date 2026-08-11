@@ -1,40 +1,40 @@
-import { ParseError } from "./errors";
+import { ParseError } from "@/errors";
 import {
   capabilities as eslrcCapabilities,
   read as readEslrc,
   write as writeEslrc,
-} from "./formats/eslrc";
+} from "@/formats/eslrc";
 import {
   capabilities as lqeCapabilities,
   read as readLqe,
   write as writeLqe,
-} from "./formats/lqe";
+} from "@/formats/lqe";
 import {
   capabilities as lrcCapabilities,
   read as readLrc,
   write as writeLrc,
-} from "./formats/lrc";
+} from "@/formats/lrc";
 import {
   capabilities as lysCapabilities,
   read as readLys,
   write as writeLys,
-} from "./formats/lys";
+} from "@/formats/lys";
 import {
   capabilities as qrcCapabilities,
   read as readQrc,
   write as writeQrc,
-} from "./formats/qrc";
+} from "@/formats/qrc";
 import {
   read as readTtml,
   capabilities as ttmlCapabilities,
   write as writeTtml,
-} from "./formats/ttml";
+} from "@/formats/ttml";
 import {
   read as readYrc,
   write as writeYrc,
   capabilities as yrcCapabilities,
-} from "./formats/yrc";
-import { losses as findLosses } from "./internal/projections";
+} from "@/formats/yrc";
+import { losses as findLosses } from "@/internal/projections";
 import type {
   ConversionLoss,
   ConvertOptions,
@@ -44,7 +44,7 @@ import type {
   ParseResult,
   ReadOptions,
   WriteOptions,
-} from "./types";
+} from "@/types";
 
 const codecs = {
   eslrc: {

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { read, write } from "@/formats/ttml";
 import {
   createDocument,
   type LyricsDocument,
   type LyricsLine,
   read as readLyrics,
   write as writeLyrics,
-} from "../../../src";
-import { read, write } from "../../../src/formats/ttml";
+} from "@/index";
 
 const lyricLine = {
   agent: "lead",

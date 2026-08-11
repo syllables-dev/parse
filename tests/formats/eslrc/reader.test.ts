@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ParseError } from "../../../src";
-import { read, write } from "../../../src/formats/eslrc";
+import { read, write } from "@/formats/eslrc";
+import { ParseError } from "@/index";
 
 describe("eslrc reader", () => {
   test("accepts a BOM and CRLF endings", () => {

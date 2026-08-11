@@ -1,4 +1,4 @@
-import { ParseError } from "../errors";
+import { ParseError } from "@/errors";
 
 export interface XmlAttr {
   local: string;

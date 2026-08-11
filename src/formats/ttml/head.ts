@@ -1,17 +1,11 @@
-import { ParseError } from "../../errors";
-import type { XmlElement, XmlNode } from "../../internal/xml";
-import type {
-  AppleLyrics,
-  LyricsDocument,
-  LyricsElementAttributes,
-  LyricsLine,
-  LyricsPronunciation,
-  LyricsPronunciationReference,
-  LyricsPronunciationTrack,
-  LyricsTranslationTrack,
-  Syllable,
-} from "../../types";
-import { checkTrack, readWords, splitRuns, untimed, unwrap } from "./lines";
+import { ParseError } from "@/errors";
+import {
+  checkTrack,
+  readWords,
+  splitRuns,
+  untimed,
+  unwrap,
+} from "@/formats/ttml/lines";
 import {
   attr,
   checkAttrs,
@@ -28,7 +22,19 @@ import {
   ttmlUri,
   ttmUri,
   xmlUri,
-} from "./profile";
+} from "@/formats/ttml/profile";
+import type { XmlElement, XmlNode } from "@/internal/xml";
+import type {
+  AppleLyrics,
+  LyricsDocument,
+  LyricsElementAttributes,
+  LyricsLine,
+  LyricsPronunciation,
+  LyricsPronunciationReference,
+  LyricsPronunciationTrack,
+  LyricsTranslationTrack,
+  Syllable,
+} from "@/types";
 
 export interface TtmlHead {
   agents: LyricsDocument["agents"];

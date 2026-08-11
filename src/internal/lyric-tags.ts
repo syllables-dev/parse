@@ -1,4 +1,4 @@
-import type { FormatId, LyricsMeta } from "../types";
+import type { FormatId, LyricsMeta } from "@/types";
 
 const lyricTag = /^\[([A-Za-z]+):(.*)\]$/u;
 const lineBreak = /[\r\n]/u;

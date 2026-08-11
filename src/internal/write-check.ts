@@ -1,10 +1,10 @@
+import { checkTime } from "@/internal/timestamps";
 import type {
   FormatCapabilities,
   FormatId,
   LyricsDocument,
   LyricsLine,
-} from "../types";
-import { checkTime } from "./timestamps";
+} from "@/types";
 
 const lineBreak = /[\r\n]/u;
 

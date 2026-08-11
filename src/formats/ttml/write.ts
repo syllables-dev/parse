@@ -1,16 +1,4 @@
-import { prepare } from "../../internal/projections";
-import { checkTime } from "../../internal/timestamps";
-import { hasLyricText } from "../../internal/write-check";
-import type {
-  LyricsDocument,
-  LyricsElementAttributes,
-  LyricsLine,
-  LyricsPronunciation,
-  LyricsTranslation,
-  Syllable,
-  WriteOptions,
-} from "../../types";
-import { capabilities } from "./capabilities";
+import { capabilities } from "@/formats/ttml/capabilities";
 import {
   escapeAttr,
   escapeText,
@@ -19,7 +7,19 @@ import {
   ttmUri,
   validLanguage,
   writeTime,
-} from "./profile";
+} from "@/formats/ttml/profile";
+import { prepare } from "@/internal/projections";
+import { checkTime } from "@/internal/timestamps";
+import { hasLyricText } from "@/internal/write-check";
+import type {
+  LyricsDocument,
+  LyricsElementAttributes,
+  LyricsLine,
+  LyricsPronunciation,
+  LyricsTranslation,
+  Syllable,
+  WriteOptions,
+} from "@/types";
 
 function checkTrack(
   syllables: Syllable[],

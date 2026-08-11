@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsDocument } from "../src";
-import { ParseError, read, write } from "../src";
+import type { LyricsDocument } from "@/index";
+import { ParseError, read, write } from "@/index";
 
 function prefixedTtml(lyricMarkup: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>

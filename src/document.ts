@@ -1,4 +1,4 @@
-import type { LyricsDocument } from "./types";
+import type { LyricsDocument } from "@/types";
 
 /**
  * creates an empty, editable lyric document using the current schema version.

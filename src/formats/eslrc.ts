@@ -5,28 +5,28 @@
  * [00:00.000]Hel[00:00.500]lo[00:01.000]
  */
 
-import { ParseError } from "../errors";
-import { checkMetaText, readTag } from "../internal/lyric-tags";
-import { prepare } from "../internal/projections";
+import { ParseError } from "@/errors";
+import { checkMetaText, readTag } from "@/internal/lyric-tags";
+import { prepare } from "@/internal/projections";
 import {
   readOffset,
   readStamp,
   shiftTimes,
   splitLines,
   writeStamp,
-} from "../internal/timestamps";
+} from "@/internal/timestamps";
 import {
   checkLines,
   checkText,
   checkWrite,
   hasLyricText,
-} from "../internal/write-check";
+} from "@/internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
   ReadOptions,
   WriteOptions,
-} from "../types";
+} from "@/types";
 
 interface EslrcMarker {
   begin: number;

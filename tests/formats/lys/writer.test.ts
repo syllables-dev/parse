@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsDocument, LyricsLine } from "../../../src";
-import { read, write } from "../../../src/formats/lys";
+import { read, write } from "@/formats/lys";
+import type { LyricsDocument, LyricsLine } from "@/index";
 import { makeLine } from "./shared";
 
 const lyricLine = {

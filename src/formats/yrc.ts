@@ -5,33 +5,33 @@
  * [12000,3320](12000,400,0)Hel(12400,300,0)lo (12700,600,0)world
  */
 
-import { ParseError } from "../errors";
-import { checkMetaText, readTag } from "../internal/lyric-tags";
-import { prepare } from "../internal/projections";
+import { ParseError } from "@/errors";
+import { checkMetaText, readTag } from "@/internal/lyric-tags";
+import { prepare } from "@/internal/projections";
 import {
   foldSpacers,
   readYrcWords,
   type TimedWord,
-} from "../internal/timed-words";
+} from "@/internal/timed-words";
 import {
   checkTime,
   readOffset,
   shiftTimes,
   splitLines,
   toInt,
-} from "../internal/timestamps";
+} from "@/internal/timestamps";
 import {
   checkLines,
   checkText,
   checkWrite,
   hasLyricText,
-} from "../internal/write-check";
+} from "@/internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
   ReadOptions,
   WriteOptions,
-} from "../types";
+} from "@/types";
 
 interface YrcRow {
   begin: number;

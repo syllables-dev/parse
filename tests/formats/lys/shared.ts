@@ -1,4 +1,4 @@
-import type { LyricsLine } from "../../../src";
+import type { LyricsLine } from "@/index";
 
 export function makeLine(
   id: string,

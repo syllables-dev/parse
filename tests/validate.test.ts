@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsLine } from "../src";
-import { createDocument, validate } from "../src";
+import type { LyricsLine } from "@/index";
+import { createDocument, validate } from "@/index";
 
 function timedLine(
   id: string,

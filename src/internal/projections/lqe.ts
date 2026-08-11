@@ -1,12 +1,12 @@
+import { projectedLine } from "@/internal/projections/line";
+import { projectedLysLines } from "@/internal/projections/lys";
 import type {
   FormatCapabilities,
   FormatId,
   LyricsDocument,
   LyricsLine,
   LyricsTranslationTrack,
-} from "../../types";
-import { projectedLine } from "./line";
-import { projectedLysLines } from "./lys";
+} from "@/types";
 
 function lqeTranslationMetadataLoss(metadata: {
   automaticallyCreated?: boolean;

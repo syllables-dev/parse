@@ -5,27 +5,27 @@
  * [12000,3320]Hel(12000,400)lo (12400,300)world(12700,600)
  */
 
-import { ParseError } from "../errors";
-import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare, qrcTextLosses } from "../internal/projections";
+import { ParseError } from "@/errors";
+import { readTag, writeTags } from "@/internal/lyric-tags";
+import { prepare, qrcTextLosses } from "@/internal/projections";
 import {
   foldSpacers,
   readTimedWords,
   type TimedWord,
-} from "../internal/timed-words";
+} from "@/internal/timed-words";
 import {
   checkTime,
   readOffset,
   shiftTimes,
   splitLines,
   toInt,
-} from "../internal/timestamps";
+} from "@/internal/timestamps";
 import {
   checkLines,
   checkText,
   checkWrite,
   hasLyricText,
-} from "../internal/write-check";
+} from "@/internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
@@ -33,7 +33,7 @@ import type {
   ReadOptions,
   Syllable,
   WriteOptions,
-} from "../types";
+} from "@/types";
 
 interface QrcRow {
   begin: number;

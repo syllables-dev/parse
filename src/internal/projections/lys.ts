@@ -1,9 +1,4 @@
-import type {
-  FormatId,
-  LyricsDocument,
-  LyricsLine,
-  Syllable,
-} from "../../types";
+import type { FormatId, LyricsDocument, LyricsLine, Syllable } from "@/types";
 
 function hasPrimary(
   line: LyricsLine

@@ -1,4 +1,4 @@
-import type { FormatCapabilities } from "../../types";
+import type { FormatCapabilities } from "@/types";
 
 export const capabilities = {
   agents: "identity",

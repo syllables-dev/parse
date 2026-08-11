@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsDocument, LyricsLine } from "../../../src";
-import { read, write } from "../../../src/formats/eslrc";
+import { read, write } from "@/formats/eslrc";
+import type { LyricsDocument, LyricsLine } from "@/index";
 
 const lyricLine = {
   agent: null,

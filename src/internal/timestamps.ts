@@ -1,5 +1,5 @@
-import { ParseError } from "../errors";
-import type { FormatId, LyricsDocument, Syllable } from "../types";
+import { ParseError } from "@/errors";
+import type { FormatId, LyricsDocument, Syllable } from "@/types";
 
 const lineBreak = /\r\n|\n|\r/u;
 const digits = /^\d+$/u;

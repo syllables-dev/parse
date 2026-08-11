@@ -1,11 +1,4 @@
-import { ParseError } from "../../errors";
-import type { XmlElement, XmlNode } from "../../internal/xml";
-import type {
-  LyricsDocument,
-  LyricsLine,
-  LyricsSection,
-  Syllable,
-} from "../../types";
+import { ParseError } from "@/errors";
 import {
   attr,
   checkAttrs,
@@ -18,7 +11,14 @@ import {
   readTime,
   ttmlUri,
   ttmUri,
-} from "./profile";
+} from "@/formats/ttml/profile";
+import type { XmlElement, XmlNode } from "@/internal/xml";
+import type {
+  LyricsDocument,
+  LyricsLine,
+  LyricsSection,
+  Syllable,
+} from "@/types";
 
 interface Runs {
   backing: BackingRun | null;

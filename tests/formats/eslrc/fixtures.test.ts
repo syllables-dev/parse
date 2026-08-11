@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import { read, write } from "../../../src/formats/eslrc";
+import { read, write } from "@/formats/eslrc";
 
 describe("eslrc fixture", () => {
   test("reads concrete trailing stamps and round-trips them", async () => {

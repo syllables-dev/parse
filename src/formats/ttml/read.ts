@@ -1,12 +1,6 @@
-import { ParseError } from "../../errors";
-import { type XmlElement, XmlReader } from "../../internal/xml";
-import type {
-  LyricsDocument,
-  LyricsElementAttributes,
-  ReadOptions,
-} from "../../types";
-import { readHead, readProns, readTranslations } from "./head";
-import { readBody } from "./lines";
+import { ParseError } from "@/errors";
+import { readHead, readProns, readTranslations } from "@/formats/ttml/head";
+import { readBody } from "@/formats/ttml/lines";
 import {
   attr,
   checkAttrs,
@@ -20,7 +14,13 @@ import {
   ttmlUri,
   ttmUri,
   xmlUri,
-} from "./profile";
+} from "@/formats/ttml/profile";
+import { type XmlElement, XmlReader } from "@/internal/xml";
+import type {
+  LyricsDocument,
+  LyricsElementAttributes,
+  ReadOptions,
+} from "@/types";
 
 function readTiming(root: XmlElement): {
   language?: string;

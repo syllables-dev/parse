@@ -3,7 +3,7 @@ import type {
   FormatCapabilities,
   FormatId,
   LyricsMeta,
-} from "../../types";
+} from "@/types";
 
 const lineBreak = /\r|\n/u;
 const lineBreakRun = /[\r\n]+/gu;

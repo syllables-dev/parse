@@ -1,5 +1,5 @@
-import { ParseError } from "../errors";
-import { toInt } from "./timestamps";
+import { ParseError } from "@/errors";
+import { toInt } from "@/internal/timestamps";
 
 export interface TimedWord {
   begin: number;

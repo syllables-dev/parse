@@ -1,17 +1,17 @@
-import { ParseError } from "../errors";
-import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare } from "../internal/projections";
-import { readOffset, shiftTimes, splitLines } from "../internal/timestamps";
-import { checkLines, checkText, checkWrite } from "../internal/write-check";
+import { ParseError } from "@/errors";
+import { read as readLrc, writeAlignedRows } from "@/formats/lrc";
+import { read as readLys, write as writeLys } from "@/formats/lys";
+import { readTag, writeTags } from "@/internal/lyric-tags";
+import { prepare } from "@/internal/projections";
+import { readOffset, shiftTimes, splitLines } from "@/internal/timestamps";
+import { checkLines, checkText, checkWrite } from "@/internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
   LyricsLine,
   ReadOptions,
   WriteOptions,
-} from "../types";
-import { read as readLrc, writeAlignedRows } from "./lrc";
-import { read as readLys, write as writeLys } from "./lys";
+} from "@/types";
 
 type SectionKind = "lyrics" | "pronunciation" | "translation";
 

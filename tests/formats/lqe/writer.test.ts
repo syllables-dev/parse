@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsDocument, LyricsLine } from "../../../src";
-import { read, write } from "../../../src/formats/lqe";
+import { read, write } from "@/formats/lqe";
+import type { LyricsDocument, LyricsLine } from "@/index";
 import { containerMark } from "./shared";
 
 const translatedLine = {

@@ -9,28 +9,28 @@
  * [00:15.30][01:02.10]repeated chorus line
  */
 
-import { ParseError } from "../errors";
-import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare } from "../internal/projections";
+import { ParseError } from "@/errors";
+import { readTag, writeTags } from "@/internal/lyric-tags";
+import { prepare } from "@/internal/projections";
 import {
   readOffset,
   readStamp,
   shiftTimes,
   splitLines,
   writeStamp,
-} from "../internal/timestamps";
+} from "@/internal/timestamps";
 import {
   checkLines,
   checkText,
   checkWrite,
   hasLyricText,
-} from "../internal/write-check";
+} from "@/internal/write-check";
 import type {
   FormatCapabilities,
   LyricsDocument,
   ReadOptions,
   WriteOptions,
-} from "../types";
+} from "@/types";
 
 interface LrcRow {
   begin: number;

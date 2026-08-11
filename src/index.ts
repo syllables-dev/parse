@@ -7,9 +7,9 @@ export {
   parse,
   read,
   write,
-} from "./api";
-export { createDocument } from "./document";
-export { ParseError } from "./errors";
+} from "@/api";
+export { createDocument } from "@/document";
+export { ParseError } from "@/errors";
 export type {
   AppleLyrics,
   ConversionLoss,
@@ -37,5 +37,5 @@ export type {
   Syllable,
   SyllableContent,
   WriteOptions,
-} from "./types";
-export { validate } from "./validate";
+} from "@/types";
+export { validate } from "@/validate";

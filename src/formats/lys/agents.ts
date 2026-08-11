@@ -1,4 +1,4 @@
-import type { LyricsDocument, LyricsLine } from "../../types";
+import type { LyricsDocument, LyricsLine } from "@/types";
 
 export function* lysSideLines(
   doc: LyricsDocument

@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
+import { read, write } from "@/formats/ttml";
 import {
   ParseError,
   read as readLyrics,
   validate,
   write as writeLyrics,
-} from "../../../src";
-import { read, write } from "../../../src/formats/ttml";
+} from "@/index";
 
 const ttmlUri = "http://www.w3.org/ns/ttml";
 const ttmUri = "http://www.w3.org/ns/ttml#metadata";

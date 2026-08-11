@@ -1,6 +1,6 @@
-import { ParseError } from "../../errors";
-import { toInt } from "../../internal/timestamps";
-import type { XmlElement } from "../../internal/xml";
+import { ParseError } from "@/errors";
+import { toInt } from "@/internal/timestamps";
+import type { XmlElement } from "@/internal/xml";
 
 const xmlnsUri = "http://www.w3.org/2000/xmlns/";
 const clockPattern = /^(?:(\d+):)?(\d+)(?:\.(\d{1,3}))?$/u;

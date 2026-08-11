@@ -1,4 +1,4 @@
-import type { LyricsDocument, LyricsLine, Problem, Syllable } from "./types";
+import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
 function checkTrack(line: LyricsLine, syllables: Syllable[]): Problem[] {
   const problems: Problem[] = [];

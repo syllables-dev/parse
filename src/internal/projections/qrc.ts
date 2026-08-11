@@ -1,9 +1,5 @@
-import type {
-  FormatCapabilities,
-  LyricsDocument,
-  LyricsLine,
-} from "../../types";
-import { projectedLine } from "./line";
+import { projectedLine } from "@/internal/projections/line";
+import type { FormatCapabilities, LyricsDocument, LyricsLine } from "@/types";
 
 interface QrcProjectionRow {
   lineIndex: number;

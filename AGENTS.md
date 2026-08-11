@@ -24,6 +24,7 @@ Any-to-any conversion is `write(read(text))`; codecs never import each other, wi
 - Documents are plain JSON-serializable data: no classes, Maps, or Dates in the schema.
 - Zero runtime dependencies. Do not add any without explicit approval.
 - Named exports only. No `utils.ts`; shared code gets a descriptive name and lives in `src/internal/`.
+- Import through the `@/` alias, never `./` or `../`. `@/` maps to `src/`, so `@/internal/projections` and `@/types` work from any depth. The build rewrites the alias back to relative paths in the emitted declarations, so published consumers never see it. Test files importing a sibling helper under `tests/` stay relative, since `@/` only reaches `src/`.
 
 ## Coding style
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ParseError } from "../../../src";
-import { read, write } from "../../../src/formats/qrc";
+import { read, write } from "@/formats/qrc";
+import { ParseError } from "@/index";
 
 describe("qrc reader", () => {
   test("accepts a BOM and CRLF endings", () => {

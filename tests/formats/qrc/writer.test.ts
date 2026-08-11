@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { read, write } from "@/formats/qrc";
 import {
   losses as findLosses,
   type LyricsDocument,
   type LyricsLine,
   read as readLyrics,
   write as writeLyrics,
-} from "../../../src";
-import { read, write } from "../../../src/formats/qrc";
+} from "@/index";
 
 const lyricLine = {
   agent: null,

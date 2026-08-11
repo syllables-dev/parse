@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { ParseError } from "../../../src";
-import { read } from "../../../src/formats/lqe";
+import { read } from "@/formats/lqe";
+import { ParseError } from "@/index";
 import { containerMark } from "./shared";
 
 function makeLqe(...lines: string[]) {

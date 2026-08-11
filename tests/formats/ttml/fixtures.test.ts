@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import { read, write } from "../../../src/formats/ttml";
+import { read, write } from "@/formats/ttml";
 
 const fixtureCases = [
   {
