@@ -9,6 +9,7 @@ const { doc, format } = parse(source);
 const lrc = convert(source, "lrc");
 const ttml = write(doc, "ttml");
 const preservesWords = capabilities(format).wordTiming;
+const preservesTitle = capabilities(format).metadata.title;
 ```
 
 The root exports `detect`, `parse`, `read`, `write`, `convert`, `capabilities`, `validate`, `createDocument`, `ParseError`, and all public schema types. Detection reads content only and returns `null` for unrecognized text. Parsing and conversion throw `ParseError` when detection cannot identify a format.
@@ -20,3 +21,5 @@ import { read, write } from "@syllables-dev/parse/ttml";
 ```
 
 Documents and ids are deterministic for identical input. Readers and writers are pure and preserve features according to `capabilities(format)`.
+
+Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Readers apply source offsets to document timestamps.
