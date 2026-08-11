@@ -6,7 +6,6 @@ import type {
   LyricsLine,
   LyricsMeta,
   LyricsPronunciation,
-  LyricsTranslation,
   LyricsTranslationTrack,
   Syllable,
   WriteOptions,
@@ -291,9 +290,9 @@ function lineLosses(doc: LyricsDocument, format: FormatId) {
       return (
         (earlier !== undefined && line.begin <= earlier.begin) ||
         line.end !== end ||
-        line.p.length !== 1 ||
-        line.p[0]?.begin !== line.begin ||
-        line.p[0]?.end !== line.end
+        line.p.length > 1 ||
+        (line.p.length === 1 &&
+          (line.p[0]?.begin !== line.begin || line.p[0]?.end !== line.end))
       );
     })
       ? ["lineTiming" as const]
@@ -303,15 +302,12 @@ function lineLosses(doc: LyricsDocument, format: FormatId) {
     return [];
   }
   const timedLines = doc.lines.filter(hasPrimary);
-  return [
-    ...(timedLines.some((line) => {
-      const range = lysLineRange(line);
-      return range.begin !== line.begin || range.end !== line.end;
-    })
-      ? ["lineTiming" as const]
-      : []),
-    ...(doc.lines.length === timedLines.length ? [] : ["lineShape" as const]),
-  ];
+  return timedLines.some((line) => {
+    const range = lysLineRange(line);
+    return range.begin !== line.begin || range.end !== line.end;
+  })
+    ? ["lineTiming" as const]
+    : [];
 }
 
 function qrcWrappingPair(line: LyricsLine) {
@@ -458,19 +454,6 @@ function projectedQrcLines(
   });
 }
 
-function lqeTranslationRows(line: LyricsLine, translation: LyricsTranslation) {
-  const rows: number[] = [];
-  const primary = line.p.at(0);
-  if (primary) {
-    rows.push(primary.begin);
-  }
-  const backing = line.b.at(0);
-  if (backing && translation.b !== undefined) {
-    rows.push(backing.begin);
-  }
-  return rows;
-}
-
 function lqeTranslationMetadataLoss(metadata: {
   automaticallyCreated?: boolean;
   kind?: "subtitle" | "replacement";
@@ -502,20 +485,6 @@ function trackMetadataLosses(
   return { pronunciation, translation };
 }
 
-function lqeTimestampLoss(
-  rows: number[],
-  starts: Map<number, number>,
-  timestamps: Set<number>
-) {
-  for (const begin of rows) {
-    if ((starts.get(begin) ?? 0) > 1 || timestamps.has(begin)) {
-      return true;
-    }
-    timestamps.add(begin);
-  }
-  return false;
-}
-
 function lqeTranslationLosses(doc: LyricsDocument) {
   const languages = new Set(
     doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
@@ -532,12 +501,8 @@ function lqeTranslationLosses(doc: LyricsDocument) {
   ) {
     return true;
   }
-  const starts = lqeTranslationStarts(doc);
-  const timestamps = new Map<string, Set<number>>();
   for (const line of doc.lines) {
-    for (const [language, translation] of Object.entries(
-      line.translations ?? {}
-    )) {
+    for (const translation of Object.values(line.translations ?? {})) {
       const primary = line.p.at(0);
       const backing = line.b.at(0);
       if (
@@ -549,96 +514,22 @@ function lqeTranslationLosses(doc: LyricsDocument) {
       ) {
         return true;
       }
-      const used = timestamps.get(language) ?? new Set<number>();
-      timestamps.set(language, used);
-      if (
-        lqeTimestampLoss(lqeTranslationRows(line, translation), starts, used)
-      ) {
-        return true;
-      }
     }
   }
   return false;
 }
 
-function lqeTranslationStarts(doc: LyricsDocument) {
-  const starts = new Map<number, number>();
-  for (const line of doc.lines) {
-    for (const begin of [line.p[0]?.begin, line.b[0]?.begin]) {
-      if (begin !== undefined) {
-        starts.set(begin, (starts.get(begin) ?? 0) + 1);
-      }
-    }
+function projectedLqeTranslations(line: LyricsLine) {
+  if (line.b.length > 0 || line.translations === undefined) {
+    return line.translations;
   }
-  return starts;
-}
-
-export function lqeAmbiguousStarts(doc: LyricsDocument) {
-  return new Set(
-    [...lqeTranslationStarts(doc)].flatMap(([begin, count]) =>
-      count > 1 ? [begin] : []
-    )
+  const translations = Object.fromEntries(
+    Object.entries(line.translations).map(([language, translation]) => [
+      language,
+      translation.b === undefined ? translation : { p: translation.p },
+    ])
   );
-}
-
-function canPlaceLqeTranslation(
-  begin: number,
-  starts: Map<number, number>,
-  timestamps: Set<number>
-) {
-  return (starts.get(begin) ?? 0) === 1 && !timestamps.has(begin);
-}
-
-function projectedLqeTranslation(
-  line: LyricsLine,
-  translation: LyricsTranslation,
-  starts: Map<number, number>,
-  timestamps: Set<number>
-) {
-  const primary = line.p.at(0);
-  const backing = line.b.at(0);
-  const keepPrimary =
-    primary !== undefined &&
-    canPlaceLqeTranslation(primary.begin, starts, timestamps);
-  const keepBacking =
-    backing !== undefined &&
-    translation.b !== undefined &&
-    canPlaceLqeTranslation(backing.begin, starts, timestamps);
-  if (!keepPrimary && primary !== undefined) {
-    return;
-  }
-  if (!(keepPrimary || keepBacking)) {
-    return;
-  }
-  if (keepPrimary && primary) {
-    timestamps.add(primary.begin);
-  }
-  if (keepBacking && backing) {
-    timestamps.add(backing.begin);
-  }
-  return {
-    ...(keepBacking && { b: translation.b }),
-    p: keepPrimary ? translation.p : "",
-  };
-}
-
-function projectedLqeTranslations(
-  line: LyricsLine,
-  starts: Map<number, number>,
-  timestamps: Map<string, Set<number>>
-) {
-  const translations: NonNullable<LyricsLine["translations"]> = {};
-  for (const [language, translation] of Object.entries(
-    line.translations ?? {}
-  )) {
-    const used = timestamps.get(language) ?? new Set<number>();
-    timestamps.set(language, used);
-    const projected = projectedLqeTranslation(line, translation, starts, used);
-    if (projected) {
-      translations[language] = projected;
-    }
-  }
-  return Object.keys(translations).length === 0 ? undefined : translations;
+  return translations;
 }
 
 function projectedLqeLines(
@@ -647,15 +538,8 @@ function projectedLqeLines(
   wordTimed: boolean
 ) {
   const shapedLines = projectedLysLines(doc);
-  const starts = lqeTranslationStarts({ ...doc, lines: shapedLines });
-  const timestamps = new Map<string, Set<number>>();
   return shapedLines.map((line) =>
-    projectedLine(
-      line,
-      capabilities,
-      wordTimed,
-      projectedLqeTranslations(line, starts, timestamps)
-    )
+    projectedLine(line, capabilities, wordTimed, projectedLqeTranslations(line))
   );
 }
 
@@ -798,7 +682,11 @@ function basicLosses(
   ) {
     features.push("agents");
   }
-  if (!capabilities.backing && doc.lines.some((line) => line.b.length > 0)) {
+  if (
+    (!capabilities.backing && doc.lines.some((line) => line.b.length > 0)) ||
+    ((format === "lys" || format === "lqe" || format === "ttml") &&
+      doc.lines.some((line) => line.p.length === 0 && line.b.length > 0))
+  ) {
     features.push("backing");
   }
   return features;

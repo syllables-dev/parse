@@ -1,6 +1,6 @@
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
-import { lqeAmbiguousStarts, prepare } from "../internal/projection";
+import { prepare } from "../internal/projection";
 import { readOffset, shiftTimes, splitLines } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
@@ -199,22 +199,21 @@ function readTranslation(section: LqeSection) {
 
 function addTranslation(
   section: LqeSection,
-  targets: Map<number, TranslationTarget | null>,
+  targets: Map<number, TranslationTarget[]>,
   assigned: Map<LyricsLine, Set<string>>
 ) {
   const { language, lines } = readTranslation(section);
+  const consumed = new Map<number, number>();
   for (const translationLine of lines) {
-    const target = targets.get(translationLine.begin);
+    const queue = targets.get(translationLine.begin);
+    const index = consumed.get(translationLine.begin) ?? 0;
+    const target = queue?.at(index);
     if (target === undefined) {
       throw new ParseError(
         `lqe translation tag ${translationLine.begin} has no lyric track`
       );
     }
-    if (target === null) {
-      throw new ParseError(
-        `lqe translation tag ${translationLine.begin} is ambiguous`
-      );
-    }
+    consumed.set(translationLine.begin, index + 1);
     const track = `${language}:${target.track}`;
     const lineTracks = assigned.get(target.line) ?? new Set<string>();
     if (lineTracks.has(track)) {
@@ -265,21 +264,19 @@ function readTracks(
       ...lyricSection.body.filter((line) => !offsetTag.test(line.trim())),
     ].join("\n")
   );
-  const targets = new Map<number, TranslationTarget | null>();
+  const targets = new Map<number, TranslationTarget[]>();
   for (const line of doc.lines) {
     const primaryBegin = line.p[0]?.begin;
     if (primaryBegin !== undefined) {
-      targets.set(
-        primaryBegin,
-        targets.has(primaryBegin) ? null : { line, track: "p" }
-      );
+      const queue = targets.get(primaryBegin) ?? [];
+      queue.push({ line, track: "p" });
+      targets.set(primaryBegin, queue);
     }
     const backingBegin = line.b[0]?.begin;
     if (backingBegin !== undefined) {
-      targets.set(
-        backingBegin,
-        targets.has(backingBegin) ? null : { line, track: "b" }
-      );
+      const queue = targets.get(backingBegin) ?? [];
+      queue.push({ line, track: "b" });
+      targets.set(backingBegin, queue);
     }
   }
   const assigned = new Map<LyricsLine, Set<string>>();
@@ -325,13 +322,10 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
 function addRow(
   rows: TranslationRow[],
   syllables: LyricsLine["p"],
-  text: string | undefined,
+  text: string,
   lineId: string,
   track: "backing" | "primary"
 ) {
-  if (text === undefined) {
-    return;
-  }
   const firstSyllable = syllables.at(0);
   if (!firstSyllable) {
     if (text.length > 0 || track === "backing") {
@@ -351,20 +345,10 @@ function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
   const rows: TranslationRow[] = [];
   for (const line of doc.lines) {
     const translation = line.translations?.[language];
-    if (!translation) {
-      continue;
+    addRow(rows, line.p, translation?.p ?? "", line.id, "primary");
+    if (translation?.b !== undefined) {
+      addRow(rows, line.b, translation.b, line.id, "backing");
     }
-    addRow(rows, line.p, translation.p, line.id, "primary");
-    addRow(rows, line.b, translation.b, line.id, "backing");
-  }
-  rows.sort((left, right) => left.begin - right.begin);
-  let previousBegin: number | undefined;
-  const ambiguousStarts = lqeAmbiguousStarts(doc);
-  for (const row of rows) {
-    if (row.begin === previousBegin || ambiguousStarts.has(row.begin)) {
-      throw new Error(`lqe cannot disambiguate translation tag ${row.begin}`);
-    }
-    previousBegin = row.begin;
   }
   return {
     agents: [],
