@@ -244,17 +244,16 @@ describe("eslrc writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test("rejects an empty primary track without mutation", () => {
+  test("keeps an empty primary track as a positional placeholder", () => {
     const doc = {
       ...wordDocument,
       lines: [{ ...lyricLine, p: [] }],
     } satisfies LyricsDocument;
-    const before = structuredClone(doc);
 
-    expect(() => write(doc)).toThrow(
-      "eslrc cannot represent empty primary line l0"
-    );
-    expect(doc).toEqual(before);
+    expect(write(doc)).toBe("[by:]\n[00:01.001][00:02.503]");
+    expect(read(write(doc))).toMatchObject({
+      lines: [{ p: [{ text: "" }] }],
+    });
   });
 
   test.each([

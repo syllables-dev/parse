@@ -398,6 +398,25 @@ describe("qrc writer", () => {
     expect(doc).toEqual(before);
   });
 
+  test("silently drops a line with no primary and no backing syllables", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        makeLine("l0", 1000, "Lead"),
+        { ...makeLine("l1", 2000, ""), b: [], p: [] },
+        makeLine("l2", 3000, "Last"),
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(findLosses(doc, "qrc")).toEqual([]);
+    expect(readLyrics(writeLyrics(doc, "qrc"), "qrc").lines).toMatchObject([
+      { p: [{ text: "Lead" }] },
+      { p: [{ text: "Last" }] },
+    ]);
+    expect(doc).toEqual(before);
+  });
+
   test.each([
     { close: ")", open: "(", text: "ASCII" },
     { close: "）", open: "（", text: "full-width" },

@@ -278,15 +278,16 @@ describe("lrc writer", () => {
     expect(doc).toEqual(before);
   });
 
+  test("keeps an empty line as a positional placeholder", () => {
+    const doc = { ...lineDocument, lines: [{ ...lyricLine, p: [] }] };
+
+    expect(write(doc)).toBe("[by:]\n[00:01.000]");
+    expect(read(write(doc))).toMatchObject({
+      lines: [{ p: [{ text: "" }] }],
+    });
+  });
+
   test.each([
-    {
-      createPrimaryDocument: () =>
-        ({
-          ...lineDocument,
-          lines: [{ ...lyricLine, p: [] }],
-        }) satisfies LyricsDocument,
-      message: "count",
-    },
     {
       createPrimaryDocument: () =>
         ({

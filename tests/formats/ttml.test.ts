@@ -984,6 +984,41 @@ describe("ttml writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
+  test("silently drops a line with no primary and no backing syllables", () => {
+    const doc = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 2000,
+          id: "l0",
+          p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
+        },
+        { agent: null, b: [], begin: 2000, end: 3000, id: "l1", p: [] },
+        {
+          agent: null,
+          b: [],
+          begin: 3000,
+          end: 4000,
+          id: "l2",
+          p: [{ begin: 3000, end: 4000, id: "l2w0", text: "Last" }],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(read(write(doc)).lines).toMatchObject([
+      { id: "l0", p: [{ text: "Lead" }] },
+      { id: "l2", p: [{ text: "Last" }] },
+    ]);
+    expect(doc).toEqual(before);
+  });
+
   test("escapes opaque ids and round-trips every representable field", () => {
     const lineId = "line&\"'<tag>";
     const agentId = "voice&\"'<tag>";

@@ -102,14 +102,19 @@ describe("yrc reader", () => {
     expect(read(source).meta.songwriters).toEqual(["One", "Two"]);
   });
 
-  test("preserves empty and whitespace-only lyric lines", () => {
+  test("parses an empty line distinctly from a whitespace-only line", () => {
     const doc = read("[1000,1000]\n[2000,1000]   ");
 
     expect(doc.lines[0]?.p).toEqual([]);
     expect(doc.lines[1]?.p).toEqual([
       { begin: 2000, end: 3000, id: "l1w0", text: "   " },
     ]);
-    expect(read(write(doc))).toEqual(doc);
+  });
+
+  test("drops an empty line on write, keeping the whitespace-only line", () => {
+    const doc = read("[1000,1000]\n[2000,1000]   ");
+
+    expect(read(write(doc)).lines).toMatchObject([{ p: [{ text: "   " }] }]);
   });
 
   test("preserves overlapping rows and exact integer word times", () => {
