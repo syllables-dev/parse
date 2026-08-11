@@ -28,6 +28,6 @@ Writes and conversions are strict by default. `losses(doc, format)` lists unsupp
 
 Agent capabilities are `false`, `alignment`, or `identity`; `alignment` preserves duet-side attribution and may canonicalize IDs and types, and `identity` preserves opaque IDs and types.
 
-Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Track metadata capabilities cover `translation.automaticallyCreated`, `translation.kind`, and `pronunciation.automaticallyCreated`.
+Metadata capabilities cover `apple`, `album`, `artist`, `author`, `songwriters`, and `title`. `apple` covers Apple TTML-only fields such as agents, song parts, timing metadata, and element attributes. `trackGenerated` covers the generated-text flag on translation and pronunciation tracks; `trackKind` covers translation subtitle and replacement behavior.
 
-Line `translations` and `pronunciations` hold each language's lyric rows. Document-level `translationTracks` maps languages to `{ automaticallyCreated?, kind? }`; `pronunciationTracks` maps languages to `{ automaticallyCreated? }`. Readers apply source offsets to document timestamps.
+Line `translations` and `pronunciations` hold each language's lyric rows. Document-level `translationTracks` maps languages to `{ automaticallyCreated?, kind? }`; `pronunciationTracks` maps languages to `{ automaticallyCreated?, variants? }`. Repeated Apple transliterations use `variants` and `apple.pronunciationOrder` to retain source order. Nested Apple spans use `Syllable.content`. Readers apply source offsets to document timestamps and writers emit adjusted timestamps without offset tags.

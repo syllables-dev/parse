@@ -1,10 +1,15 @@
 import { ParseError } from "../../errors";
 import type { XmlElement, XmlNode } from "../../internal/xml";
 import type {
+  AppleLyrics,
   LyricsDocument,
+  LyricsElementAttributes,
   LyricsLine,
+  LyricsPronunciation,
+  LyricsPronunciationReference,
   LyricsPronunciationTrack,
   LyricsTranslationTrack,
+  Syllable,
 } from "../../types";
 import { checkTrack, readWords, splitRuns, untimed, unwrap } from "./lines";
 import {
@@ -17,6 +22,7 @@ import {
   locale,
   needAttr,
   only,
+  readRange,
   readTime,
   text,
   ttmlUri,
@@ -26,11 +32,22 @@ import {
 
 export interface TtmlHead {
   agents: LyricsDocument["agents"];
+  apple?: Pick<AppleLyrics, "audio" | "leadingSilence">;
+  lyricGenerationId?: string;
   offset?: number;
+  songwriterIds?: (string | undefined)[];
   songwriters: string[];
   translations: XmlElement[];
   transliterations: XmlElement[];
 }
+
+interface ParallelFields extends LyricsElementAttributes {
+  begin?: number;
+  end?: number;
+  keepParentheses?: boolean;
+}
+
+const boolStart = /^[1-9TtYy]/u;
 
 function readAgent(declaration: XmlElement, ids: Set<string>) {
   checkAttrs(declaration, [
@@ -42,15 +59,25 @@ function readAgent(declaration: XmlElement, ids: Set<string>) {
   if (id.length === 0 || ids.has(id)) {
     throw new ParseError(`invalid or duplicate ttml agent id ${id}`);
   }
-  for (const name of elements(declaration)) {
-    if (!is(name, "name", ttmUri)) {
-      throw new ParseError(`unsupported agent child <${name.name}>`);
+  let name: string | undefined;
+  for (const child of elements(declaration)) {
+    if (!is(child, "name", ttmUri)) {
+      throw new ParseError(`unsupported agent child <${child.name}>`);
     }
-    checkAttrs(name, [key(null, "type")]);
-    text(name);
+    checkAttrs(child, [key(null, "type")]);
+    if (name !== undefined) {
+      throw new ParseError("ttml agent supports one name");
+    }
+    name = text(child);
   }
   ids.add(id);
-  return { id, type: needAttr(declaration, "type", null) };
+  const artistId = attr(declaration, "artistId", itunesUri);
+  return {
+    ...(artistId === undefined ? {} : { artistId }),
+    id,
+    ...(name === undefined ? {} : { name }),
+    type: attr(declaration, "type", null) ?? "",
+  };
 }
 
 function single(children: XmlElement[], local: string) {
@@ -61,7 +88,7 @@ function single(children: XmlElement[], local: string) {
   return matches[0];
 }
 
-function readAudioOffset(children: XmlElement[]) {
+function readAudio(children: XmlElement[]) {
   const audio = single(children, "audio");
   if (!audio) {
     return;
@@ -75,17 +102,26 @@ function readAudioOffset(children: XmlElement[]) {
     throw new ParseError("ttml audio metadata must be empty");
   }
   const lyricOffset = attr(audio, "lyricOffset", null);
-  if (lyricOffset === undefined) {
-    return;
-  }
-  const sign = lyricOffset.charAt(0);
-  return (
-    (sign === "-" ? -1 : 1) *
-    readTime(
-      sign === "-" || sign === "+" ? lyricOffset.slice(1) : lyricOffset,
-      "ttml lyric offset"
-    )
-  );
+  const role = attr(audio, "role", null);
+  const spatial = attr(audio, "spatial", null);
+  const offset =
+    lyricOffset === undefined
+      ? undefined
+      : (() => {
+          const sign = lyricOffset.charAt(0);
+          return (
+            (sign === "-" ? -1 : 1) *
+            readTime(
+              sign === "-" || sign === "+" ? lyricOffset.slice(1) : lyricOffset,
+              "ttml lyric offset"
+            )
+          );
+        })();
+  return {
+    ...(offset === undefined ? {} : { offset }),
+    ...(role === undefined ? {} : { role }),
+    ...(spatial === undefined ? {} : { spatial: boolStart.test(spatial) }),
+  };
 }
 
 function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
@@ -95,9 +131,10 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
   }
   checkAttrs(apple, [key(null, "leadingSilence")]);
   const leading = attr(apple, "leadingSilence", null);
-  if (leading !== undefined) {
-    readTime(leading, "ttml leading silence");
-  }
+  const leadingSilence =
+    leading === undefined
+      ? undefined
+      : readTime(leading, "ttml leading silence");
   const children = elements(apple);
   const allowed = ["translations", "transliterations", "songwriters", "audio"];
   if (
@@ -111,19 +148,30 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
   if (writerBlock) {
     checkAttrs(writerBlock, []);
   }
-  const songwriters = (writerBlock ? elements(writerBlock) : []).map(
-    (writer) => {
-      if (!is(writer, "songwriter", itunesUri)) {
-        throw new ParseError(`unsupported songwriter child <${writer.name}>`);
-      }
-      checkAttrs(writer, [key(itunesUri, "artistId")]);
-      return text(writer);
+  const writers = (writerBlock ? elements(writerBlock) : []).map((writer) => {
+    if (!is(writer, "songwriter", itunesUri)) {
+      throw new ParseError(`unsupported songwriter child <${writer.name}>`);
     }
-  );
-  const offset = readAudioOffset(children);
+    checkAttrs(writer, [key(null, "artistId")]);
+    return { artistId: attr(writer, "artistId", null), name: text(writer) };
+  });
+  const { offset, ...audio } = readAudio(children) ?? {};
   return {
+    ...(audio.role === undefined &&
+    audio.spatial === undefined &&
+    leadingSilence === undefined
+      ? {}
+      : {
+          apple: {
+            ...(Object.keys(audio).length === 0 ? {} : { audio }),
+            ...(leadingSilence === undefined ? {} : { leadingSilence }),
+          },
+        }),
     ...(offset === undefined ? {} : { offset }),
-    songwriters,
+    songwriters: writers.map((writer) => writer.name),
+    ...(writers.some((writer) => writer.artistId !== undefined)
+      ? { songwriterIds: writers.map((writer) => writer.artistId) }
+      : {}),
     translations: children.filter((child) =>
       is(child, "translations", itunesUri)
     ),
@@ -155,7 +203,12 @@ export function readHead(root: XmlElement): TtmlHead {
       agents.push(readAgent(declaration, ids));
     }
   }
-  return { agents, ...readApple(metadata) };
+  const lyricGenerationId = attr(metadata, "lyricGenId", itunesUri);
+  return {
+    agents,
+    ...(lyricGenerationId === undefined ? {} : { lyricGenerationId }),
+    ...readApple(metadata),
+  };
 }
 
 function target(textLine: XmlElement, lineById: Map<string, LyricsLine>) {
@@ -175,6 +228,55 @@ function target(textLine: XmlElement, lineById: Map<string, LyricsLine>) {
   return line;
 }
 
+function parallelAttrs(
+  textLine: XmlElement,
+  line: LyricsLine,
+  offset: number,
+  agentIds: Set<string>
+): ParallelFields {
+  checkAttrs(textLine, [
+    key(null, "begin"),
+    key(null, "end"),
+    key(null, "for"),
+    key(null, "role"),
+    key(ttmUri, "agent"),
+    key(ttmUri, "role"),
+    key(itunesUri, "key"),
+    key(itunesUri, "parenthesis"),
+  ]);
+  const agent = attr(textLine, "agent", ttmUri);
+  if (agent !== undefined && !agentIds.has(agent)) {
+    throw new ParseError(`unknown ttml agent ${agent}`);
+  }
+  const namespacedRole = attr(textLine, "role", ttmUri);
+  const plainRole = attr(textLine, "role", null);
+  if (
+    namespacedRole !== undefined &&
+    plainRole !== undefined &&
+    namespacedRole !== plainRole
+  ) {
+    throw new ParseError("conflicting roles on parallel ttml text");
+  }
+  const begin = attr(textLine, "begin", null);
+  const end = attr(textLine, "end", null);
+  if ((begin === undefined) !== (end === undefined)) {
+    throw new ParseError("parallel ttml text requires begin and end together");
+  }
+  const range =
+    begin === undefined ? {} : readRange(textLine, offset, `line ${line.id}`);
+  const parenthesis = attr(textLine, "parenthesis", itunesUri);
+  const xmlId = attr(textLine, "id", xmlUri);
+  return {
+    ...(agent === undefined ? {} : { agent }),
+    ...range,
+    ...(parenthesis === "keep" ? { keepParentheses: true } : {}),
+    ...((namespacedRole ?? plainRole) === undefined
+      ? {}
+      : { role: namespacedRole ?? plainRole }),
+    ...(xmlId === undefined ? {} : { xmlId }),
+  };
+}
+
 function readCreated(track: XmlElement) {
   const value = attr(track, "automaticallyCreated", null);
   return value === undefined ? undefined : value === "true";
@@ -183,45 +285,88 @@ function readCreated(track: XmlElement) {
 function addTranslation(
   textLine: XmlElement,
   language: string,
-  lineById: Map<string, LyricsLine>
+  lineById: Map<string, LyricsLine>,
+  offset: number,
+  agentIds: Set<string>,
+  timing: "line" | "word"
 ) {
   if (!is(textLine, "text", itunesUri)) {
     throw new ParseError(`unsupported translated child <${textLine.name}>`);
   }
-  checkAttrs(textLine, [key(null, "for"), key(itunesUri, "key")]);
   const line = target(textLine, lineById);
-  if (Object.hasOwn(line.translations ?? {}, language)) {
-    throw new ParseError(
-      `duplicate ${language} translation for line ${line.id}`
+  const fields = parallelAttrs(textLine, line, offset, agentIds);
+  const runs = splitRuns(textLine);
+  let primaryWords: Syllable[] | undefined;
+  if (runs.primary.some((node) => node.kind === "element")) {
+    primaryWords = readWordTrack(
+      runs.primary,
+      line,
+      offset,
+      `${line.id}t`,
+      false,
+      agentIds,
+      false,
+      timing === "line"
     );
   }
-  const runs = splitRuns(textLine, line.agent);
   const backingRun = runs.backing;
+  let backingWords: Syllable[] | undefined;
+  let keepBacking = false;
   let backing: string | undefined;
   if (backingRun !== null) {
-    const backingText = untimed(backingRun.nodes, line.agent);
+    const rawBacking = backingRun.nodes.some((node) => node.kind === "element")
+      ? readWordTrack(
+          backingRun.nodes,
+          line,
+          offset,
+          `${line.id}tb`,
+          false,
+          agentIds,
+          false,
+          timing === "line"
+        )
+      : undefined;
+    backingWords =
+      rawBacking === undefined
+        ? undefined
+        : unwrap(rawBacking, backingRun.keepParentheses);
+    const backingText =
+      rawBacking === undefined
+        ? untimed(backingRun.nodes)
+        : rawBacking.map((word) => word.text).join("");
     if (!(backingText.startsWith("(") && backingText.endsWith(")"))) {
       throw new ParseError("ttml backing text requires wrapping parentheses");
     }
     backing = backingRun.keepParentheses
       ? backingText
       : backingText.slice(1, -1);
+    keepBacking = backingRun.keepParentheses;
   }
   line.translations = {
     ...line.translations,
     [language]: {
       ...(backing === undefined ? {} : { b: backing }),
-      p: untimed(runs.primary, line.agent),
+      ...(keepBacking ? { bKeepParentheses: true } : {}),
+      ...(backingWords === undefined ? {} : { bWords: backingWords }),
+      ...fields,
+      p:
+        primaryWords === undefined
+          ? untimed(runs.primary)
+          : primaryWords.map((word) => word.text).join(""),
+      ...(primaryWords === undefined ? {} : { pWords: primaryWords }),
     },
   };
 }
 
 export function readTranslations(
   containers: XmlElement[],
-  lines: LyricsLine[]
+  lines: LyricsLine[],
+  offset: number,
+  agents: LyricsDocument["agents"],
+  timing: "line" | "word"
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
-  const kinds = new Map<string, "subtitle" | "replacement">();
+  const agentIds = new Set(agents.map((agent) => agent.id));
   const tracks: Record<string, LyricsTranslationTrack> = {};
   for (const container of containers) {
     checkAttrs(container, []);
@@ -241,32 +386,28 @@ export function readTranslations(
         throw new ParseError(`unsupported ttml translation type ${kind}`);
       }
       const language = locale(translation);
-      if (kinds.has(language) && kinds.get(language) !== kind) {
-        throw new ParseError(
-          `ttml ${language} translation kind must be consistent across lines`
-        );
-      }
-      kinds.set(language, kind);
       const automaticallyCreated = readCreated(translation);
       tracks[language] = {
         ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
         kind,
       };
       for (const textLine of elements(translation)) {
-        addTranslation(textLine, language, lineById);
+        addTranslation(textLine, language, lineById, offset, agentIds, timing);
       }
     }
   }
   return tracks;
 }
 
-function readPronTrack(
+function readWordTrack(
   nodes: XmlNode[],
   line: LyricsLine,
   offset: number,
   idPrefix: string,
   backing: boolean,
-  keepParentheses = false
+  agentIds: Set<string>,
+  keepParentheses = false,
+  lineTimed = false
 ) {
   const syllables = readWords(
     nodes,
@@ -274,7 +415,9 @@ function readPronTrack(
     line.end,
     offset,
     idPrefix,
-    line.agent
+    line.agent,
+    agentIds,
+    lineTimed
   );
   const track = backing ? unwrap(syllables, keepParentheses) : syllables;
   checkTrack(track, line);
@@ -286,46 +429,75 @@ function addPron(
   language: string,
   trackIndex: number,
   lineById: Map<string, LyricsLine>,
-  offset: number
+  offset: number,
+  agentIds: Set<string>,
+  variant: number,
+  timing: "line" | "word"
 ) {
   if (!is(textLine, "text", itunesUri)) {
     throw new ParseError(`unsupported transliterated child <${textLine.name}>`);
   }
-  checkAttrs(textLine, [key(null, "for"), key(itunesUri, "key")]);
   const line = target(textLine, lineById);
-  if (Object.hasOwn(line.pronunciations ?? {}, language)) {
+  const fields = parallelAttrs(textLine, line, offset, agentIds);
+  if (variant === 0 && Object.hasOwn(line.pronunciations ?? {}, language)) {
     throw new ParseError(
       `duplicate ${language} pronunciation for line ${line.id}`
     );
   }
-  const runs = splitRuns(textLine, line.agent);
+  const runs = splitRuns(textLine);
   const prefix = `${line.id}r${trackIndex}`;
+  const pronunciation = {
+    b:
+      runs.backing === null
+        ? []
+        : readWordTrack(
+            runs.backing.nodes,
+            line,
+            offset,
+            `${prefix}b`,
+            true,
+            agentIds,
+            runs.backing.keepParentheses,
+            timing === "line"
+          ),
+    ...fields,
+    p: readWordTrack(
+      runs.primary,
+      line,
+      offset,
+      `${prefix}w`,
+      false,
+      agentIds,
+      false,
+      timing === "line"
+    ),
+  };
+  const current = line.pronunciations?.[language];
+  if (variant === 0) {
+    line.pronunciations = { ...line.pronunciations, [language]: pronunciation };
+    return;
+  }
+  const empty: LyricsPronunciation = { absent: true, b: [], p: [] };
+  const base = current ?? empty;
+  const variants = [...(base.variants ?? [])];
+  variants[variant - 1] = pronunciation;
   line.pronunciations = {
     ...line.pronunciations,
-    [language]: {
-      b:
-        runs.backing === null
-          ? []
-          : readPronTrack(
-              runs.backing.nodes,
-              line,
-              offset,
-              `${prefix}b`,
-              true,
-              runs.backing.keepParentheses
-            ),
-      p: readPronTrack(runs.primary, line, offset, `${prefix}w`, false),
-    },
+    [language]: { ...base, variants },
   };
 }
 
 export function readProns(
   containers: XmlElement[],
   lines: LyricsLine[],
-  offset: number
+  offset: number,
+  agents: LyricsDocument["agents"],
+  timing: "line" | "word"
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
+  const agentIds = new Set(agents.map((agent) => agent.id));
   const tracks: Record<string, LyricsPronunciationTrack> = {};
+  const order: LyricsPronunciationReference[] = [];
   let trackIndex = 0;
   for (const container of containers) {
     checkAttrs(container, []);
@@ -341,14 +513,31 @@ export function readProns(
       ]);
       const language = locale(transliteration);
       const automaticallyCreated = readCreated(transliteration);
-      tracks[language] = {
+      const current = tracks[language];
+      const variant =
+        current === undefined ? 0 : (current.variants?.length ?? 0) + 1;
+      const metadata = {
         ...(automaticallyCreated === undefined ? {} : { automaticallyCreated }),
       };
+      tracks[language] =
+        current === undefined
+          ? metadata
+          : { ...current, variants: [...(current.variants ?? []), metadata] };
+      order.push({ language, variant });
       for (const textLine of elements(transliteration)) {
-        addPron(textLine, language, trackIndex, lineById, offset);
+        addPron(
+          textLine,
+          language,
+          trackIndex,
+          lineById,
+          offset,
+          agentIds,
+          variant,
+          timing
+        );
       }
       trackIndex += 1;
     }
   }
-  return tracks;
+  return { order, tracks };
 }

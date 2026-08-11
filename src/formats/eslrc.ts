@@ -42,16 +42,15 @@ export const capabilities = {
   backing: false,
   metadata: {
     album: true,
+    apple: false,
     artist: true,
     author: true,
     songwriters: true,
     title: true,
   },
   pronunciation: false,
-  trackMetadata: {
-    pronunciation: { automaticallyCreated: false },
-    translation: { automaticallyCreated: false, kind: false },
-  },
+  trackGenerated: false,
+  trackKind: false,
   translation: false,
   wordTiming: true,
 } satisfies FormatCapabilities;

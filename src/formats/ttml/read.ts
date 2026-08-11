@@ -1,9 +1,14 @@
 import { ParseError } from "../../errors";
 import { type XmlElement, XmlReader } from "../../internal/xml";
-import type { LyricsDocument, ReadOptions } from "../../types";
+import type {
+  LyricsDocument,
+  LyricsElementAttributes,
+  ReadOptions,
+} from "../../types";
 import { readHead, readProns, readTranslations } from "./head";
 import { readBody } from "./lines";
 import {
+  attr,
   checkAttrs,
   elements,
   is,
@@ -13,22 +18,39 @@ import {
   needAttr,
   only,
   ttmlUri,
+  ttmUri,
   xmlUri,
 } from "./profile";
 
-function readTiming(root: XmlElement) {
+function readTiming(root: XmlElement): {
+  language?: string;
+  lyricGenerationId?: string;
+  rootFields?: LyricsElementAttributes;
+  timing: "line" | "word";
+} {
   if (!is(root, "tt", ttmlUri)) {
     throw new ParseError("ttml root must be <tt>");
   }
   checkAttrs(root, [
     key(itunesUri, "lyricGenId"),
     key(itunesUri, "timing"),
+    key(ttmUri, "agent"),
+    key(null, "role"),
+    key(ttmUri, "role"),
     key(xmlUri, "lang"),
   ]);
-  locale(root);
-  const timing = needAttr(root, "timing", itunesUri).toLowerCase();
-  if (timing !== "line" && timing !== "word") {
-    throw new ParseError(`unsupported ttml timing ${timing}`);
+  const language = attr(root, "lang", xmlUri);
+  if (language !== undefined) {
+    locale(root);
+  }
+  const timingText = needAttr(root, "timing", itunesUri).toLowerCase();
+  let timing: "line" | "word";
+  if (timingText === "line") {
+    timing = "line";
+  } else if (timingText === "word") {
+    timing = "word";
+  } else {
+    throw new ParseError(`unsupported ttml timing ${timingText}`);
   }
   if (
     elements(root).some(
@@ -37,7 +59,30 @@ function readTiming(root: XmlElement) {
   ) {
     throw new ParseError("ttml root supports head and body children");
   }
-  return timing;
+  const agent = attr(root, "agent", ttmUri);
+  const namespacedRole = attr(root, "role", ttmUri);
+  const plainRole = attr(root, "role", null);
+  if (
+    namespacedRole !== undefined &&
+    plainRole !== undefined &&
+    namespacedRole !== plainRole
+  ) {
+    throw new ParseError("conflicting roles on ttml root");
+  }
+  const xmlId = attr(root, "id", xmlUri);
+  const rootFields: LyricsElementAttributes = {
+    ...(agent === undefined ? {} : { agent }),
+    ...((namespacedRole ?? plainRole) === undefined
+      ? {}
+      : { role: namespacedRole ?? plainRole }),
+    ...(xmlId === undefined ? {} : { xmlId }),
+  };
+  return {
+    ...(Object.keys(rootFields).length === 0 ? {} : { rootFields }),
+    ...(language === undefined ? {} : { language }),
+    lyricGenerationId: attr(root, "lyricGenId", itunesUri),
+    timing,
+  };
 }
 
 export function read(
@@ -48,27 +93,67 @@ export function read(
     throw new Error("expandRepeats is available for lrc input");
   }
   const root = new XmlReader(textSource).read();
-  const timing = readTiming(root);
+  const rootFields = readTiming(root);
   const head = readHead(root);
   const offset = head.offset === undefined ? 0 : head.offset;
-  const lines = readBody(
+  const body = readBody(
     only(root, "body", ttmlUri),
-    timing,
+    rootFields.timing,
     head.agents,
-    offset
+    offset,
+    rootFields.rootFields?.agent
   );
-  const translationTracks = readTranslations(head.translations, lines);
-  const pronunciationTracks = readProns(head.transliterations, lines, offset);
+  const translationTracks = readTranslations(
+    head.translations,
+    body.lines,
+    offset,
+    head.agents,
+    rootFields.timing
+  );
+  const pronunciation = readProns(
+    head.transliterations,
+    body.lines,
+    offset,
+    head.agents,
+    rootFields.timing
+  );
+  const lyricGenerationId =
+    rootFields.lyricGenerationId ?? head.lyricGenerationId;
+  if (
+    rootFields.lyricGenerationId !== undefined &&
+    head.lyricGenerationId !== undefined &&
+    rootFields.lyricGenerationId !== head.lyricGenerationId
+  ) {
+    throw new ParseError("conflicting Apple lyric generation IDs");
+  }
+  const apple = {
+    ...(head.apple ?? {}),
+    ...(body.apple ?? {}),
+    ...(rootFields.language === undefined
+      ? {}
+      : { language: rootFields.language }),
+    ...(lyricGenerationId === undefined ? {} : { lyricGenerationId }),
+    ...(rootFields.rootFields === undefined
+      ? {}
+      : { root: rootFields.rootFields }),
+    ...(pronunciation.order.length < 2
+      ? {}
+      : { pronunciationOrder: pronunciation.order }),
+  };
   return {
     agents: head.agents,
-    lines,
+    ...(Object.keys(apple).length === 0 ? {} : { apple }),
+    lines: body.lines,
     meta: {
       ...(head.songwriters.length > 0 && { songwriters: head.songwriters }),
+      ...(head.songwriterIds === undefined
+        ? {}
+        : { songwriterIds: head.songwriterIds }),
     },
-    ...(Object.keys(pronunciationTracks).length > 0 && {
-      pronunciationTracks,
+    ...(Object.keys(pronunciation.tracks).length > 0 && {
+      pronunciationTracks: pronunciation.tracks,
     }),
-    timing,
+    timing: rootFields.timing,
     ...(Object.keys(translationTracks).length > 0 && { translationTracks }),
     version: 1,
   };

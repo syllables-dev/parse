@@ -11,16 +11,22 @@ export {
 export { createDocument } from "./document";
 export { ParseError } from "./errors";
 export type {
+  AppleLyrics,
   ConversionLoss,
   ConvertOptions,
   FormatCapabilities,
   FormatId,
   LyricsAgent,
+  LyricsAudio,
+  LyricsBody,
   LyricsDocument,
+  LyricsElementAttributes,
   LyricsLine,
   LyricsMeta,
   LyricsPronunciation,
+  LyricsPronunciationReference,
   LyricsPronunciationTrack,
+  LyricsSection,
   LyricsTranslation,
   LyricsTranslationTrack,
   MetadataCapabilities,
@@ -29,7 +35,7 @@ export type {
   ProblemCode,
   ReadOptions,
   Syllable,
-  TrackMetadataCapabilities,
+  SyllableContent,
   WriteOptions,
 } from "./types";
 export { validate } from "./validate";

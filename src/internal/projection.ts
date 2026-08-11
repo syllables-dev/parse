@@ -5,6 +5,7 @@ import type {
   LyricsDocument,
   LyricsLine,
   LyricsMeta,
+  LyricsPronunciation,
   LyricsTranslation,
   LyricsTranslationTrack,
   Syllable,
@@ -54,6 +55,65 @@ function lost(
   preserved: boolean
 ) {
   return value !== undefined && !preserved ? [field] : [];
+}
+
+function hasAppleFields(doc: LyricsDocument) {
+  return (
+    doc.apple !== undefined ||
+    doc.meta.songwriterIds !== undefined ||
+    doc.agents.some(
+      (agent) => agent.artistId !== undefined || agent.name !== undefined
+    ) ||
+    doc.lines.some(
+      (line) =>
+        line.role !== undefined ||
+        line.xmlId !== undefined ||
+        line.keepParentheses !== undefined ||
+        [...line.p, ...line.b].some((syllable) => hasAppleSyllable(syllable))
+    ) ||
+    doc.lines.some(
+      (line) =>
+        Object.values(line.translations ?? {}).some(
+          (translation) =>
+            translation.agent !== undefined ||
+            translation.begin !== undefined ||
+            translation.bKeepParentheses !== undefined ||
+            translation.bWords !== undefined ||
+            translation.end !== undefined ||
+            translation.keepParentheses !== undefined ||
+            translation.role !== undefined ||
+            translation.pWords !== undefined ||
+            translation.xmlId !== undefined
+        ) ||
+        Object.values(line.pronunciations ?? {}).some(hasApplePronunciation)
+    )
+  );
+}
+
+function hasAppleSyllable(syllable: Syllable): boolean {
+  return (
+    syllable.agent !== undefined ||
+    syllable.content !== undefined ||
+    syllable.keepParentheses !== undefined ||
+    syllable.role !== undefined ||
+    syllable.timed !== undefined ||
+    syllable.xmlId !== undefined
+  );
+}
+
+function hasApplePronunciation(pronunciation: LyricsPronunciation): boolean {
+  return (
+    pronunciation.agent !== undefined ||
+    pronunciation.begin !== undefined ||
+    pronunciation.end !== undefined ||
+    pronunciation.keepParentheses !== undefined ||
+    pronunciation.role !== undefined ||
+    pronunciation.xmlId !== undefined ||
+    (pronunciation.variants?.some(
+      (variant) => variant !== undefined && hasApplePronunciation(variant)
+    ) ??
+      false)
+  );
 }
 
 function usesLyricTags(format: FormatId) {
@@ -172,6 +232,18 @@ function projectedLine(
   wordTimed: boolean,
   translations: LyricsLine["translations"]
 ) {
+  const projectedTranslations =
+    capabilities.metadata.apple || translations === undefined
+      ? translations
+      : Object.fromEntries(
+          Object.entries(translations).map(([language, translation]) => [
+            language,
+            {
+              ...(translation.b === undefined ? {} : { b: translation.b }),
+              p: translation.p,
+            },
+          ])
+        );
   return {
     agent: capabilities.agents === false ? null : line.agent,
     b: capabilities.backing ? projectedTrack(line.b, line, wordTimed) : [],
@@ -184,8 +256,8 @@ function projectedLine(
         pronunciations: line.pronunciations,
       }),
     ...(capabilities.translation &&
-      translations !== undefined && {
-        translations,
+      projectedTranslations !== undefined && {
+        translations: projectedTranslations,
       }),
   };
 }
@@ -416,14 +488,16 @@ function trackMetadataLosses(
   const translation = Object.values(doc.translationTracks ?? {}).some(
     (metadata) =>
       (metadata.automaticallyCreated !== undefined &&
-        !capabilities.trackMetadata.translation.automaticallyCreated) ||
-      (metadata.kind === "replacement" &&
-        !capabilities.trackMetadata.translation.kind)
+        !capabilities.trackGenerated) ||
+      (metadata.kind === "replacement" && !capabilities.trackKind)
   );
   const pronunciation = Object.values(doc.pronunciationTracks ?? {}).some(
     (metadata) =>
-      metadata.automaticallyCreated !== undefined &&
-      !capabilities.trackMetadata.pronunciation.automaticallyCreated
+      [metadata, ...(metadata.variants ?? [])].some(
+        (entry) =>
+          entry.automaticallyCreated !== undefined &&
+          !capabilities.trackGenerated
+      )
   );
   return { pronunciation, translation };
 }
@@ -770,6 +844,9 @@ export function losses(
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
   return [
+    ...(hasAppleFields(doc) && !capabilities.metadata.apple
+      ? ["metadata.apple" as const]
+      : []),
     ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
     ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
     ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),

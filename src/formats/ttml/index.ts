@@ -1,6 +1,5 @@
 /**
- * TTML (Timed Text Markup Language), Apple Music's lyric profile.
- * by Apple
+ * Apple TTML (Timed Text Markup Language) lyric profile.
  *
  * <span ttm:role="x-bg">(backing vocal)</span>
  */

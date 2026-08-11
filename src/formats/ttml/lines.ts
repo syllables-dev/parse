@@ -1,6 +1,11 @@
 import { ParseError } from "../../errors";
 import type { XmlElement, XmlNode } from "../../internal/xml";
-import type { LyricsDocument, LyricsLine, Syllable } from "../../types";
+import type {
+  LyricsDocument,
+  LyricsLine,
+  LyricsSection,
+  Syllable,
+} from "../../types";
 import {
   attr,
   checkAttrs,
@@ -11,7 +16,6 @@ import {
   needAttr,
   readRange,
   readTime,
-  text,
   ttmlUri,
   ttmUri,
 } from "./profile";
@@ -40,9 +44,6 @@ function role(element: XmlElement) {
     throw new ParseError(`conflicting roles on <${element.name}>`);
   }
   const value = namespaced ?? plain;
-  if (value !== undefined && value !== "x-bg") {
-    throw new ParseError(`unsupported ttml role ${value}`);
-  }
   return value;
 }
 
@@ -58,7 +59,7 @@ function agentRef(
   return value;
 }
 
-function checkSpan(element: XmlElement, lineAgent: string | null) {
+function checkSpan(element: XmlElement) {
   if (!isSpan(element)) {
     throw new ParseError(`unsupported lyric element <${element.name}>`);
   }
@@ -71,10 +72,6 @@ function checkSpan(element: XmlElement, lineAgent: string | null) {
     key(itunesUri, "parenthesis"),
   ]);
   role(element);
-  const explicit = attr(element, "agent", ttmUri);
-  if (explicit !== undefined && explicit !== lineAgent) {
-    throw new ParseError("ttml cannot preserve a syllable-level agent change");
-  }
 }
 
 function keepsParentheses(nodes: XmlNode[]): boolean {
@@ -86,7 +83,7 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
   );
 }
 
-export function splitRuns(parent: XmlElement, lineAgent: string | null): Runs {
+export function splitRuns(parent: XmlElement): Runs {
   const primary: XmlNode[] = [];
   let backing: BackingRun | null = null;
   for (const child of parent.children) {
@@ -94,7 +91,7 @@ export function splitRuns(parent: XmlElement, lineAgent: string | null): Runs {
       if (!isSpan(child) || backing !== null) {
         throw new ParseError("ttml lines support one backing-vocal span");
       }
-      checkSpan(child, lineAgent);
+      checkSpan(child);
       const nodes =
         attr(child, "begin", null) === undefined ? child.children : [child];
       backing = {
@@ -110,44 +107,78 @@ export function splitRuns(parent: XmlElement, lineAgent: string | null): Runs {
   return { backing, primary };
 }
 
-function addText(
-  value: string,
-  syllables: Syllable[],
-  first: number,
-  loose: string
-) {
-  const last = syllables.length > first ? syllables.at(-1) : undefined;
-  if (last) {
-    last.text += value;
-  }
-  return last ? loose : loose + value;
-}
-
 function readWord(
   element: XmlElement,
   offset: number,
   idPrefix: string,
-  lineAgent: string | null,
-  syllables: Syllable[],
-  leading: string
+  inheritedAgent: string | null,
+  agentIds: Set<string>,
+  wordIndex: number,
+  leading: string,
+  lineTimed: boolean,
+  fallbackBegin: number,
+  fallbackEnd: number
 ) {
-  checkSpan(element, lineAgent);
-  const id = `${idPrefix}${syllables.length}`;
-  const range = readRange(element, offset, `syllable ${id}`, true);
-  if (element.children.every((child) => child.kind === "text")) {
-    syllables.push({ ...range, id, text: leading + text(element) });
-    return;
+  checkSpan(element);
+  const id = `${idPrefix}${wordIndex}`;
+  const begin = attr(element, "begin", null);
+  const end = attr(element, "end", null);
+  if ((begin === undefined) !== (end === undefined)) {
+    throw new ParseError(`syllable ${id} requires begin and end together`);
   }
-  const first = syllables.length;
-  let loose = leading;
+  const range =
+    begin === undefined
+      ? { begin: fallbackBegin, end: fallbackEnd }
+      : readRange(element, offset, `syllable ${id}`, true);
+  const agent = agentRef(element, inheritedAgent, agentIds);
+  const xmlId = attr(element, "id", "http://www.w3.org/XML/1998/namespace");
+  const word = {
+    ...(agent === null || agent === inheritedAgent ? {} : { agent }),
+    ...range,
+    id,
+    ...(attr(element, "parenthesis", itunesUri) === "keep"
+      ? { keepParentheses: true }
+      : {}),
+    ...(role(element) === undefined ? {} : { role: role(element) }),
+    ...(lineTimed && begin !== undefined ? { timed: true } : {}),
+    ...(xmlId === undefined ? {} : { xmlId }),
+  };
+  const content: Syllable["content"] = leading.length === 0 ? [] : [leading];
+  let lyric = leading;
+  let childIndex = 0;
   for (const child of element.children) {
     if (child.kind === "text") {
-      loose = addText(child.text, syllables, first, loose);
+      const previous = content.at(-1);
+      if (typeof previous === "string") {
+        content[content.length - 1] = previous + child.text;
+      } else {
+        content.push(child.text);
+      }
+      lyric += child.text;
     } else {
-      readWord(child, offset, idPrefix, lineAgent, syllables, loose);
-      loose = "";
+      const subword = readWord(
+        child,
+        offset,
+        `${id}s`,
+        agent,
+        agentIds,
+        childIndex,
+        "",
+        lineTimed,
+        fallbackBegin,
+        fallbackEnd
+      );
+      content.push(subword);
+      lyric += subword.text;
+      childIndex += 1;
     }
   }
+  const nested = content.some((part) => typeof part !== "string");
+  return {
+    ...word,
+    ...(nested ? { content } : {}),
+    text: lyric,
+  };
 }
 
 export function readWords(
@@ -156,16 +187,44 @@ export function readWords(
   end: number,
   offset: number,
   idPrefix: string,
-  lineAgent: string | null
+  lineAgent: string | null,
+  agentIds: Set<string>,
+  lineTimed = false
 ) {
   const syllables: Syllable[] = [];
   let loose = "";
   for (const child of nodes) {
     if (child.kind === "text") {
-      loose = addText(child.text, syllables, 0, loose);
+      const last = syllables.at(-1);
+      if (last) {
+        last.text += child.text;
+        if (last.content) {
+          const previous = last.content.at(-1);
+          if (typeof previous === "string") {
+            last.content[last.content.length - 1] = previous + child.text;
+          } else {
+            last.content.push(child.text);
+          }
+        }
+      } else {
+        loose += child.text;
+      }
       continue;
     }
-    readWord(child, offset, idPrefix, lineAgent, syllables, loose);
+    syllables.push(
+      readWord(
+        child,
+        offset,
+        idPrefix,
+        lineAgent,
+        agentIds,
+        syllables.length,
+        loose,
+        lineTimed,
+        begin,
+        end
+      )
+    );
     loose = "";
   }
   return syllables.length === 0 && loose.length > 0
@@ -184,27 +243,65 @@ export function unwrap(syllables: Syllable[], keepParentheses = false) {
   const first = syllables.findIndex((syllable) => syllable.text.length > 0);
   const last = syllables.findLastIndex((syllable) => syllable.text.length > 0);
   return syllables.map((syllable, index) => {
-    const from = index === first ? 1 : 0;
-    const to = index === last ? -1 : undefined;
-    return { ...syllable, text: syllable.text.slice(from, to) };
+    const start = index === first;
+    const end = index === last;
+    return trimWord(syllable, start, end);
   });
 }
 
-export function untimed(nodes: XmlNode[], lineAgent: string | null) {
+function trimWord(syllable: Syllable, start: boolean, end: boolean): Syllable {
+  const text = syllable.text.slice(start ? 1 : 0, end ? -1 : undefined);
+  if (syllable.content === undefined) {
+    return { ...syllable, text };
+  }
+  const content = [...syllable.content];
+  for (const atStart of [true, false]) {
+    if ((atStart && !start) || !(atStart || end)) {
+      continue;
+    }
+    const index = atStart
+      ? content.findIndex((part) => typeof part !== "string" || part.length > 0)
+      : content.findLastIndex(
+          (part) => typeof part !== "string" || part.length > 0
+        );
+    const entry = content[index];
+    if (entry === undefined) {
+      throw new ParseError("ttml backing text has no wrapping parentheses");
+    }
+    if (typeof entry === "string") {
+      content[index] = atStart ? entry.slice(1) : entry.slice(0, -1);
+    } else {
+      content[index] = trimWord(entry, atStart, !atStart);
+    }
+  }
+  const kept = content.filter(
+    (part, index) =>
+      typeof part !== "string" ||
+      part.length > 0 ||
+      (index > 0 && index < content.length - 1)
+  );
+  return {
+    ...syllable,
+    content: kept,
+    text,
+  };
+}
+
+export function untimed(nodes: XmlNode[]) {
   let lyric = "";
   for (const child of nodes) {
     if (child.kind === "text") {
       lyric += child.text;
       continue;
     }
-    checkSpan(child, lineAgent);
+    checkSpan(child);
     if (
       attr(child, "begin", null) !== undefined ||
       attr(child, "end", null) !== undefined
     ) {
       throw new ParseError("line-timed text cannot carry syllable timestamps");
     }
-    lyric += untimed(child.children, lineAgent);
+    lyric += untimed(child.children);
   }
   return lyric;
 }
@@ -228,12 +325,33 @@ function readTrack(
   line: Pick<LyricsLine, "begin" | "end" | "agent">,
   timing: "line" | "word",
   offset: number,
-  idPrefix: string
+  idPrefix: string,
+  agentIds: Set<string>
 ) {
   if (timing === "word") {
-    return readWords(nodes, line.begin, line.end, offset, idPrefix, line.agent);
+    return readWords(
+      nodes,
+      line.begin,
+      line.end,
+      offset,
+      idPrefix,
+      line.agent,
+      agentIds
+    );
   }
-  const lyric = untimed(nodes, line.agent);
+  if (nodes.some((node) => node.kind === "element")) {
+    return readWords(
+      nodes,
+      line.begin,
+      line.end,
+      offset,
+      idPrefix,
+      line.agent,
+      agentIds,
+      true
+    );
+  }
+  const lyric = untimed(nodes);
   return lyric.length === 0
     ? []
     : [{ begin: line.begin, end: line.end, id: `${idPrefix}0`, text: lyric }];
@@ -259,8 +377,9 @@ function readLine(
   const id = attr(paragraph, "key", itunesUri) ?? `L${lineIndex + 1}`;
   const agent = agentRef(paragraph, inheritedAgent, agentIds);
   const range = readRange(paragraph, offset, `line ${id}`);
+  const roleValue = role(paragraph);
   const runs =
-    role(paragraph) === "x-bg"
+    roleValue === "x-bg"
       ? {
           backing: {
             keepParentheses:
@@ -270,7 +389,7 @@ function readLine(
           },
           primary: [],
         }
-      : splitRuns(paragraph, agent);
+      : splitRuns(paragraph);
   const line = { agent, ...range };
   const lyricLine = {
     agent,
@@ -278,12 +397,29 @@ function readLine(
       runs.backing === null
         ? []
         : unwrap(
-            readTrack(runs.backing.nodes, line, timing, offset, `${id}b`),
+            readTrack(
+              runs.backing.nodes,
+              line,
+              timing,
+              offset,
+              `${id}b`,
+              agentIds
+            ),
             runs.backing.keepParentheses
           ),
     ...range,
     id,
-    p: readTrack(runs.primary, line, timing, offset, `${id}w`),
+    ...(attr(paragraph, "parenthesis", itunesUri) === "keep"
+      ? { keepParentheses: true }
+      : {}),
+    p: readTrack(runs.primary, line, timing, offset, `${id}w`, agentIds),
+    ...(roleValue === undefined ? {} : { role: roleValue }),
+    ...(attr(paragraph, "id", "http://www.w3.org/XML/1998/namespace") ===
+    undefined
+      ? {}
+      : {
+          xmlId: attr(paragraph, "id", "http://www.w3.org/XML/1998/namespace"),
+        }),
   };
   if (lyricLine.p.length === 0 && lyricLine.b.length > 0) {
     throw new ParseError(
@@ -302,7 +438,7 @@ function readDiv(
   inheritedAgent: string | null,
   agentIds: Set<string>,
   offset: number
-) {
+): { lines: LyricsLine[]; section: LyricsSection } {
   if (!is(division, "div", ttmlUri)) {
     throw new ParseError(`unsupported body element <${division.name}>`);
   }
@@ -310,6 +446,9 @@ function readDiv(
     key(null, "begin"),
     key(null, "end"),
     key(ttmUri, "agent"),
+    key(null, "role"),
+    key(ttmUri, "role"),
+    key(itunesUri, "parenthesis"),
     key(itunesUri, "songPart"),
   ]);
   const paragraphs = elements(division);
@@ -323,11 +462,12 @@ function readDiv(
       "populated ttml divisions require begin and end times"
     );
   }
-  if (beginText !== undefined && endText !== undefined) {
-    readRange(division, 0, "ttml division");
-  }
+  const range =
+    beginText === undefined
+      ? undefined
+      : readRange(division, 0, "ttml division");
   const divAgent = agentRef(division, inheritedAgent, agentIds);
-  return paragraphs.map((paragraph, index) => {
+  const lines = paragraphs.map((paragraph, index) => {
     if (!is(paragraph, "p", ttmlUri)) {
       throw new ParseError(`unsupported division element <${paragraph.name}>`);
     }
@@ -340,23 +480,54 @@ function readDiv(
       offset
     );
   });
+  const roleValue = role(division);
+  const xmlId = attr(division, "id", "http://www.w3.org/XML/1998/namespace");
+  const part = attr(division, "songPart", itunesUri);
+  return {
+    lines,
+    section: {
+      ...(divAgent === inheritedAgent ? {} : { agent: divAgent ?? undefined }),
+      ...(range === undefined ? {} : range),
+      lines: lines.map((line) => line.id),
+      ...(part === undefined ? {} : { part }),
+      ...(attr(division, "parenthesis", itunesUri) === "keep"
+        ? { keepParentheses: true }
+        : {}),
+      ...(roleValue === undefined ? {} : { role: roleValue }),
+      ...(xmlId === undefined ? {} : { xmlId }),
+    },
+  };
 }
 
 export function readBody(
   body: XmlElement,
   timing: "line" | "word",
   agents: LyricsDocument["agents"],
-  offset: number
+  offset: number,
+  rootAgent: string | undefined
 ) {
-  checkAttrs(body, [key(null, "dur"), key(ttmUri, "agent")]);
+  checkAttrs(body, [
+    key(null, "dur"),
+    key(ttmUri, "agent"),
+    key(null, "role"),
+    key(ttmUri, "role"),
+  ]);
   const duration = readTime(needAttr(body, "dur", null), "ttml duration");
   const agentIds = new Set(agents.map((agent) => agent.id));
-  const bodyAgent = agentRef(body, null, agentIds);
+  const bodyAgent = agentRef(body, rootAgent ?? null, agentIds);
   const lines: LyricsLine[] = [];
+  const sections: LyricsSection[] = [];
   for (const division of elements(body)) {
-    lines.push(
-      ...readDiv(division, lines.length, timing, bodyAgent, agentIds, offset)
+    const parsed = readDiv(
+      division,
+      lines.length,
+      timing,
+      bodyAgent,
+      agentIds,
+      offset
     );
+    lines.push(...parsed.lines);
+    sections.push(parsed.section);
   }
   const ids = lines.map((line) => line.id);
   if (ids.some((id, index) => id.length === 0 || ids.indexOf(id) !== index)) {
@@ -365,5 +536,41 @@ export function readBody(
   if (lines.some((line) => line.end > duration)) {
     throw new ParseError("ttml body duration ends before its lyrics");
   }
-  return lines;
+  const roleValue = role(body);
+  const xmlId = attr(body, "id", "http://www.w3.org/XML/1998/namespace");
+  const defaultBegin =
+    lines.length === 0
+      ? undefined
+      : Math.min(...lines.map((line) => line.begin));
+  const defaultDuration =
+    lines.length === 0 ? 0 : Math.max(...lines.map((line) => line.end));
+  const [section] = sections;
+  const standardSection =
+    section !== undefined &&
+    sections.length === 1 &&
+    (lines.length === 0 ||
+      (section.begin === defaultBegin && section.end === duration)) &&
+    section.lines.every((id, index) => id === lines[index]?.id) &&
+    section.lines.length === lines.length &&
+    section.agent === undefined &&
+    section.keepParentheses === undefined &&
+    section.part === undefined &&
+    section.role === undefined &&
+    section.xmlId === undefined;
+  const bodyFields = {
+    ...(bodyAgent === (rootAgent ?? null)
+      ? {}
+      : { agent: bodyAgent ?? undefined }),
+    ...(duration === defaultDuration ? {} : { duration }),
+    ...(roleValue === undefined ? {} : { role: roleValue }),
+    ...(xmlId === undefined ? {} : { xmlId }),
+  };
+  const apple = {
+    ...(Object.keys(bodyFields).length === 0 ? {} : { body: bodyFields }),
+    ...(standardSection ? {} : { sections }),
+  };
+  return {
+    ...(Object.keys(apple).length === 0 ? {} : { apple }),
+    lines,
+  };
 }

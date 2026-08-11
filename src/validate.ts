@@ -154,10 +154,14 @@ export function validate(doc: LyricsDocument): Problem[] {
       ...checkTrack(line, line.b)
     );
     for (const pronunciation of Object.values(line.pronunciations ?? {})) {
-      problems.push(
-        ...checkTrack(line, pronunciation.p),
-        ...checkTrack(line, pronunciation.b)
-      );
+      for (const entry of [pronunciation, ...(pronunciation.variants ?? [])]) {
+        if (entry) {
+          problems.push(
+            ...checkTrack(line, entry.p),
+            ...checkTrack(line, entry.b)
+          );
+        }
+      }
     }
     previousBegin = line.begin;
   }
