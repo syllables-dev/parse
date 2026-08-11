@@ -189,6 +189,58 @@ function projectedLine(
   };
 }
 
+function hasPrimary(
+  line: LyricsLine
+): line is LyricsLine & { p: [Syllable, ...Syllable[]] } {
+  return line.p.length > 0;
+}
+
+function lysLineRange(line: LyricsLine & { p: [Syllable, ...Syllable[]] }) {
+  const syllables = [...line.p, ...line.b];
+  return {
+    begin: Math.min(...syllables.map((syllable) => syllable.begin)),
+    end: Math.max(...syllables.map((syllable) => syllable.end)),
+  };
+}
+
+function projectedLysLines(doc: LyricsDocument) {
+  return doc.lines.filter(hasPrimary).map((line) => {
+    const range = lysLineRange(line);
+    return { ...line, begin: range.begin, end: range.end };
+  });
+}
+
+function lineLosses(doc: LyricsDocument, format: FormatId) {
+  if (format === "lrc") {
+    return doc.lines.some((line, lineIndex) => {
+      const earlier = doc.lines[lineIndex - 1];
+      const end = doc.lines[lineIndex + 1]?.begin ?? line.begin + 5000;
+      return (
+        (earlier !== undefined && line.begin <= earlier.begin) ||
+        line.end !== end ||
+        line.p.length !== 1 ||
+        line.p[0]?.begin !== line.begin ||
+        line.p[0]?.end !== line.end
+      );
+    })
+      ? ["lineTiming" as const]
+      : [];
+  }
+  if (format !== "lqe" && format !== "lys") {
+    return [];
+  }
+  const timedLines = doc.lines.filter(hasPrimary);
+  return [
+    ...(timedLines.some((line) => {
+      const range = lysLineRange(line);
+      return range.begin !== line.begin || range.end !== line.end;
+    })
+      ? ["lineTiming" as const]
+      : []),
+    ...(doc.lines.length === timedLines.length ? [] : ["lineShape" as const]),
+  ];
+}
+
 function qrcWrappingPair(line: LyricsLine) {
   const first = line.p.findIndex((syllable) => syllable.text.length > 0);
   const last = line.p.findLastIndex((syllable) => syllable.text.length > 0);
@@ -488,9 +540,10 @@ function projectedLqeLines(
   capabilities: FormatCapabilities,
   wordTimed: boolean
 ) {
-  const starts = lqeTranslationStarts(doc);
+  const shapedLines = projectedLysLines(doc);
+  const starts = lqeTranslationStarts({ ...doc, lines: shapedLines });
   const timestamps = new Map<string, Set<number>>();
-  return doc.lines.map((line) =>
+  return shapedLines.map((line) =>
     projectedLine(
       line,
       capabilities,
@@ -581,6 +634,11 @@ function projectedLines(
   if (format === "qrc") {
     return projectedQrcLines(doc, capabilities, wordTimed);
   }
+  if (format === "lys") {
+    return projectedLysLines(doc).map((line) =>
+      projectedLine(line, capabilities, wordTimed, line.translations)
+    );
+  }
   return doc.lines.map((line) =>
     projectedLine(line, capabilities, wordTimed, line.translations)
   );
@@ -606,22 +664,7 @@ export function losses(
   if (!capabilities.wordTiming && doc.timing === "word") {
     features.push("wordTiming");
   }
-  if (
-    format === "lrc" &&
-    doc.lines.some((line, lineIndex) => {
-      const earlier = doc.lines[lineIndex - 1];
-      const end = doc.lines[lineIndex + 1]?.begin ?? line.begin + 5000;
-      return (
-        (earlier !== undefined && line.begin <= earlier.begin) ||
-        line.end !== end ||
-        line.p.length !== 1 ||
-        line.p[0]?.begin !== line.begin ||
-        line.p[0]?.end !== line.end
-      );
-    })
-  ) {
-    features.push("lineTiming");
-  }
+  features.push(...lineLosses(doc, format));
   if (
     capabilities.agents === false &&
     (doc.agents.length > 0 || doc.lines.some((line) => line.agent !== null))
@@ -637,7 +680,13 @@ export function losses(
   ) {
     features.push("translations");
   }
-  if (format === "lqe" && lqeTranslationLosses(doc)) {
+  if (
+    format === "lqe" &&
+    (doc.lines.some(
+      (line) => line.p.length === 0 && line.translations !== undefined
+    ) ||
+      lqeTranslationLosses({ ...doc, lines: projectedLysLines(doc) }))
+  ) {
     features.push("translations");
   }
   if (format === "qrc" && qrcTextLosses(doc).size > 0) {

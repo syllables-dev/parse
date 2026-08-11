@@ -40,6 +40,7 @@ interface LysRow {
 const lineHeader = /^\[(\d+)\](.*)$/u;
 const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
+const zeroTimeSeparator = /^[\p{White_Space}\p{P}]+$/u;
 const leftAgentId = "v1";
 const rightAgentId = "v2";
 
@@ -72,6 +73,28 @@ function makeTrack(
   }));
 }
 
+function normalizedWords(words: TimedWord[], lineIndex: number) {
+  const syllables: TimedWord[] = [];
+  for (const word of words) {
+    if (
+      word.begin === 0 &&
+      word.end === 0 &&
+      zeroTimeSeparator.test(word.text)
+    ) {
+      const previous = syllables.at(-1);
+      if (!previous) {
+        throw new ParseError(
+          `lys line ${lineIndex + 1} begins with a zero-time separator`
+        );
+      }
+      previous.text += word.text;
+      continue;
+    }
+    syllables.push(word);
+  }
+  return syllables;
+}
+
 function readRow(
   raw: string,
   lineIndex: number,
@@ -101,7 +124,10 @@ function readRow(
   if (whitespace.test(body)) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
   }
-  const words = readTimedWords(body, lineIndex + 1, 0, 0);
+  const words = normalizedWords(
+    readTimedWords(body, lineIndex + 1, 0, 0),
+    lineIndex
+  );
   if (words.length === 0) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
   }
@@ -243,13 +269,8 @@ export function write(
       checkText(syllable.text, "lys", reservedStamp);
     }
   }
-  for (const [lineIndex, line] of doc.lines.entries()) {
-    const previous = doc.lines[lineIndex - 1];
-    if (
-      line.p.length === 0 &&
-      line.b.length > 0 &&
-      previous?.agent === line.agent
-    ) {
+  for (const line of doc.lines) {
+    if (line.p.length === 0 && line.b.length > 0) {
       throw new Error(`lys cannot preserve backing-only line ${line.id}`);
     }
   }

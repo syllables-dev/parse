@@ -414,12 +414,8 @@ export function write(
       }
     }
   }
-  for (const [lineIndex, line] of doc.lines.entries()) {
-    if (
-      line.p.length === 0 &&
-      line.b.length > 0 &&
-      doc.lines[lineIndex - 1]?.agent === line.agent
-    ) {
+  for (const line of doc.lines) {
+    if (line.p.length === 0 && line.b.length > 0) {
       throw new Error(`lqe cannot preserve backing-only line ${line.id}`);
     }
   }

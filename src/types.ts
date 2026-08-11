@@ -173,6 +173,7 @@ export type ConversionLoss =
   | "pronunciations"
   | "translations"
   | "lyricText"
+  | "lineShape"
   | "lineTiming"
   | "wordTiming";
 
