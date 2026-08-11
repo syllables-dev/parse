@@ -399,8 +399,8 @@ describe("public dispatch", () => {
       const aligned = read(format === "lys" ? lys : lqe, format);
 
       expect(aligned.agents).toEqual([
-        { id: "v1", type: "group" },
-        { id: "v2", type: "other" },
+        { id: "v1", type: "person" },
+        { id: "v2", type: "person" },
       ]);
       expect(aligned.lines.map((line) => line.agent)).toEqual([
         "v1",
@@ -418,27 +418,46 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("writes canonical lys sides as ttml agents", () => {
-    const lyricDocument = read(
-      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)",
-      "lys"
-    );
+  test("writes canonical lys and lqe duet sides as ttml person agents", () => {
+    const lyricRows =
+      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)";
+    const lqe = [
+      "[Lyricify Quick Export]",
+      "[version:1.0]",
+      "[lyrics: format@Lyricify Syllable]",
+      lyricRows,
+    ].join("\n");
 
-    expect(lyricDocument.agents).toEqual([
-      { id: "v1", type: "group" },
-      { id: "v2", type: "other" },
-    ]);
-    expect(lyricDocument.lines.map((line) => line.agent)).toEqual([
-      "v1",
-      "v2",
-      "v2",
-    ]);
-    expect(write(lyricDocument, "lys")).toBe(
-      "[by:]\n[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)"
-    );
-    expect(write(lyricDocument, "ttml")).toContain(
-      '<ttm:agent type="group" xml:id="v1"/><ttm:agent type="other" xml:id="v2"/>'
-    );
+    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
+      const lyricDocument = read(format === "lys" ? lyricRows : lqe, format);
+
+      expect(lyricDocument.agents).toEqual([
+        { id: "v1", type: "person" },
+        { id: "v2", type: "person" },
+      ]);
+      expect(write(lyricDocument, "ttml")).toContain(
+        '<ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/>'
+      );
+    }
+  });
+
+  test("writes an isolated lys or lqe right side as a ttml other agent", () => {
+    const lyricRow = "[5]Right(1000,500)";
+    const lqe = [
+      "[Lyricify Quick Export]",
+      "[version:1.0]",
+      "[lyrics: format@Lyricify Syllable]",
+      lyricRow,
+    ].join("\n");
+
+    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
+      const lyricDocument = read(format === "lys" ? lyricRow : lqe, format);
+
+      expect(lyricDocument.agents).toEqual([{ id: "v2", type: "other" }]);
+      expect(write(lyricDocument, "ttml")).toContain(
+        '<ttm:agent type="other" xml:id="v2"/>'
+      );
+    }
   });
 
   test("rejects undeclared lys agents through both public writers", () => {

@@ -6,15 +6,15 @@ import { read, write } from "../../src/formats/lys";
 const fixtureCases = [
   {
     agents: [
-      { id: "v1", type: "group" },
-      { id: "v2", type: "other" },
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
     ],
     fileName: "duet-values.lys",
     firstText: "Through the rose-colored lenses",
     lineCount: 50,
   },
   {
-    agents: [{ id: "v1", type: "group" }],
+    agents: [{ id: "v1", type: "person" }],
     fileName: "primary-background.lys",
     firstText: "Tryna feel something real",
     lineCount: 57,
@@ -34,7 +34,7 @@ const lyricLine = {
 } satisfies LyricsLine;
 
 const wordDocument = {
-  agents: [{ id: "v1", type: "group" }],
+  agents: [{ id: "v1", type: "person" }],
   lines: [lyricLine],
   meta: {},
   timing: "word",
@@ -125,8 +125,8 @@ describe("lys reader", () => {
     );
 
     expect(doc.agents).toEqual([
-      { id: "v1", type: "group" },
-      { id: "v2", type: "other" },
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
     ]);
     expect(
       doc.lines.map((line) => ({
@@ -144,6 +144,28 @@ describe("lys reader", () => {
       { agent: "v1", track: "backing" },
       { agent: "v2", track: "backing" },
     ]);
+  });
+
+  test("uses person identity changes rather than agent ids for sides", () => {
+    const doc = {
+      agents: [
+        { id: "v2", type: "person" },
+        { id: "guest-92", type: "person" },
+        { id: "voice-401", type: "person" },
+      ],
+      lines: [
+        { ...makeLine("l0", 1000, "First", "p"), agent: "v2" },
+        { ...makeLine("l1", 2000, "Second", "p"), agent: "guest-92" },
+        { ...makeLine("l2", 3000, "Third", "p"), agent: "voice-401" },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+
+    expect(write(doc)).toBe(
+      "[by:]\n[4]First(1000,500)\n[5]Second(2000,500)\n[4]Third(3000,500)"
+    );
   });
 
   test("reads corrected suffix spacing without moving text", () => {
@@ -310,7 +332,7 @@ describe("lys writer", () => {
 
   test("preserves a leading backing-only line", () => {
     const doc = {
-      agents: [{ id: "v1", type: "group" }],
+      agents: [{ id: "v1", type: "person" }],
       lines: [
         makeLine("l0", 1000, "Echo", "b"),
         makeLine("l1", 2000, "Lead", "p"),
@@ -325,7 +347,7 @@ describe("lys writer", () => {
 
   test("rejects a same-agent backing-only line without mutation", () => {
     const doc = {
-      agents: [{ id: "v1", type: "group" }],
+      agents: [{ id: "v1", type: "person" }],
       lines: [
         makeLine("l0", 1000, "Lead", "p"),
         makeLine("l1", 2000, "Echo", "b"),

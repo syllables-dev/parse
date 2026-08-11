@@ -7,15 +7,15 @@ const containerMark = "[Lyricify Quick Export]";
 
 const fixtureCases = [
   {
-    agents: [{ id: "v1", type: "group" }],
+    agents: [{ id: "v1", type: "person" }],
     fileName: "translation-by-tag.lqe",
     firstText: "なんでもかんでも みんな",
     firstTranslation: "世间万物 统统",
   },
   {
     agents: [
-      { id: "v1", type: "group" },
-      { id: "v2", type: "other" },
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
     ],
     fileName: "translation.lqe",
     firstText: "I've been feeling lonely",
@@ -38,7 +38,7 @@ const translatedLine = {
 } satisfies LyricsLine;
 
 const translatedDocument = {
-  agents: [{ id: "v1", type: "group" }],
+  agents: [{ id: "v1", type: "person" }],
   lines: [translatedLine],
   meta: {},
   timing: "word",
