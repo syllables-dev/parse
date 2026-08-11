@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import type { FormatCapabilities, FormatId } from "../src";
+import type { FormatCapabilities, FormatId, LyricsDocument } from "../src";
 import {
   capabilities,
   convert,
@@ -138,6 +138,35 @@ const authorCases = [
       "[Lyricify Quick Export]\n[version:1.0]\n[by:Thereallo]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
   },
 ] satisfies { format: FormatId; source: string }[];
+
+const metadataDocument = {
+  agents: [],
+  lines: [
+    {
+      agent: null,
+      b: [],
+      begin: 1000,
+      end: 6000,
+      id: "l0",
+      p: [{ begin: 1000, end: 6000, id: "l0w0", text: "Hello" }],
+    },
+  ],
+  meta: {},
+  timing: "line",
+  version: 1,
+} satisfies LyricsDocument;
+
+const paddedMetadataCases = [
+  { field: "title", meta: { title: " Song" } },
+  { field: "artist", meta: { artist: "Artist " } },
+  { field: "album", meta: { album: " Album " } },
+  { field: "author", meta: { author: " Author" } },
+  { field: "songwriter", meta: { songwriters: ["Writer "] } },
+] satisfies { field: string; meta: LyricsDocument["meta"] }[];
+
+const paddedWriterCases = authorCases.flatMap(({ format }) =>
+  paddedMetadataCases.map(({ field, meta }) => ({ field, format, meta }))
+);
 
 const precedenceCases = [
   {
@@ -335,6 +364,39 @@ describe("public dispatch", () => {
       "[version:1.0]",
       "[by:Thereallo]",
     ]);
+  });
+
+  test.each(paddedWriterCases)(
+    "rejects $field padding in $format metadata without mutation",
+    ({ format, meta }) => {
+      const doc = { ...metadataDocument, meta: structuredClone(meta) };
+      const before = structuredClone(doc);
+
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot preserve leading or trailing metadata whitespace`
+      );
+      expect(doc).toEqual(before);
+    }
+  );
+
+  test("keeps LQE translations stable when writing TTML", () => {
+    const source = [
+      "[Lyricify Quick Export]",
+      "[version:1.0]",
+      "[lyrics: format@Lyricify Syllable]",
+      "[4]Hello(1000,1000)",
+      "[translation: language@fr, format@LRC]",
+      "[00:01.000]Bonjour",
+    ].join("\n");
+    const doc = read(source, "lqe");
+    const ttml = write(doc, "ttml");
+
+    expect(doc.lines[0]?.translations?.fr).toEqual({
+      kind: "subtitle",
+      p: "Bonjour",
+    });
+    expect(ttml).toContain('<translation type="subtitle" xml:lang="fr">');
+    expect(read(ttml, "ttml")).toEqual(doc);
   });
 
   test.each(authorCases)(

@@ -428,7 +428,7 @@ describe("ttml reader", () => {
     });
   });
 
-  test("reads primary and backing translations in every language", () => {
+  test("round-trips subtitle and replacement translations", () => {
     const apple = [
       "<itunes:iTunesMetadata><itunes:translations>",
       '<itunes:translation type="subtitle" xml:lang="fr-CA"><itunes:text for="line">Salut <span ttm:role="x-bg">(Écho )</span></itunes:text></itunes:translation>',
@@ -440,10 +440,33 @@ describe("ttml reader", () => {
       apple
     );
 
-    expect(read(source).lines[0]?.translations).toEqual({
-      "fr-CA": { b: "Écho ", p: "Salut " },
-      "yue-Hant-HK": { p: "你好" },
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]?.translations).toEqual({
+      "fr-CA": { b: "Écho ", kind: "subtitle", p: "Salut " },
+      "yue-Hant-HK": { kind: "replacement", p: "你好" },
     });
+    expect(writeLyrics(doc, "ttml")).toContain(
+      '<translation type="replacement" xml:lang="yue-Hant-HK">'
+    );
+    expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
+  });
+
+  test("rejects inconsistent source translation kinds", () => {
+    const apple = [
+      "<itunes:iTunesMetadata><itunes:translations>",
+      '<itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="first">Un</itunes:text></itunes:translation>',
+      '<itunes:translation type="replacement" xml:lang="fr"><itunes:text for="second">Deux</itunes:text></itunes:translation>',
+      "</itunes:translations></itunes:iTunesMetadata>",
+    ].join("");
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="first"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="second"><span begin="2.000" end="3.000">Two</span></p></div>',
+      apple
+    );
+
+    expect(() => readLyrics(source, "ttml")).toThrow(
+      "ttml fr translation kind must be consistent across lines"
+    );
   });
 
   test("keeps independently timed primary and backing pronunciations", () => {
@@ -513,6 +536,7 @@ describe("ttml reader", () => {
 
       expect(doc.lines[0]?.translations?.fr).toEqual({
         ...createdField,
+        kind: "subtitle",
         p: "Bonjour le monde",
       });
       expect(doc.lines[0]?.pronunciations?.["en-Latn"]).toEqual({
@@ -693,7 +717,13 @@ describe("ttml writer", () => {
               ],
             },
           },
-          translations: { "fr-CA": { b: "Écho &", p: "Une <ligne>" } },
+          translations: {
+            "fr-CA": {
+              b: "Écho &",
+              kind: "subtitle",
+              p: "Une <ligne>",
+            },
+          },
         },
       ],
       meta: { songwriters: ["Writer & Partner"] },
@@ -777,6 +807,60 @@ describe("ttml writer", () => {
         "ttml"
       )
     ).toThrow("inconsistent automaticallyCreated values");
+  });
+
+  test("rejects inconsistent translation kinds across one language", () => {
+    const laterLine = {
+      ...lyricLine,
+      begin: 4000,
+      end: 6000,
+      id: "later",
+      p: [{ begin: 4000, end: 6000, id: "laterw0", text: "Again" }],
+    } satisfies LyricsLine;
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          translations: { fr: { kind: "subtitle", p: "Bonjour" } },
+        },
+        {
+          ...laterLine,
+          translations: { fr: { kind: "replacement", p: "Encore" } },
+        },
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => writeLyrics(doc, "ttml")).toThrow(
+      "ttml fr translation kind must be consistent across lines"
+    );
+    expect(doc).toEqual(before);
+  });
+
+  test("defaults an omitted translation kind to subtitle", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          translations: { fr: { p: "Bonjour" } },
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(writeLyrics(doc, "ttml")).toContain(
+      '<translation type="subtitle" xml:lang="fr">'
+    );
+  });
+
+  test("preserves padded songwriter text", () => {
+    const doc = {
+      ...wordDocument,
+      meta: { songwriters: ["  Writer  "] },
+    } satisfies LyricsDocument;
+
+    expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
   });
 
   test("rejects metadata fields outside the Apple lyric profile", () => {

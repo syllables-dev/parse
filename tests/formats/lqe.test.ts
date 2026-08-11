@@ -31,9 +31,9 @@ const translatedLine = {
   id: "l0",
   p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
   translations: {
-    ja: { p: "こんにちは" },
-    und: { b: "", p: "" },
-    "zh-Hans": { b: "回声", p: "你好" },
+    ja: { kind: "subtitle", p: "こんにちは" },
+    und: { b: "", kind: "subtitle", p: "" },
+    "zh-Hans": { b: "回声", kind: "subtitle", p: "你好" },
   },
 } satisfies LyricsLine;
 
@@ -92,7 +92,7 @@ describe("lqe fixtures", () => {
     expect(doc.lines[29]?.p[0]?.begin).toBe(104_014);
     expect(doc.lines[29]?.b[0]?.begin).toBe(105_519);
     expect(doc.lines[37]?.translations).toEqual({
-      und: { b: "", p: "等待好日子到来" },
+      und: { b: "", kind: "subtitle", p: "等待好日子到来" },
     });
   });
 });
@@ -122,7 +122,7 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.p[0]?.begin).toBe(1000);
     expect(doc.lines[0]?.b[0]?.begin).toBe(1200);
     expect(doc.lines[0]?.translations).toEqual({
-      "zh-Hans": { b: "回声", p: "你好" },
+      "zh-Hans": { b: "回声", kind: "subtitle", p: "你好" },
     });
   });
 
@@ -139,7 +139,9 @@ describe("lqe reader", () => {
       )
     );
 
-    expect(doc.lines[0]?.translations).toEqual({ und: { b: "", p: "" } });
+    expect(doc.lines[0]?.translations).toEqual({
+      und: { b: "", kind: "subtitle", p: "" },
+    });
   });
 
   test("reads metadata, consumes its offset, and ignores dead fields", () => {
@@ -174,7 +176,9 @@ describe("lqe reader", () => {
     });
     expect(doc.lines[0]).toMatchObject({ begin: 1900, end: 2400 });
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 1900, end: 2400 });
-    expect(doc.lines[0]?.translations).toEqual({ und: { p: "Meaning" } });
+    expect(doc.lines[0]?.translations).toEqual({
+      und: { kind: "subtitle", p: "Meaning" },
+    });
     expect(doc.lines[0]?.pronunciations).toBeUndefined();
   });
 
@@ -212,7 +216,7 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 975, end: 1475 });
     expect(doc.lines[0]?.b[0]).toMatchObject({ begin: 1175, end: 1675 });
     expect(doc.lines[0]?.translations).toEqual({
-      und: { b: "Reply", p: "Meaning" },
+      und: { b: "Reply", kind: "subtitle", p: "Meaning" },
     });
   });
 
@@ -410,6 +414,27 @@ describe("lqe writer", () => {
       "[translation: language@zh-Hans, format@LRC]",
     ]);
     expect(read(written)).toEqual(translatedDocument);
+  });
+
+  test("rejects replacement translations without mutation", () => {
+    const doc = {
+      ...translatedDocument,
+      lines: [
+        {
+          ...translatedLine,
+          translations: {
+            ...translatedLine.translations,
+            ja: { kind: "replacement", p: "こんにちは" },
+          },
+        },
+      ],
+    } satisfies LyricsDocument;
+    const before = structuredClone(doc);
+
+    expect(() => write(doc)).toThrow(
+      "lqe cannot represent replacement translations"
+    );
+    expect(doc).toEqual(before);
   });
 
   test.each([
