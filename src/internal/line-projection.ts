@@ -1,0 +1,60 @@
+import type { FormatCapabilities, LyricsLine, Syllable } from "../types";
+
+export function track(syllables: Syllable[], line: LyricsLine) {
+  const [first] = syllables;
+  if (first === undefined) {
+    return [];
+  }
+  return [
+    {
+      begin: line.begin,
+      end: line.end,
+      id: first.id,
+      text: syllables.map((syllable) => syllable.text).join(""),
+    },
+  ];
+}
+
+function projectedTrack(
+  syllables: Syllable[],
+  line: LyricsLine,
+  wordTimed: boolean
+) {
+  return wordTimed ? syllables : track(syllables, line);
+}
+
+export function projectedLine(
+  line: LyricsLine,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean,
+  translations: LyricsLine["translations"]
+) {
+  const projectedTranslations =
+    capabilities.metadata.apple || translations === undefined
+      ? translations
+      : Object.fromEntries(
+          Object.entries(translations).map(([language, translation]) => [
+            language,
+            {
+              ...(translation.b === undefined ? {} : { b: translation.b }),
+              p: translation.p,
+            },
+          ])
+        );
+  return {
+    agent: capabilities.agents === false ? null : line.agent,
+    b: capabilities.backing ? projectedTrack(line.b, line, wordTimed) : [],
+    begin: line.begin,
+    end: line.end,
+    id: line.id,
+    p: projectedTrack(line.p, line, wordTimed),
+    ...(capabilities.pronunciation &&
+      line.pronunciations !== undefined && {
+        pronunciations: line.pronunciations,
+      }),
+    ...(capabilities.translation &&
+      projectedTranslations !== undefined && {
+        translations: projectedTranslations,
+      }),
+  };
+}

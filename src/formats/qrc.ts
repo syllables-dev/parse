@@ -7,7 +7,8 @@
 
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare, qrcTextLosses } from "../internal/projection";
+import { prepare } from "../internal/projection";
+import { qrcTextLosses } from "../internal/qrc-projection";
 import {
   foldSpacers,
   readTimedWords,
