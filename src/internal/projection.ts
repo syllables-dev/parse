@@ -5,6 +5,7 @@ import type {
   LyricsDocument,
   LyricsLine,
   LyricsMeta,
+  LyricsTranslation,
   Syllable,
   WriteOptions,
 } from "../types";
@@ -156,21 +157,192 @@ function formatMetadataLosses(
 function projectedLine(
   line: LyricsLine,
   capabilities: FormatCapabilities,
-  wordTimed: boolean
+  wordTimed: boolean,
+  translations: LyricsLine["translations"]
 ) {
-  const { pronunciations, translations, ...plain } = line;
   return {
-    ...plain,
     agent: capabilities.agents === false ? null : line.agent,
     b: capabilities.backing ? projectedTrack(line.b, line, wordTimed) : [],
+    begin: line.begin,
+    end: line.end,
+    id: line.id,
     p: projectedTrack(line.p, line, wordTimed),
     ...(capabilities.pronunciation &&
-      pronunciations !== undefined && { pronunciations }),
+      line.pronunciations !== undefined && {
+        pronunciations: line.pronunciations,
+      }),
     ...(capabilities.translation &&
       translations !== undefined && {
         translations,
       }),
   };
+}
+
+function lqeTranslationRows(line: LyricsLine, translation: LyricsTranslation) {
+  const rows: number[] = [];
+  const primary = line.p.at(0);
+  if (primary) {
+    rows.push(primary.begin);
+  }
+  const backing = line.b.at(0);
+  if (backing && translation.b !== undefined) {
+    rows.push(backing.begin);
+  }
+  return rows;
+}
+
+function lqeTranslationMetadataLoss(translation: LyricsTranslation) {
+  return (
+    translation.automaticallyCreated !== undefined ||
+    translation.kind === "replacement"
+  );
+}
+
+function lqeTimestampLoss(
+  rows: number[],
+  starts: Map<number, number>,
+  timestamps: Set<number>
+) {
+  for (const begin of rows) {
+    if ((starts.get(begin) ?? 0) > 1 || timestamps.has(begin)) {
+      return true;
+    }
+    timestamps.add(begin);
+  }
+  return false;
+}
+
+function lqeTranslationLosses(doc: LyricsDocument) {
+  const starts = lqeTranslationStarts(doc);
+  const timestamps = new Map<string, Set<number>>();
+  for (const line of doc.lines) {
+    for (const [language, translation] of Object.entries(
+      line.translations ?? {}
+    )) {
+      if (lqeTranslationMetadataLoss(translation)) {
+        return true;
+      }
+      const primary = line.p.at(0);
+      const backing = line.b.at(0);
+      if (
+        (primary === undefined &&
+          (translation.p.length > 0 ||
+            translation.b === undefined ||
+            backing === undefined)) ||
+        (translation.b !== undefined && backing === undefined)
+      ) {
+        return true;
+      }
+      const used = timestamps.get(language) ?? new Set<number>();
+      timestamps.set(language, used);
+      if (
+        lqeTimestampLoss(lqeTranslationRows(line, translation), starts, used)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function lqeTranslationStarts(doc: LyricsDocument) {
+  const starts = new Map<number, number>();
+  for (const line of doc.lines) {
+    for (const begin of [line.p[0]?.begin, line.b[0]?.begin]) {
+      if (begin !== undefined) {
+        starts.set(begin, (starts.get(begin) ?? 0) + 1);
+      }
+    }
+  }
+  return starts;
+}
+
+export function lqeAmbiguousStarts(doc: LyricsDocument) {
+  return new Set(
+    [...lqeTranslationStarts(doc)].flatMap(([begin, count]) =>
+      count > 1 ? [begin] : []
+    )
+  );
+}
+
+function canPlaceLqeTranslation(
+  begin: number,
+  starts: Map<number, number>,
+  timestamps: Set<number>
+) {
+  return (starts.get(begin) ?? 0) === 1 && !timestamps.has(begin);
+}
+
+function projectedLqeTranslation(
+  line: LyricsLine,
+  translation: LyricsTranslation,
+  starts: Map<number, number>,
+  timestamps: Set<number>
+) {
+  const primary = line.p.at(0);
+  const backing = line.b.at(0);
+  const keepPrimary =
+    primary !== undefined &&
+    canPlaceLqeTranslation(primary.begin, starts, timestamps);
+  const keepBacking =
+    backing !== undefined &&
+    translation.b !== undefined &&
+    canPlaceLqeTranslation(backing.begin, starts, timestamps);
+  if (!keepPrimary && primary !== undefined) {
+    return;
+  }
+  if (!(keepPrimary || keepBacking)) {
+    return;
+  }
+  if (keepPrimary && primary) {
+    timestamps.add(primary.begin);
+  }
+  if (keepBacking && backing) {
+    timestamps.add(backing.begin);
+  }
+  const kind =
+    translation.kind === "replacement" ? "subtitle" : translation.kind;
+  return {
+    ...(keepBacking && { b: translation.b }),
+    ...(kind === undefined ? {} : { kind }),
+    p: keepPrimary ? translation.p : "",
+  };
+}
+
+function projectedLqeTranslations(
+  line: LyricsLine,
+  starts: Map<number, number>,
+  timestamps: Map<string, Set<number>>
+) {
+  const translations: NonNullable<LyricsLine["translations"]> = {};
+  for (const [language, translation] of Object.entries(
+    line.translations ?? {}
+  )) {
+    const used = timestamps.get(language) ?? new Set<number>();
+    timestamps.set(language, used);
+    const projected = projectedLqeTranslation(line, translation, starts, used);
+    if (projected) {
+      translations[language] = projected;
+    }
+  }
+  return Object.keys(translations).length === 0 ? undefined : translations;
+}
+
+function projectedLqeLines(
+  doc: LyricsDocument,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+) {
+  const starts = lqeTranslationStarts(doc);
+  const timestamps = new Map<string, Set<number>>();
+  return doc.lines.map((line) =>
+    projectedLine(
+      line,
+      capabilities,
+      wordTimed,
+      projectedLqeTranslations(line, starts, timestamps)
+    )
+  );
 }
 
 function projectedLrcLines(
@@ -189,7 +361,7 @@ function projectedLrcLines(
     const end = orderedLines[lineIndex + 1]?.line.begin ?? begin + 5000;
     const p = track(line.p, { ...line, begin, end });
     return {
-      ...projectedLine(line, capabilities, wordTimed),
+      ...projectedLine(line, capabilities, wordTimed, line.translations),
       begin,
       end,
       p: p.length > 0 ? p : [{ begin, end, id: `${line.id}w0`, text: "" }],
@@ -237,6 +409,23 @@ function projectedMeta(
         title,
       }),
   };
+}
+
+function projectedLines(
+  doc: LyricsDocument,
+  format: FormatId,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+) {
+  if (format === "lrc") {
+    return projectedLrcLines(doc, capabilities, wordTimed);
+  }
+  if (format === "lqe") {
+    return projectedLqeLines(doc, capabilities, wordTimed);
+  }
+  return doc.lines.map((line) =>
+    projectedLine(line, capabilities, wordTimed, line.translations)
+  );
 }
 
 export function losses(
@@ -290,6 +479,9 @@ export function losses(
   ) {
     features.push("translations");
   }
+  if (format === "lqe" && lqeTranslationLosses(doc)) {
+    features.push("translations");
+  }
   if (
     !capabilities.pronunciation &&
     doc.lines.some((line) => line.pronunciations !== undefined)
@@ -311,10 +503,7 @@ export function project(
   return {
     ...doc,
     agents: capabilities.agents === false ? [] : doc.agents,
-    lines:
-      format === "lrc"
-        ? projectedLrcLines(doc, capabilities, wordTimed)
-        : doc.lines.map((line) => projectedLine(line, capabilities, wordTimed)),
+    lines: projectedLines(doc, format, capabilities, wordTimed),
     meta: projectedMeta(doc.meta, format, capabilities),
     timing: wordTimed ? doc.timing : "line",
   };

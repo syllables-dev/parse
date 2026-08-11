@@ -1,6 +1,6 @@
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
-import { prepare } from "../internal/projection";
+import { lqeAmbiguousStarts, prepare } from "../internal/projection";
 import { readOffset, shiftTimes, splitLines } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
@@ -345,8 +345,9 @@ function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
   }
   rows.sort((left, right) => left.begin - right.begin);
   let previousBegin: number | undefined;
+  const ambiguousStarts = lqeAmbiguousStarts(doc);
   for (const row of rows) {
-    if (row.begin === previousBegin) {
+    if (row.begin === previousBegin || ambiguousStarts.has(row.begin)) {
       throw new Error(`lqe cannot disambiguate translation tag ${row.begin}`);
     }
     previousBegin = row.begin;
@@ -392,6 +393,15 @@ export function write(
     )
   ) {
     throw new Error("lqe cannot represent replacement translations");
+  }
+  if (
+    doc.lines.some((line) =>
+      Object.values(line.translations ?? {}).some(
+        (translation) => translation.automaticallyCreated !== undefined
+      )
+    )
+  ) {
+    throw new Error("lqe cannot represent automaticallyCreated translations");
   }
   for (const line of doc.lines) {
     for (const syllable of [...line.p, ...line.b]) {
