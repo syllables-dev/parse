@@ -200,9 +200,6 @@ export function write(
   checkWrite(doc, "eslrc", capabilities);
   checkMetaText(doc.meta, "eslrc");
   for (const line of doc.lines) {
-    if (line.p.length === 0) {
-      throw new Error(`eslrc cannot represent empty primary line ${line.id}`);
-    }
     for (const syllable of line.p) {
       checkText(syllable.text, "eslrc", reservedStamp);
     }

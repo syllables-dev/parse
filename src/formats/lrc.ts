@@ -215,7 +215,7 @@ export function write(
     if (line.end !== expectedEnd) {
       throw new Error(`lrc cannot represent the end time of line ${line.id}`);
     }
-    if (line.p.length !== 1) {
+    if (line.p.length > 1) {
       throw new Error(
         `lrc cannot represent the primary syllable count of line ${line.id}`
       );

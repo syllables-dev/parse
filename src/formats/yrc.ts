@@ -212,7 +212,11 @@ export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "yrc", options);
+  const prepared = prepare(source, capabilities, "yrc", options);
+  const doc = {
+    ...prepared,
+    lines: prepared.lines.filter((line) => line.p.length > 0),
+  };
   checkLines(doc, "yrc");
   checkWrite(doc, "yrc", capabilities);
   checkMetaText(doc.meta, "yrc");

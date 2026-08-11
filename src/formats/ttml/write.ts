@@ -637,11 +637,34 @@ function writeBody(doc: LyricsDocument) {
   return `<body dur="${writeTime(duration)}"${writeAttrs(doc.apple?.body ?? {})}>${writeSections(doc, duration)}</body>`;
 }
 
+function droppingEmptyLines(doc: LyricsDocument): LyricsDocument {
+  const kept = doc.lines.filter(
+    (line) => line.p.length > 0 || line.b.length > 0
+  );
+  if (kept.length === doc.lines.length) {
+    return doc;
+  }
+  const keptIds = new Set(kept.map((line) => line.id));
+  const apple =
+    doc.apple?.sections === undefined
+      ? doc.apple
+      : {
+          ...doc.apple,
+          sections: doc.apple.sections.map((section) => ({
+            ...section,
+            lines: section.lines.filter((id) => keptIds.has(id)),
+          })),
+        };
+  return { ...doc, apple, lines: kept };
+}
+
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "ttml", options);
+  const doc = droppingEmptyLines(
+    prepare(source, capabilities, "ttml", options)
+  );
   checkDoc(doc);
   const agents = doc.agents
     .map((agent) => {

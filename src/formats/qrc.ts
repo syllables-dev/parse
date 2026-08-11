@@ -274,7 +274,13 @@ export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "qrc", options);
+  const prepared = prepare(source, capabilities, "qrc", options);
+  const doc = {
+    ...prepared,
+    lines: prepared.lines.filter(
+      (line) => line.p.length > 0 || line.b.length > 0
+    ),
+  };
   checkLines(doc, "qrc");
   checkWrite(doc, "qrc", capabilities);
   for (const line of doc.lines) {

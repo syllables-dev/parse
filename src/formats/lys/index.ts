@@ -247,7 +247,13 @@ export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "lys", options);
+  const prepared = prepare(source, capabilities, "lys", options);
+  const doc = {
+    ...prepared,
+    lines: prepared.lines.filter(
+      (line) => line.p.length > 0 || line.b.length > 0
+    ),
+  };
   checkLines(doc, "lys");
   checkWrite(doc, "lys", capabilities);
   for (const line of doc.lines) {
@@ -263,9 +269,6 @@ export function write(
   const lyricRows: string[] = [];
   for (const [line, side] of lysSideLines(doc)) {
     const syllables = [...line.p, ...line.b];
-    if (syllables.length === 0) {
-      throw new Error(`lys cannot represent empty line ${line.id}`);
-    }
     const begin = Math.min(...syllables.map((syllable) => syllable.begin));
     const end = Math.max(...syllables.map((syllable) => syllable.end));
     if (begin !== line.begin || end !== line.end) {
