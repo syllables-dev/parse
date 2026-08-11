@@ -1,7 +1,7 @@
 /**
  * a lyric format supported by the package.
  *
- * enhanced lrc with a2 word markers is represented as `lrc`.
+ * enhanced LRC with A2 word markers is represented as `lrc`.
  */
 export type FormatId = "ttml" | "lrc" | "eslrc" | "qrc" | "yrc" | "lys" | "lqe";
 
@@ -25,8 +25,8 @@ export type ProblemCode =
 /**
  * the editable, format-independent lyric document.
  *
- * the complete value is plain json and all timestamps are absolute integer
- * milliseconds. readers produce deterministic ids for identical input.
+ * the complete value is plain JSON and all timestamps are absolute integer
+ * milliseconds. readers produce deterministic IDs for identical input.
  */
 export interface LyricsDocument {
   /** vocal agents referenced by lyric lines. */
@@ -73,7 +73,7 @@ export interface LyricsAgent {
  * one timed lyric line with primary, backing, translation, and pronunciation tracks.
  */
 export interface LyricsLine {
-  /** the referenced vocal agent id, or `null` for an unattributed line. */
+  /** the referenced vocal agent ID, or `null` for an unattributed line. */
   agent: string | null;
   /** the backing-vocal timed syllables without serialization parentheses. */
   b: Syllable[];
@@ -85,9 +85,9 @@ export interface LyricsLine {
   id: string;
   /** the primary timed syllables, including meaningful whitespace in their text. */
   p: Syllable[];
-  /** timed pronunciation tracks keyed by bcp 47 language tag. */
+  /** timed pronunciation tracks keyed by BCP 47 language tag. */
   pronunciations?: Record<string, LyricsPronunciation>;
-  /** untimed translations keyed by bcp 47 language tag. */
+  /** untimed translations keyed by BCP 47 language tag. */
   translations?: Record<string, LyricsTranslation>;
 }
 
@@ -113,7 +113,7 @@ export interface LyricsTranslation {
   automaticallyCreated?: boolean;
   /** the backing-vocal translation text without serialization parentheses. */
   b?: string;
-  /** the apple ttml translation type; omission defaults to subtitle. */
+  /** the Apple TTML translation type; omission defaults to subtitle. */
   kind?: "subtitle" | "replacement";
   /** the primary translation text. */
   p: string;
@@ -137,7 +137,7 @@ export interface LyricsPronunciation {
 export interface Problem {
   /** the stable machine-readable problem category. */
   code: ProblemCode;
-  /** the offending line or syllable id. */
+  /** the offending line or syllable ID. */
   id: string;
   /** a concise human-readable description for diagnostics. */
   message: string;
@@ -166,8 +166,8 @@ export interface MetadataCapabilities {
  */
 export interface FormatCapabilities {
   /**
-   * agent capability tier. `identity` preserves opaque ids and types.
-   * `alignment` preserves duet-side attribution and may canonicalize ids and types.
+   * agent capability tier. `identity` preserves opaque IDs and types.
+   * `alignment` preserves duet-side attribution and may canonicalize IDs and types.
    */
   agents: false | "alignment" | "identity";
   /** whether the format preserves a separate backing-vocal track. */
@@ -187,7 +187,7 @@ export interface FormatCapabilities {
  */
 export interface ReadOptions {
   /**
-   * expands each leading lrc timestamp into a separate line.
+   * expands each leading LRC timestamp into a separate line.
    *
    * @defaultValue `false`
    */

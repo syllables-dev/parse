@@ -1,6 +1,6 @@
 /**
- * lrc (lyrics), plain line-timed lyrics.
- * by the community; de-facto standard since the late-1990s mp3 player era
+ * LRC (lyrics), plain line-timed lyrics.
+ * by the community; de-facto standard since the late-1990s MP3 player era
  *
  * [ti:Title]
  * [ar:Artist]

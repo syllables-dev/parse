@@ -20,8 +20,8 @@ Each codec also has a focused subpath that exports `read`, `write`, and `capabil
 import { read, write } from "@syllables-dev/parse/ttml";
 ```
 
-Documents and ids are deterministic for identical input. Readers and writers are pure and preserve features according to `capabilities(format)`.
+Documents and IDs are deterministic for identical input. Readers and writers are pure and preserve features according to `capabilities(format)`.
 
-Agent capabilities are `false`, `alignment`, or `identity`; `alignment` preserves duet-side attribution and may canonicalize ids and types, and `identity` preserves opaque ids and types.
+Agent capabilities are `false`, `alignment`, or `identity`; `alignment` preserves duet-side attribution and may canonicalize IDs and types, and `identity` preserves opaque IDs and types.
 
 Metadata capabilities cover `album`, `artist`, `author`, `songwriters`, and `title`. Readers apply source offsets to document timestamps.

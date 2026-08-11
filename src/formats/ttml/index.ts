@@ -1,11 +1,11 @@
 /**
- * ttml (timed text markup language), Apple Music's lyric profile.
+ * TTML (Timed Text Markup Language), Apple Music's lyric profile.
  * by Apple
  *
  * <span ttm:role="x-bg">(backing vocal)</span>
  */
 
-// biome-ignore-all lint/performance/noBarrelFile: file defines ttml public surface
+// biome-ignore-all lint/performance/noBarrelFile: file defines TTML public surface
 import type { FormatCapabilities } from "../../types";
 
 export { read } from "./read";
