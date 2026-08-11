@@ -6,15 +6,15 @@ import { read, write } from "../../src/formats/lys";
 const fixtureCases = [
   {
     agents: [
-      { id: "lys-left", type: "group" },
-      { id: "lys-right", type: "other" },
+      { id: "v1", type: "group" },
+      { id: "v2", type: "other" },
     ],
     fileName: "duet-values.lys",
     firstText: "Through the rose-colored lenses",
     lineCount: 50,
   },
   {
-    agents: [{ id: "lys-left", type: "group" }],
+    agents: [{ id: "v1", type: "group" }],
     fileName: "primary-background.lys",
     firstText: "Tryna feel something real",
     lineCount: 57,
@@ -22,7 +22,7 @@ const fixtureCases = [
 ];
 
 const lyricLine = {
-  agent: "lys-left",
+  agent: "v1",
   b: [],
   begin: 1001,
   end: 2503,
@@ -34,7 +34,7 @@ const lyricLine = {
 } satisfies LyricsLine;
 
 const wordDocument = {
-  agents: [{ id: "lys-left", type: "group" }],
+  agents: [{ id: "v1", type: "group" }],
   lines: [lyricLine],
   meta: {},
   timing: "word",
@@ -57,7 +57,7 @@ function makeLine(id: string, begin: number, text: string, track: "b" | "p") {
     text,
   };
   return {
-    agent: "lys-left",
+    agent: "v1",
     b: track === "b" ? [syllable] : [],
     begin,
     end: begin + 500,
@@ -88,7 +88,7 @@ describe("lys fixtures", () => {
     const doc = await readFixture("primary-background.lys");
 
     expect(doc.lines[20]).toMatchObject({
-      agent: "lys-left",
+      agent: "v1",
       begin: 71_459,
       end: 72_967,
       id: "l20",
@@ -125,8 +125,8 @@ describe("lys reader", () => {
     );
 
     expect(doc.agents).toEqual([
-      { id: "lys-left", type: "group" },
-      { id: "lys-right", type: "other" },
+      { id: "v1", type: "group" },
+      { id: "v2", type: "other" },
     ]);
     expect(
       doc.lines.map((line) => ({
@@ -135,14 +135,14 @@ describe("lys reader", () => {
       }))
     ).toEqual([
       { agent: null, track: "primary" },
-      { agent: "lys-left", track: "primary" },
-      { agent: "lys-right", track: "primary" },
+      { agent: "v1", track: "primary" },
+      { agent: "v2", track: "primary" },
       { agent: null, track: "primary" },
-      { agent: "lys-left", track: "primary" },
-      { agent: "lys-right", track: "primary" },
+      { agent: "v1", track: "primary" },
+      { agent: "v2", track: "primary" },
       { agent: null, track: "backing" },
-      { agent: "lys-left", track: "backing" },
-      { agent: "lys-right", track: "backing" },
+      { agent: "v1", track: "backing" },
+      { agent: "v2", track: "backing" },
     ]);
   });
 
@@ -288,10 +288,10 @@ describe("lys writer", () => {
 
   test("round-trips a canonical right-side carrier", () => {
     const doc = {
-      agents: [{ id: "lys-right", type: "other" }],
+      agents: [{ id: "v2", type: "other" }],
       lines: [
         {
-          agent: "lys-right",
+          agent: "v2",
           b: [],
           begin: 1000,
           end: 1500,
@@ -310,7 +310,7 @@ describe("lys writer", () => {
 
   test("preserves a leading backing-only line", () => {
     const doc = {
-      agents: [{ id: "lys-left", type: "group" }],
+      agents: [{ id: "v1", type: "group" }],
       lines: [
         makeLine("l0", 1000, "Echo", "b"),
         makeLine("l1", 2000, "Lead", "p"),
@@ -325,7 +325,7 @@ describe("lys writer", () => {
 
   test("rejects a same-agent backing-only line without mutation", () => {
     const doc = {
-      agents: [{ id: "lys-left", type: "group" }],
+      agents: [{ id: "v1", type: "group" }],
       lines: [
         makeLine("l0", 1000, "Lead", "p"),
         makeLine("l1", 2000, "Echo", "b"),

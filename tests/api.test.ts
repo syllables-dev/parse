@@ -392,23 +392,24 @@ describe("public dispatch", () => {
     const lys = convert(ttml, "lys");
     const lqe = convert(ttml, "lqe");
 
+    expect(read(ttml, "ttml").agents).toEqual(lyricDocument.agents);
     expect(lys).toBe(`[by:]\n${expectedRows.join("\n")}`);
     expect(lqe).toContain(expectedRows.join("\n"));
     for (const format of ["lys", "lqe"] satisfies FormatId[]) {
       const aligned = read(format === "lys" ? lys : lqe, format);
 
       expect(aligned.agents).toEqual([
-        { id: "lys-left", type: "group" },
-        { id: "lys-right", type: "other" },
+        { id: "v1", type: "group" },
+        { id: "v2", type: "other" },
       ]);
       expect(aligned.lines.map((line) => line.agent)).toEqual([
-        "lys-left",
-        "lys-left",
-        "lys-right",
-        "lys-right",
-        "lys-left",
-        "lys-right",
-        "lys-right",
+        "v1",
+        "v1",
+        "v2",
+        "v2",
+        "v1",
+        "v2",
+        "v2",
       ]);
     }
     expect(capabilities("ttml").agents).toBe("identity");
@@ -417,23 +418,26 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("uses fixed synthetic agents for lys side-only rows", () => {
+  test("writes canonical lys sides as ttml agents", () => {
     const lyricDocument = read(
       "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)",
       "lys"
     );
 
     expect(lyricDocument.agents).toEqual([
-      { id: "lys-left", type: "group" },
-      { id: "lys-right", type: "other" },
+      { id: "v1", type: "group" },
+      { id: "v2", type: "other" },
     ]);
     expect(lyricDocument.lines.map((line) => line.agent)).toEqual([
-      "lys-left",
-      "lys-right",
-      "lys-right",
+      "v1",
+      "v2",
+      "v2",
     ]);
     expect(write(lyricDocument, "lys")).toBe(
       "[by:]\n[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)"
+    );
+    expect(write(lyricDocument, "ttml")).toContain(
+      '<ttm:agent type="group" xml:id="v1"/><ttm:agent type="other" xml:id="v2"/>'
     );
   });
 
