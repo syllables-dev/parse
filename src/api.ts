@@ -34,7 +34,10 @@ import {
   write as writeYrc,
   capabilities as yrcCapabilities,
 } from "./formats/yrc";
+import { losses as findLosses } from "./internal/projection";
 import type {
+  ConversionLoss,
+  ConvertOptions,
   FormatCapabilities,
   FormatId,
   LyricsDocument,
@@ -147,9 +150,17 @@ export function write(
 export function convert(
   text: string,
   to: FormatId,
-  options: ReadOptions = {}
+  options: ConvertOptions = {}
 ): string {
-  return write(read(text, requireFormat(text), options), to);
+  return write(read(text, requireFormat(text), options), to, options);
+}
+
+/** lists document features removed by an explicit lossy write. */
+export function losses(
+  doc: LyricsDocument,
+  format: FormatId
+): ConversionLoss[] {
+  return findLosses(doc, codecs[format].capabilities);
 }
 
 /** returns an isolated snapshot of the features preserved by the selected format writer. */

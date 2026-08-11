@@ -6,22 +6,6 @@
  */
 
 // biome-ignore-all lint/performance/noBarrelFile: file defines TTML public surface
-import type { FormatCapabilities } from "../../types";
-
+export { capabilities } from "./capabilities";
 export { read } from "./read";
 export { write } from "./write";
-
-export const capabilities = {
-  agents: "identity",
-  backing: true,
-  metadata: {
-    album: false,
-    artist: false,
-    author: false,
-    songwriters: true,
-    title: false,
-  },
-  pronunciation: true,
-  translation: true,
-  wordTiming: true,
-} satisfies FormatCapabilities;

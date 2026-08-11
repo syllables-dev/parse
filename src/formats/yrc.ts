@@ -7,6 +7,7 @@
 
 import { ParseError } from "../errors";
 import { checkMetaText, readTag } from "../internal/lyric-tags";
+import { prepare } from "../internal/projection";
 import { readYrcWords, type TimedWord } from "../internal/timed-words";
 import {
   checkTime,
@@ -195,10 +196,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
-  if (Object.keys(options).length > 0) {
-    throw new Error("yrc write options are unsupported");
-  }
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "yrc", options);
   checkLines(doc, "yrc");
   checkWrite(doc, "yrc", capabilities);
   checkMetaText(doc.meta, "yrc");

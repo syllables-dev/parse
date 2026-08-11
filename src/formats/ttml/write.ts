@@ -1,3 +1,4 @@
+import { prepare } from "../../internal/projection";
 import { checkTime } from "../../internal/timestamps";
 import type {
   LyricsDocument,
@@ -5,6 +6,7 @@ import type {
   Syllable,
   WriteOptions,
 } from "../../types";
+import { capabilities } from "./capabilities";
 import {
   escapeAttr,
   escapeText,
@@ -294,10 +296,11 @@ function writeBody(doc: LyricsDocument) {
   return `<body dur="${writeTime(duration)}"><div begin="${writeTime(begin)}" end="${writeTime(duration)}">${paragraphs}</div></body>`;
 }
 
-export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
-  if (Object.keys(options).length > 0) {
-    throw new Error("ttml write options are unsupported");
-  }
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "ttml", options);
   checkDoc(doc);
   const agents = doc.agents
     .map(

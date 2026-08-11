@@ -161,6 +161,19 @@ export interface MetadataCapabilities {
   title: boolean;
 }
 
+/** a document feature removed by an explicit lossy conversion. */
+export type ConversionLoss =
+  | "agents"
+  | "backing"
+  | "metadata.album"
+  | "metadata.artist"
+  | "metadata.author"
+  | "metadata.songwriters"
+  | "metadata.title"
+  | "pronunciations"
+  | "translations"
+  | "wordTiming";
+
 /**
  * the lyric features a format can preserve when writing.
  */
@@ -197,9 +210,15 @@ export interface ReadOptions {
 /**
  * writer behavior shared by public serialization entry points.
  *
- * the type is reserved for format options introduced by demonstrated need.
+ * set `lossy` to remove features unsupported by the output format.
  */
-export type WriteOptions = Record<string, never>;
+export interface WriteOptions {
+  /** allows a writer to remove features listed by {@link losses}. */
+  lossy?: boolean;
+}
+
+/** conversion read and write options. */
+export type ConvertOptions = ReadOptions & WriteOptions;
 
 /**
  * the document and detected format returned by {@link parse}.

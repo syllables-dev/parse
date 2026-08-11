@@ -1,5 +1,6 @@
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
+import { prepare } from "../internal/projection";
 import { readOffset, shiftTimes, splitLines } from "../internal/timestamps";
 import { checkLines, checkText, checkWrite } from "../internal/write-check";
 import type {
@@ -376,10 +377,11 @@ function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
   };
 }
 
-export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
-  if (Object.keys(options).length > 0) {
-    throw new Error("lqe write options are unsupported");
-  }
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "lqe", options);
   checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
   if (

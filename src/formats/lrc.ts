@@ -11,6 +11,7 @@
 
 import { ParseError } from "../errors";
 import { readTag, writeTags } from "../internal/lyric-tags";
+import { prepare } from "../internal/projection";
 import {
   readOffset,
   readStamp,
@@ -198,10 +199,11 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
-  if (Object.keys(options).length > 0) {
-    throw new Error("lrc write options are unsupported");
-  }
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "lrc", options);
   checkLines(doc, "lrc");
   checkWrite(doc, "lrc", capabilities);
   for (const [lineIndex, line] of doc.lines.entries()) {

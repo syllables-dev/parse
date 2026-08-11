@@ -7,6 +7,7 @@
 
 import { ParseError } from "../../errors";
 import { readTag, writeTags } from "../../internal/lyric-tags";
+import { prepare } from "../../internal/projection";
 import { readTimedWords, type TimedWord } from "../../internal/timed-words";
 import {
   checkTime,
@@ -225,10 +226,11 @@ function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
     .join("")}`;
 }
 
-export function write(doc: LyricsDocument, options: WriteOptions = {}): string {
-  if (Object.keys(options).length > 0) {
-    throw new Error("lys write options are unsupported");
-  }
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, capabilities, "lys", options);
   checkLines(doc, "lys");
   checkWrite(doc, "lys", capabilities);
   for (const line of doc.lines) {
