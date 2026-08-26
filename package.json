@@ -2,6 +2,10 @@
   "name": "@syllables-dev/parse",
   "version": "0.2.0",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/syllables-dev/parse.git"
+  },
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
