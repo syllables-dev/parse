@@ -130,4 +130,4 @@ Available for `ttml`, `lrc`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
 
 ## License
 
-AGPL-3.0-or-later
+MIT

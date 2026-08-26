@@ -1,7 +1,7 @@
 {
   "name": "@syllables-dev/parse",
   "version": "0.1.0",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "type": "module",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
