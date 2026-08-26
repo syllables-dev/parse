@@ -145,6 +145,7 @@ export function read(
     ...(Object.keys(apple).length === 0 ? {} : { apple }),
     lines: body.lines,
     meta: {
+      ...(head.title === undefined ? {} : { title: head.title }),
       ...(head.songwriters.length > 0 && { songwriters: head.songwriters }),
       ...(head.songwriterIds === undefined
         ? {}

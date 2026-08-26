@@ -43,6 +43,7 @@ export interface TtmlHead {
   offset?: number;
   songwriterIds?: (string | undefined)[];
   songwriters: string[];
+  title?: string;
   translations: XmlElement[];
   transliterations: XmlElement[];
 }
@@ -196,8 +197,21 @@ export function readHead(root: XmlElement): TtmlHead {
   const metadata = only(head, "metadata", ttmlUri);
   checkAttrs(metadata, [key(itunesUri, "lyricGenId")]);
   for (const child of elements(metadata)) {
+    // a third-party namespace is skipped rather than rejected, since a writer that does not
+    // understand it also does not need to; only the vocabularies this profile owns are policed
     if (
-      !(is(child, "agent", ttmUri) || is(child, "iTunesMetadata", itunesUri))
+      child.uri !== ttmlUri &&
+      child.uri !== ttmUri &&
+      child.uri !== itunesUri
+    ) {
+      continue;
+    }
+    if (
+      !(
+        is(child, "agent", ttmUri) ||
+        is(child, "title", ttmUri) ||
+        is(child, "iTunesMetadata", itunesUri)
+      )
     ) {
       throw new ParseError(`unsupported metadata element <${child.name}>`);
     }
@@ -210,8 +224,12 @@ export function readHead(root: XmlElement): TtmlHead {
     }
   }
   const lyricGenerationId = attr(metadata, "lyricGenId", itunesUri);
+  const titleElement = elements(metadata).find((child) =>
+    is(child, "title", ttmUri)
+  );
   return {
     agents,
+    ...(titleElement === undefined ? {} : { title: text(titleElement) }),
     ...(lyricGenerationId === undefined ? {} : { lyricGenerationId }),
     ...readApple(metadata),
   };

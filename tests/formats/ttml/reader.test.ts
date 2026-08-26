@@ -243,6 +243,39 @@ describe("ttml reader", () => {
     ]);
   });
 
+  test("reads the ttml title into document metadata", () => {
+    const doc = readLyrics(
+      makeTtml(
+        '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000">Hi</p></div>',
+        "<ttm:title>Everything Goes On</ttm:title>"
+      ),
+      "ttml"
+    );
+
+    expect(doc.meta.title).toBe("Everything Goes On");
+  });
+
+  test("skips metadata from a namespace this profile does not own", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000">Hi</p></div>',
+      '<amll:meta key="album" value="Everything Goes On - Single"/>'
+    ).replace("<tt ", '<tt xmlns:amll="http://www.example.com/ns/amll" ');
+
+    expect(() => readLyrics(source, "ttml")).not.toThrow();
+  });
+
+  test("still rejects an unknown element in a namespace this profile owns", () => {
+    expect(() =>
+      readLyrics(
+        makeTtml(
+          '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000">Hi</p></div>',
+          "<ttm:copyright>anything</ttm:copyright>"
+        ),
+        "ttml"
+      )
+    ).toThrow(ParseError);
+  });
+
   test("keeps Apple translation and pronunciation backing parentheses", () => {
     const metadata = [
       "<itunes:iTunesMetadata>",

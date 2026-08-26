@@ -394,12 +394,9 @@ function checkDoc(doc: LyricsDocument) {
   if (doc.meta.author !== undefined) {
     throw new Error("ttml cannot represent a lyric file author");
   }
-  if (
-    doc.meta.title !== undefined ||
-    doc.meta.artist !== undefined ||
-    doc.meta.album !== undefined
-  ) {
-    throw new Error("ttml cannot represent title, artist, or album metadata");
+  // title has a home in ttml's own vocabulary, artist and album do not
+  if (doc.meta.artist !== undefined || doc.meta.album !== undefined) {
+    throw new Error("ttml cannot represent artist or album metadata");
   }
   if (doc.meta.songwriters?.length === 0) {
     throw new Error("ttml cannot preserve an empty songwriter list");
@@ -665,6 +662,11 @@ export function write(
     prepare(source, capabilities, "ttml", options)
   );
   checkDoc(doc);
+  // ttml's own title element, emitted before the agents it precedes in the profile
+  const title =
+    doc.meta.title === undefined
+      ? ""
+      : `<ttm:title>${escapeText(doc.meta.title)}</ttm:title>`;
   const agents = doc.agents
     .map((agent) => {
       const attrs = ` type="${escapeAttr(agent.type)}" xml:id="${escapeAttr(agent.id)}"${agent.artistId === undefined ? "" : ` itunes:artistId="${escapeAttr(agent.artistId)}"`}`;
@@ -703,7 +705,7 @@ export function write(
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${doc.timing === "word" ? "Word" : "Line"}"${lyricGenerationId}${language}${writeAttrs(apple?.root ?? {})}>`,
-    `<head><metadata>${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
+    `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
     writeBody(doc),
     "</tt>",
   ].join("\n");
