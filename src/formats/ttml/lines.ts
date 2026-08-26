@@ -13,7 +13,7 @@ import {
   ttmlUri,
   ttmUri,
 } from "@/formats/ttml/profile";
-import type { XmlElement, XmlNode } from "@/internal/xml";
+import type { XmlElement, XmlNode, XmlText } from "@/internal/xml";
 import type {
   LyricsDocument,
   LyricsLine,
@@ -35,6 +35,9 @@ interface BackingRun {
 // accepted and dropped rather than failing the read
 const presentation = [key(null, "region"), key(null, "style")];
 
+const spacePattern = /[\t\n\r ]/u;
+const spaceOnly = /^[\t\n\r ]*$/u;
+
 // an element from another vocabulary carries no lyric text of ours, so it drops out of the
 // flow entirely rather than ending the line at an unreadable node
 function lyricNodes(nodes: XmlNode[]) {
@@ -44,6 +47,51 @@ function lyricNodes(nodes: XmlNode[]) {
       // <br> is a presentational break inside a paragraph this profile already models as one line
       (owned(node.uri) && !is(node, "br", ttmlUri))
   );
+}
+
+// the text nodes of a block in document order, span nesting flattened away, so a whitespace run
+// that crosses a tag boundary is still one run
+function textNodes(nodes: XmlNode[]): XmlText[] {
+  return nodes.flatMap((node) =>
+    node.kind === "text" ? [node] : textNodes(lyricNodes(node.children))
+  );
+}
+
+// the lyric nodes of a block, whitespace normalized in place
+//
+// lyric content is xml:space="default", which this profile never overrides, so a reader owes it
+// the xsl normalization: tabs and linefeeds count as spaces, a run of them collapses to one, and
+// the runs on the block's outer edges go away
+//
+// the surviving space lands where its run started, which is what keeps "word " spaced from the
+// group that follows it while pretty-printed indentation stays out of the lyric
+function blockNodes(parent: XmlElement) {
+  const nodes = lyricNodes(parent.children);
+  const texts = textNodes(nodes);
+  let running = false;
+  let started = false;
+  for (const node of texts) {
+    let normalized = "";
+    for (const char of node.text) {
+      if (spacePattern.test(char)) {
+        normalized += running || !started ? "" : " ";
+        running = true;
+        continue;
+      }
+      normalized += char;
+      running = false;
+      started = true;
+    }
+    node.text = normalized;
+  }
+  // a run still open at the block edge is trailing, and its space is the last character emitted
+  const trailing = running
+    ? texts.findLast((node) => node.text.length > 0)
+    : undefined;
+  if (trailing) {
+    trailing.text = trailing.text.slice(0, -1);
+  }
+  return nodes;
 }
 
 function isSpan(element: XmlElement) {
@@ -100,10 +148,19 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
   );
 }
 
+// whitespace at the head of a run separates it from the sibling run before it, so it belongs to
+// neither track and would otherwise indent whichever one happens to be written second
+function separated(nodes: XmlNode[]) {
+  const first = nodes.findIndex(
+    (node) => node.kind !== "text" || !spaceOnly.test(node.text)
+  );
+  return first === -1 ? [] : nodes.slice(first);
+}
+
 export function splitRuns(parent: XmlElement): Runs {
   const primary: XmlNode[] = [];
   let backing: BackingRun | null = null;
-  for (const child of lyricNodes(parent.children)) {
+  for (const child of blockNodes(parent)) {
     if (child.kind === "element" && role(child) === "x-bg") {
       if (!isSpan(child) || backing !== null) {
         throw new ParseError("ttml lines support one backing-vocal span");
@@ -111,7 +168,7 @@ export function splitRuns(parent: XmlElement): Runs {
       checkSpan(child);
       const nodes =
         attr(child, "begin", null) === undefined
-          ? lyricNodes(child.children)
+          ? separated(lyricNodes(child.children))
           : [child];
       backing = {
         keepParentheses:
@@ -123,7 +180,7 @@ export function splitRuns(parent: XmlElement): Runs {
       primary.push(child);
     }
   }
-  return { backing, primary };
+  return { backing, primary: separated(primary) };
 }
 
 function readWord(
@@ -398,14 +455,16 @@ function readLine(
   const agent = agentRef(paragraph, inheritedAgent, agentIds);
   const range = readRange(paragraph, offset, `line ${id}`);
   const roleValue = role(paragraph);
+  // a paragraph carrying the role is backing in its entirety, so it never splits into two runs
+  const whole = roleValue === "x-bg" ? blockNodes(paragraph) : [];
   const runs =
     roleValue === "x-bg"
       ? {
           backing: {
             keepParentheses:
               attr(paragraph, "parenthesis", itunesUri) === "keep" ||
-              keepsParentheses(lyricNodes(paragraph.children)),
-            nodes: lyricNodes(paragraph.children),
+              keepsParentheses(whole),
+            nodes: whole,
           },
           primary: [],
         }

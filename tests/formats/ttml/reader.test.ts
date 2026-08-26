@@ -777,3 +777,74 @@ describe("ttml reader", () => {
     expect(() => read(source)).toThrow(ParseError);
   });
 });
+
+describe("ttml whitespace", () => {
+  const open = '<p begin="0.000" end="3.000" itunes:key="L1">';
+  const group =
+    '<span ttm:role="x-bg"><span begin="0.000" end="1.000">(oh)</span></span>';
+  const timed = [
+    '<span begin="1.000" end="2.000">You </span>',
+    '<span begin="2.000" end="3.000">should</span>',
+  ];
+  const words = [
+    { begin: 1000, end: 2000, id: "L1w0", text: "You " },
+    { begin: 2000, end: 3000, id: "L1w1", text: "should" },
+  ];
+
+  function line(paragraph: string) {
+    const doc = read(
+      makeTtml(`<div begin="0.000" end="3.000">${paragraph}</div>`)
+    );
+    expect(read(write(doc))).toEqual(doc);
+    return doc.lines[0];
+  }
+
+  test("a backing group ahead of the words does not indent the primary track", () => {
+    expect(line(`${open}${group} ${timed.join("")}</p>`)).toMatchObject({
+      b: [{ text: "oh" }],
+      p: words,
+    });
+  });
+
+  test("a backing group after the words keeps the space that separates them", () => {
+    // the writer orders tracks by their start, so a trailing group has to start last to survive one
+    const late =
+      '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
+    expect(line(`${open}${timed.join("")} ${late}</p>`)).toMatchObject({
+      b: [{ text: "oh" }],
+      p: [words[0], { ...words[1], text: "should " }],
+    });
+  });
+
+  test("indentation and linefeeds collapse the way xml:space default requires", () => {
+    const indent = "\n  ";
+    expect(line(`${open}${indent}${timed.join(indent)}\n</p>`)?.p).toEqual(
+      words
+    );
+  });
+
+  test("a whitespace run spanning a tag boundary collapses to one space", () => {
+    expect(
+      line(
+        `${open}<span begin="1.000" end="2.000">You \t\n</span>  ${timed[1]}</p>`
+      )?.p
+    ).toEqual(words);
+  });
+
+  test("a pretty-printed backing group still finds its wrapping parentheses", () => {
+    const indent = "\n  ";
+    expect(
+      line(
+        `${open}${indent}<span ttm:role="x-bg">\n    <span begin="0.000" end="1.000">(oh)</span></span>${indent}${timed.join(indent)}\n</p>`
+      )
+    ).toMatchObject({ b: [{ text: "oh" }], p: words });
+  });
+
+  test("a backing group is the only content of a whitespace-padded line", () => {
+    expect(() =>
+      read(
+        makeTtml(`<div begin="0.000" end="3.000">${open} ${group} </p></div>`)
+      )
+    ).toThrow(ParseError);
+  });
+});
