@@ -7,6 +7,7 @@ import {
   itunesUri,
   key,
   needAttr,
+  owned,
   readRange,
   readTime,
   ttmlUri,
@@ -28,6 +29,21 @@ interface Runs {
 interface BackingRun {
   keepParentheses: boolean;
   nodes: XmlNode[];
+}
+
+// layout is a player's concern, not the lyric's; these carry no timing or text so they are
+// accepted and dropped rather than failing the read
+const presentation = [key(null, "region"), key(null, "style")];
+
+// an element from another vocabulary carries no lyric text of ours, so it drops out of the
+// flow entirely rather than ending the line at an unreadable node
+function lyricNodes(nodes: XmlNode[]) {
+  return nodes.filter(
+    (node) =>
+      node.kind === "text" ||
+      // <br> is a presentational break inside a paragraph this profile already models as one line
+      (owned(node.uri) && !is(node, "br", ttmlUri))
+  );
 }
 
 function isSpan(element: XmlElement) {
@@ -70,6 +86,7 @@ function checkSpan(element: XmlElement) {
     key(ttmUri, "agent"),
     key(ttmUri, "role"),
     key(itunesUri, "parenthesis"),
+    ...presentation,
   ]);
   role(element);
 }
@@ -86,14 +103,16 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
 export function splitRuns(parent: XmlElement): Runs {
   const primary: XmlNode[] = [];
   let backing: BackingRun | null = null;
-  for (const child of parent.children) {
+  for (const child of lyricNodes(parent.children)) {
     if (child.kind === "element" && role(child) === "x-bg") {
       if (!isSpan(child) || backing !== null) {
         throw new ParseError("ttml lines support one backing-vocal span");
       }
       checkSpan(child);
       const nodes =
-        attr(child, "begin", null) === undefined ? child.children : [child];
+        attr(child, "begin", null) === undefined
+          ? lyricNodes(child.children)
+          : [child];
       backing = {
         keepParentheses:
           attr(child, "parenthesis", itunesUri) === "keep" ||
@@ -146,7 +165,7 @@ function readWord(
   const content: Syllable["content"] = leading.length === 0 ? [] : [leading];
   let lyric = leading;
   let childIndex = 0;
-  for (const child of element.children) {
+  for (const child of lyricNodes(element.children)) {
     if (child.kind === "text") {
       const previous = content.at(-1);
       if (typeof previous === "string") {
@@ -193,7 +212,7 @@ export function readWords(
 ) {
   const syllables: Syllable[] = [];
   let loose = "";
-  for (const child of nodes) {
+  for (const child of lyricNodes(nodes)) {
     if (child.kind === "text") {
       const last = syllables.at(-1);
       if (last) {
@@ -289,7 +308,7 @@ function trimWord(syllable: Syllable, start: boolean, end: boolean): Syllable {
 
 export function untimed(nodes: XmlNode[]) {
   let lyric = "";
-  for (const child of nodes) {
+  for (const child of lyricNodes(nodes)) {
     if (child.kind === "text") {
       lyric += child.text;
       continue;
@@ -373,6 +392,7 @@ function readLine(
     key(ttmUri, "role"),
     key(itunesUri, "key"),
     key(itunesUri, "parenthesis"),
+    ...presentation,
   ]);
   const id = attr(paragraph, "key", itunesUri) ?? `L${lineIndex + 1}`;
   const agent = agentRef(paragraph, inheritedAgent, agentIds);
@@ -384,8 +404,8 @@ function readLine(
           backing: {
             keepParentheses:
               attr(paragraph, "parenthesis", itunesUri) === "keep" ||
-              keepsParentheses(paragraph.children),
-            nodes: paragraph.children,
+              keepsParentheses(lyricNodes(paragraph.children)),
+            nodes: lyricNodes(paragraph.children),
           },
           primary: [],
         }
@@ -450,8 +470,9 @@ function readDiv(
     key(ttmUri, "role"),
     key(itunesUri, "parenthesis"),
     key(itunesUri, "songPart"),
+    ...presentation,
   ]);
-  const paragraphs = elements(division);
+  const paragraphs = elements(division).filter((child) => owned(child.uri));
   const beginText = attr(division, "begin", null);
   const endText = attr(division, "end", null);
   if (
@@ -511,13 +532,14 @@ export function readBody(
     key(ttmUri, "agent"),
     key(null, "role"),
     key(ttmUri, "role"),
+    ...presentation,
   ]);
   const duration = readTime(needAttr(body, "dur", null), "ttml duration");
   const agentIds = new Set(agents.map((agent) => agent.id));
   const bodyAgent = agentRef(body, rootAgent ?? null, agentIds);
   const lines: LyricsLine[] = [];
   const sections: LyricsSection[] = [];
-  for (const division of elements(body)) {
+  for (const division of elements(body).filter((child) => owned(child.uri))) {
     const parsed = readDiv(
       division,
       lines.length,

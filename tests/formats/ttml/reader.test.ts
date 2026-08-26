@@ -264,6 +264,44 @@ describe("ttml reader", () => {
     expect(() => readLyrics(source, "ttml")).not.toThrow();
   });
 
+  test("reads past presentation and parameter vocabularies", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000" region="r1"><p begin="1.000" end="3.000" region="r1" style="s1"><span begin="1.000" end="2.000" style="s1">Hi</span><br/><span begin="2.000" end="3.000">there</span></p></div>',
+      "",
+      "Word",
+      'dur="10.000" region="r1"'
+    )
+      .replace(
+        "<tt ",
+        '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
+      )
+      .replace(
+        "<head>",
+        '<head><styling xmlns:tts="http://www.w3.org/ns/ttml#styling"><style xml:id="s1" tts:color="white"/></styling><layout><region xml:id="r1"/></layout>'
+      );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]?.p).toMatchObject([{ text: "Hi" }, { text: "there" }]);
+  });
+
+  test("keeps lyric text flowing around a foreign inline element", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000"><span begin="1.000" end="2.000">Hi</span><x:note>skip me</x:note><span begin="2.000" end="3.000">there</span></p><x:aside/></div>',
+      ""
+    ).replace("<tt ", '<tt xmlns:x="urn:example:x" ');
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]?.p).toMatchObject([{ text: "Hi" }, { text: "there" }]);
+  });
+
+  test("accepts an unknown Apple attribute rather than failing the read", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000"><span begin="1.000" end="3.000">Hi</span></p></div>'
+    ).replace("itunes:timing=", 'itunes:someFutureField="7" itunes:timing=');
+
+    expect(readLyrics(source, "ttml").lines).toHaveLength(1);
+  });
+
   test("still rejects an unknown element in a namespace this profile owns", () => {
     expect(() =>
       readLyrics(

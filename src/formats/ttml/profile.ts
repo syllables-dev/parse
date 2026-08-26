@@ -2,7 +2,6 @@ import { ParseError } from "@/errors";
 import { toInt } from "@/internal/timestamps";
 import type { XmlElement } from "@/internal/xml";
 
-const xmlnsUri = "http://www.w3.org/2000/xmlns/";
 const clockPattern = /^(?:(\d+):)?(\d+)(?:\.(\d{1,3}))?$/u;
 const languagePattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const nonSpace = /\S/u;
@@ -34,11 +33,16 @@ export function needAttr(
   return value;
 }
 
+// the profile owns the ttml, ttm, and itunes vocabularies; anything else (ttp parameters, tts
+// styling, a player's private namespace) belongs to someone else and is read past, not rejected
+export function owned(uri: string | null) {
+  return uri === null || uri === ttmlUri || uri === ttmUri || uri === itunesUri;
+}
+
 export function checkAttrs(element: XmlElement, allowed: string[]) {
   for (const candidate of element.attrs) {
     if (
-      candidate.uri !== xmlnsUri &&
-      !(candidate.uri === xmlUri && candidate.local === "id") &&
+      owned(candidate.uri) &&
       !allowed.includes(key(candidate.uri, candidate.local))
     ) {
       throw new ParseError(

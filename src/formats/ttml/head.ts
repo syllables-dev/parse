@@ -16,6 +16,7 @@ import {
   locale,
   needAttr,
   only,
+  owned,
   readRange,
   readTime,
   text,
@@ -191,19 +192,11 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
 export function readHead(root: XmlElement): TtmlHead {
   const head = only(root, "head", ttmlUri);
   checkAttrs(head, []);
-  if (elements(head).some((child) => !is(child, "metadata", ttmlUri))) {
-    throw new ParseError("ttml head supports one metadata child");
-  }
   const metadata = only(head, "metadata", ttmlUri);
   checkAttrs(metadata, [key(itunesUri, "lyricGenId")]);
   for (const child of elements(metadata)) {
-    // a third-party namespace is skipped rather than rejected, since a writer that does not
-    // understand it also does not need to; only the vocabularies this profile owns are policed
-    if (
-      child.uri !== ttmlUri &&
-      child.uri !== ttmUri &&
-      child.uri !== itunesUri
-    ) {
+    // a writer that does not understand another vocabulary also does not need to
+    if (!owned(child.uri)) {
       continue;
     }
     if (

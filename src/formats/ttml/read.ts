@@ -3,11 +3,8 @@ import { readHead, readProns, readTranslations } from "@/formats/ttml/head";
 import { readBody } from "@/formats/ttml/lines";
 import {
   attr,
-  checkAttrs,
-  elements,
   is,
   itunesUri,
-  key,
   locale,
   needAttr,
   only,
@@ -31,14 +28,6 @@ function readTiming(root: XmlElement): {
   if (!is(root, "tt", ttmlUri)) {
     throw new ParseError("ttml root must be <tt>");
   }
-  checkAttrs(root, [
-    key(itunesUri, "lyricGenId"),
-    key(itunesUri, "timing"),
-    key(ttmUri, "agent"),
-    key(null, "role"),
-    key(ttmUri, "role"),
-    key(xmlUri, "lang"),
-  ]);
   const language = attr(root, "lang", xmlUri);
   if (language !== undefined) {
     locale(root);
@@ -51,13 +40,6 @@ function readTiming(root: XmlElement): {
     timing = "word";
   } else {
     throw new ParseError(`unsupported ttml timing ${timingText}`);
-  }
-  if (
-    elements(root).some(
-      (child) => !(is(child, "head", ttmlUri) || is(child, "body", ttmlUri))
-    )
-  ) {
-    throw new ParseError("ttml root supports head and body children");
   }
   const agent = attr(root, "agent", ttmUri);
   const namespacedRole = attr(root, "role", ttmUri);
