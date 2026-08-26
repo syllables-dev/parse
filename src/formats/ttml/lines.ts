@@ -148,13 +148,15 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
   );
 }
 
-// whitespace at the head of a run separates it from the sibling run before it, so it belongs to
-// neither track and would otherwise indent whichever one happens to be written second
+// whitespace on either edge of a run separates it from the sibling run beside it, so it belongs to
+// neither track, and keeping it would indent or pad whichever track it happened to land against
+//
+// a space the source wrote inside the edge syllable itself is that syllable's text and stays put
 function separated(nodes: XmlNode[]) {
-  const first = nodes.findIndex(
-    (node) => node.kind !== "text" || !spaceOnly.test(node.text)
-  );
-  return first === -1 ? [] : nodes.slice(first);
+  const lyric = (node: XmlNode) =>
+    node.kind !== "text" || !spaceOnly.test(node.text);
+  const first = nodes.findIndex(lyric);
+  return first === -1 ? [] : nodes.slice(first, nodes.findLastIndex(lyric) + 1);
 }
 
 export function splitRuns(parent: XmlElement): Runs {

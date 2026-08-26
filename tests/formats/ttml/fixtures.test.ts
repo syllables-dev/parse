@@ -213,10 +213,12 @@ describe("ttml fixtures", () => {
   test("preserves fixture whitespace and removes backing wrappers", async () => {
     const doc = await readFixture("backing-vocals.ttml");
 
+    // the spaces the source wrote inside each span stay, the one separating the line from the
+    // backing group that follows it belongs to neither track
     expect(doc.lines[17]?.p).toEqual([
       { begin: 46_341, end: 46_741, id: "L18w0", text: "Thank " },
       { begin: 46_741, end: 47_291, id: "L18w1", text: "u, " },
-      { begin: 47_474, end: 47_952, id: "L18w2", text: "next " },
+      { begin: 47_474, end: 47_952, id: "L18w2", text: "next" },
     ]);
     expect(doc.lines[17]?.b).toEqual([
       { begin: 48_007, end: 48_508, id: "L18b0", text: "Next" },

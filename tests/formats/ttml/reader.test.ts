@@ -806,14 +806,27 @@ describe("ttml whitespace", () => {
     });
   });
 
-  test("a backing group after the words keeps the space that separates them", () => {
+  test("a backing group after the words does not pad the primary track", () => {
     // the writer orders tracks by their start, so a trailing group has to start last to survive one
     const late =
       '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
     expect(line(`${open}${timed.join("")} ${late}</p>`)).toMatchObject({
       b: [{ text: "oh" }],
-      p: [words[0], { ...words[1], text: "should " }],
+      p: words,
     });
+  });
+
+  test("a space the source wrote inside the last span is that syllable's own text", () => {
+    const late =
+      '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
+    expect(
+      line(
+        `${open}${timed[0]}<span begin="2.000" end="2.500">should </span>${late}</p>`
+      )?.p
+    ).toEqual([
+      { begin: 1000, end: 2000, id: "L1w0", text: "You " },
+      { begin: 2000, end: 2500, id: "L1w1", text: "should " },
+    ]);
   });
 
   test("indentation and linefeeds collapse the way xml:space default requires", () => {
