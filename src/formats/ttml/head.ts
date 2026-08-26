@@ -16,6 +16,7 @@ import {
   locale,
   needAttr,
   only,
+  owned,
   readRange,
   readTime,
   text,
@@ -43,6 +44,7 @@ export interface TtmlHead {
   offset?: number;
   songwriterIds?: (string | undefined)[];
   songwriters: string[];
+  title?: string;
   translations: XmlElement[];
   transliterations: XmlElement[];
 }
@@ -190,14 +192,19 @@ function readApple(metadata: XmlElement): Omit<TtmlHead, "agents"> {
 export function readHead(root: XmlElement): TtmlHead {
   const head = only(root, "head", ttmlUri);
   checkAttrs(head, []);
-  if (elements(head).some((child) => !is(child, "metadata", ttmlUri))) {
-    throw new ParseError("ttml head supports one metadata child");
-  }
   const metadata = only(head, "metadata", ttmlUri);
   checkAttrs(metadata, [key(itunesUri, "lyricGenId")]);
   for (const child of elements(metadata)) {
+    // a writer that does not understand another vocabulary also does not need to
+    if (!owned(child.uri)) {
+      continue;
+    }
     if (
-      !(is(child, "agent", ttmUri) || is(child, "iTunesMetadata", itunesUri))
+      !(
+        is(child, "agent", ttmUri) ||
+        is(child, "title", ttmUri) ||
+        is(child, "iTunesMetadata", itunesUri)
+      )
     ) {
       throw new ParseError(`unsupported metadata element <${child.name}>`);
     }
@@ -210,8 +217,12 @@ export function readHead(root: XmlElement): TtmlHead {
     }
   }
   const lyricGenerationId = attr(metadata, "lyricGenId", itunesUri);
+  const titleElement = elements(metadata).find((child) =>
+    is(child, "title", ttmUri)
+  );
   return {
     agents,
+    ...(titleElement === undefined ? {} : { title: text(titleElement) }),
     ...(lyricGenerationId === undefined ? {} : { lyricGenerationId }),
     ...readApple(metadata),
   };

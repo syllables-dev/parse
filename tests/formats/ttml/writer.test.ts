@@ -408,9 +408,9 @@ describe("ttml writer", () => {
     expect(() =>
       write({
         ...wordDocument,
-        meta: { album: "Album", artist: "Artist", title: "Title" },
+        meta: { album: "Album", artist: "Artist" },
       })
-    ).toThrow("ttml cannot represent title, artist, or album metadata");
+    ).toThrow("ttml cannot represent artist or album metadata");
     expect(() => write({ ...wordDocument, meta: { songwriters: [] } })).toThrow(
       "ttml cannot preserve an empty songwriter list"
     );
