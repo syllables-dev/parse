@@ -31,40 +31,30 @@ interface BackingRun {
   nodes: XmlNode[];
 }
 
-// layout is a player's concern, not the lyric's; these carry no timing or text so they are
-// accepted and dropped rather than failing the read
+// region and style are layout, so they are accepted and dropped rather than failing the read
 const presentation = [key(null, "region"), key(null, "style")];
 
 const spacePattern = /[\t\n\r ]/u;
 const spaceOnly = /^[\t\n\r ]*$/u;
 
-// an element from another vocabulary carries no lyric text of ours, so it drops out of the
-// flow entirely rather than ending the line at an unreadable node
+// a foreign-vocabulary element carries no lyric text, so it drops out instead of ending the line
 function lyricNodes(nodes: XmlNode[]) {
   return nodes.filter(
     (node) =>
       node.kind === "text" ||
-      // <br> is a presentational break inside a paragraph this profile already models as one line
+      // <br> is presentational; this profile already models a paragraph as one line
       (owned(node.uri) && !is(node, "br", ttmlUri))
   );
 }
 
-// the text nodes of a block in document order, span nesting flattened away, so a whitespace run
-// that crosses a tag boundary is still one run
+// span nesting is flattened, so a whitespace run crossing a tag boundary stays one run
 function textNodes(nodes: XmlNode[]): XmlText[] {
   return nodes.flatMap((node) =>
     node.kind === "text" ? [node] : textNodes(lyricNodes(node.children))
   );
 }
 
-// the lyric nodes of a block, whitespace normalized in place
-//
-// lyric content is xml:space="default", which this profile never overrides, so a reader owes it
-// the xsl normalization: tabs and linefeeds count as spaces, a run of them collapses to one, and
-// the runs on the block's outer edges go away
-//
-// the surviving space lands where its run started, which is what keeps "word " spaced from the
-// group that follows it while pretty-printed indentation stays out of the lyric
+// xml:space="default" normalization: a run of spaces collapses to one, block edges lose theirs
 function blockNodes(parent: XmlElement) {
   const nodes = lyricNodes(parent.children);
   const texts = textNodes(nodes);
@@ -84,7 +74,7 @@ function blockNodes(parent: XmlElement) {
     }
     node.text = normalized;
   }
-  // a run still open at the block edge is trailing, and its space is the last character emitted
+  // a run still open at the block edge is trailing
   const trailing = running
     ? texts.findLast((node) => node.text.length > 0)
     : undefined;
@@ -148,10 +138,7 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
   );
 }
 
-// whitespace on either edge of a run separates it from the sibling run beside it, so it belongs to
-// neither track, and keeping it would indent or pad whichever track it happened to land against
-//
-// a space the source wrote inside the edge syllable itself is that syllable's text and stays put
+// whitespace between two runs belongs to neither track, unlike a space inside an edge syllable
 function separated(nodes: XmlNode[]) {
   const lyric = (node: XmlNode) =>
     node.kind !== "text" || !spaceOnly.test(node.text);

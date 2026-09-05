@@ -33,8 +33,7 @@ export function needAttr(
   return value;
 }
 
-// the profile owns the ttml, ttm, and itunes vocabularies; anything else (ttp parameters, tts
-// styling, a player's private namespace) belongs to someone else and is read past, not rejected
+// foreign vocabularies such as ttp, tts, or a player's own are read past, not rejected
 export function owned(uri: string | null) {
   return uri === null || uri === ttmlUri || uri === ttmUri || uri === itunesUri;
 }

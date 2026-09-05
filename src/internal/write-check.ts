@@ -8,8 +8,7 @@ import type {
 
 const lineBreak = /[\r\n]/u;
 
-// a line whose tracks hold no lyric text occupies a timing slot with nothing
-// to render, so formats that cannot encode a placeholder row drop it
+// a line with no lyric text holds a timing slot nothing renders, so such formats drop it
 export function hasLyricText(line: LyricsLine): boolean {
   return [...line.p, ...line.b].some(
     (syllable) => syllable.text.trim().length > 0

@@ -811,7 +811,7 @@ describe("ttml whitespace", () => {
   });
 
   test("a backing group after the words does not pad the primary track", () => {
-    // the writer orders tracks by their start, so a trailing group has to start last to survive one
+    // the writer orders tracks by their start, so a trailing group must start last
     const late =
       '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
     expect(line(`${open}${timed.join("")} ${late}</p>`)).toMatchObject({

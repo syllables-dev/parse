@@ -59,7 +59,7 @@ function qrcWriteRows(
 }
 
 function qrcBackingRow(rows: QrcProjectionRow[], rowIndex: number) {
-  // qrc reads an isolated wrapped row as backing vocals.
+  // qrc reads an isolated wrapped row as backing vocals
   return (
     rows[rowIndex]?.wrapped === true &&
     !rows[rowIndex - 1]?.wrapped &&

@@ -195,7 +195,7 @@ export function readHead(root: XmlElement): TtmlHead {
   const metadata = only(head, "metadata", ttmlUri);
   checkAttrs(metadata, [key(itunesUri, "lyricGenId")]);
   for (const child of elements(metadata)) {
-    // a writer that does not understand another vocabulary also does not need to
+    // a foreign vocabulary is not ours to validate
     if (!owned(child.uri)) {
       continue;
     }
