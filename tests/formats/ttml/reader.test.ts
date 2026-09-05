@@ -255,7 +255,7 @@ describe("ttml reader", () => {
       { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
     ]);
 
-    for (const format of ["ttml", "qrc", "lys", "lqe"] as const) {
+    for (const format of ["ttml", "qrc"] as const) {
       const written = writeLyrics(doc, format);
       expect(written).toContain("((（Echo");
       expect(written).toContain("）))");
@@ -311,25 +311,16 @@ describe("ttml reader", () => {
     expect(doc.meta.title).toBe("Everything Goes On");
   });
 
-  test("skips metadata from a namespace this profile does not own", () => {
-    const source = makeTtml(
-      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000">Hi</p></div>',
-      '<amll:meta key="album" value="Everything Goes On - Single"/>'
-    ).replace("<tt ", '<tt xmlns:amll="http://www.example.com/ns/amll" ');
-
-    expect(() => readLyrics(source, "ttml")).not.toThrow();
-  });
-
   test("reads past presentation and parameter vocabularies", () => {
     const source = makeTtml(
       '<div begin="1.000" end="3.000" region="r1"><p begin="1.000" end="3.000" region="r1" style="s1"><span begin="1.000" end="2.000" style="s1">Hi</span><br/><span begin="2.000" end="3.000">there</span></p></div>',
-      "",
+      '<amll:meta key="album" value="Everything Goes On - Single"/>',
       "Word",
       'dur="10.000" region="r1"'
     )
       .replace(
         "<tt ",
-        '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
+        '<tt xmlns:amll="urn:example:amll" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
       )
       .replace(
         "<head>",

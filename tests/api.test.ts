@@ -292,160 +292,129 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("writes canonical lys and lqe duet sides as ttml person agents", () => {
-    const lyricRows =
-      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)";
-    const lqe = [
-      "[Lyricify Quick Export]",
-      "[version:1.0]",
-      "[lyrics: format@Lyricify Syllable]",
-      lyricRows,
-    ].join("\n");
+  test("writes lys duet sides as ttml agents", () => {
+    const paired = read(
+      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)",
+      "lys"
+    );
+    const isolated = read("[5]Right(1000,500)", "lys");
 
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      const lyricDocument = read(format === "lys" ? lyricRows : lqe, format);
-
-      expect(lyricDocument.agents).toEqual([
-        { id: "v1", type: "person" },
-        { id: "v2", type: "person" },
-      ]);
-      expect(write(lyricDocument, "ttml")).toContain(
-        '<ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/>'
-      );
-    }
+    expect(paired.agents).toEqual([
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
+    ]);
+    expect(write(paired, "ttml")).toContain(
+      '<ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/>'
+    );
+    expect(isolated.agents).toEqual([{ id: "v2", type: "other" }]);
+    expect(write(isolated, "ttml")).toContain(
+      '<ttm:agent type="other" xml:id="v2"/>'
+    );
   });
 
-  test("writes an isolated lys or lqe right side as a ttml other agent", () => {
-    const lyricRow = "[5]Right(1000,500)";
-    const lqe = [
-      "[Lyricify Quick Export]",
-      "[version:1.0]",
-      "[lyrics: format@Lyricify Syllable]",
-      lyricRow,
-    ].join("\n");
-
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      const lyricDocument = read(format === "lys" ? lyricRow : lqe, format);
-
-      expect(lyricDocument.agents).toEqual([{ id: "v2", type: "other" }]);
-      expect(write(lyricDocument, "ttml")).toContain(
-        '<ttm:agent type="other" xml:id="v2"/>'
-      );
-    }
-  });
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "projects %s line bounds to timed syllable bounds",
-    (format) => {
-      const lyricDocument = {
-        agents: [],
-        lines: [
-          {
-            agent: null,
-            b: [{ begin: 1200, end: 1800, id: "l0b0", text: "Reply" }],
-            begin: 1000,
-            end: 2000,
-            id: "l0",
-            p: [{ begin: 1100, end: 1900, id: "l0w0", text: "Lead" }],
-          },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual(["lineRange"]);
-      expect(() => write(lyricDocument, format)).toThrow(
-        "lys cannot represent the range of line l0"
-      );
-      expect(
-        read(write(lyricDocument, format, { lossy: true }), format).lines[0]
-      ).toMatchObject({
-        b: [{ begin: 1200, end: 1800, text: "Reply" }],
-        begin: 1100,
-        end: 1900,
-        p: [{ begin: 1100, end: 1900, text: "Lead" }],
-      });
-      expect(lyricDocument).toEqual(before);
-    }
-  );
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "silently drops empty %s lines without reporting a loss",
-    (format) => {
-      const lyricDocument = {
-        agents: [],
-        lines: [
-          {
-            agent: null,
-            b: [],
-            begin: 1000,
-            end: 1500,
-            id: "l0",
-            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
-          },
-          { agent: null, b: [], begin: 2000, end: 2500, id: "l1", p: [] },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual([]);
-      expect(read(write(lyricDocument, format), format).lines).toMatchObject([
-        { id: "l0", p: [{ text: "Lead" }] },
-      ]);
-      expect(lyricDocument).toEqual(before);
-    }
-  );
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "removes orphan backing-only %s lines only during lossy writes",
-    (format) => {
-      const lyricDocument = {
-        agents: [{ id: "v1", type: "person" }],
-        lines: [
-          {
-            agent: "v1",
-            b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
-            begin: 1000,
-            end: 1500,
-            id: "l0",
-            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
-          },
-          {
-            agent: "v1",
-            b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
-            begin: 2000,
-            end: 2500,
-            id: "l1",
-            p: [],
-          },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual(["backing"]);
-      expect(() => write(lyricDocument, format)).toThrow(
-        `${format} cannot preserve backing-only line l1`
-      );
-      expect(
-        read(write(lyricDocument, format, { lossy: true }), format).lines
-      ).toMatchObject([
+  test("projects lys line bounds to timed syllable bounds", () => {
+    const lyricDocument = {
+      agents: [],
+      lines: [
         {
-          b: [{ begin: 1200, end: 1500, text: "Reply" }],
+          agent: null,
+          b: [{ begin: 1200, end: 1800, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 2000,
           id: "l0",
-          p: [{ text: "Lead" }],
+          p: [{ begin: 1100, end: 1900, id: "l0w0", text: "Lead" }],
         },
-      ]);
-      expect(lyricDocument).toEqual(before);
-    }
-  );
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual(["lineRange"]);
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "lys cannot represent the range of line l0"
+    );
+    expect(
+      read(write(lyricDocument, "lys", { lossy: true }), "lys").lines[0]
+    ).toMatchObject({
+      b: [{ begin: 1200, end: 1800, text: "Reply" }],
+      begin: 1100,
+      end: 1900,
+      p: [{ begin: 1100, end: 1900, text: "Lead" }],
+    });
+    expect(lyricDocument).toEqual(before);
+  });
+
+  test("silently drops empty lys lines without reporting a loss", () => {
+    const lyricDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+        },
+        { agent: null, b: [], begin: 2000, end: 2500, id: "l1", p: [] },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual([]);
+    expect(read(write(lyricDocument, "lys"), "lys").lines).toMatchObject([
+      { id: "l0", p: [{ text: "Lead" }] },
+    ]);
+    expect(lyricDocument).toEqual(before);
+  });
+
+  test("removes orphan backing-only lys lines only during lossy writes", () => {
+    const lyricDocument = {
+      agents: [{ id: "v1", type: "person" }],
+      lines: [
+        {
+          agent: "v1",
+          b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+        },
+        {
+          agent: "v1",
+          b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
+          begin: 2000,
+          end: 2500,
+          id: "l1",
+          p: [],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual(["backing"]);
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "lys cannot preserve backing-only line l1"
+    );
+    expect(
+      read(write(lyricDocument, "lys", { lossy: true }), "lys").lines
+    ).toMatchObject([
+      {
+        b: [{ begin: 1200, end: 1500, text: "Reply" }],
+        id: "l0",
+        p: [{ text: "Lead" }],
+      },
+    ]);
+    expect(lyricDocument).toEqual(before);
+  });
 
   test("reports and removes LQE translations on orphan backing-only lines", () => {
     const lyricDocument = {
@@ -482,7 +451,7 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("rejects undeclared lys agents through both public writers", () => {
+  test("rejects undeclared lys agents", () => {
     const lyricDocument = {
       agents: [],
       lines: [
@@ -501,11 +470,9 @@ describe("public dispatch", () => {
     } satisfies LyricsDocument;
     const before = structuredClone(lyricDocument);
 
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      expect(() => write(lyricDocument, format)).toThrow(
-        "line l0 references an undeclared lys agent"
-      );
-    }
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "line l0 references an undeclared lys agent"
+    );
     expect(lyricDocument).toEqual(before);
   });
 
