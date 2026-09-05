@@ -53,7 +53,7 @@ import { losses, read, write } from "@syllables-dev/parse";
 const doc = read("[0,1300]Hel(0,400)lo (400,300)world(700,600)", "qrc");
 
 losses(doc, "lrc");
-// ["wordTiming", "lineTiming"]
+// ["wordTiming", "lineRange"]
 
 write(doc, "lrc");
 // throws: lrc cannot represent word timing

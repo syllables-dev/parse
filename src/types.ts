@@ -299,7 +299,7 @@ export type ConversionLoss =
   | "pronunciations"
   | "translations"
   | "lyricText"
-  | "lineTiming"
+  | "lineRange"
   | "wordTiming";
 
 /**

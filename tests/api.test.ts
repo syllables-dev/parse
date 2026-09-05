@@ -359,7 +359,7 @@ describe("public dispatch", () => {
       } satisfies LyricsDocument;
       const before = structuredClone(lyricDocument);
 
-      expect(losses(lyricDocument, format)).toEqual(["lineTiming"]);
+      expect(losses(lyricDocument, format)).toEqual(["lineRange"]);
       expect(() => write(lyricDocument, format)).toThrow(
         "lys cannot represent the range of line l0"
       );
@@ -607,7 +607,7 @@ describe("public dispatch", () => {
 
     expect(losses(lyricDocument, "lrc")).toEqual([
       "wordTiming",
-      "lineTiming",
+      "lineRange",
       "agents",
       "backing",
       "translations",
@@ -1025,7 +1025,7 @@ describe("public dispatch", () => {
     };
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(losses(doc, "lrc")).toEqual(["lineRange"]);
     expect(() => write(doc, "lrc")).toThrow(
       "lrc cannot represent the end time of line l0"
     );
@@ -1076,7 +1076,7 @@ describe("public dispatch", () => {
     ];
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(losses(doc, "lrc")).toEqual(["lineRange"]);
     const restored = read(write(doc, "lrc", { lossy: true }), "lrc");
 
     expect(restored.lines.map((line) => [line.begin, line.end])).toEqual([
