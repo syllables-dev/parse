@@ -2,7 +2,8 @@
 
 Readers and writers for Apple Music TTML, LRC, ESLRC, QRC, YRC, LYS, and LQE, built around one shared document schema.
 
-The package is pre-1.0. Everything documented here is covered by tests, but the schema may still change between minor versions.
+> [!NOTE]
+> Documentation is a work in progress. Everything below is accurate and covered by tests, but the package is pre-1.0 and the schema may still change between minor versions.
 
 ## Install
 
