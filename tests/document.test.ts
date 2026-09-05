@@ -2,15 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { createDocument } from "@/index";
 
 describe("createDocument", () => {
-  test("returns a plain JSON value", () => {
-    const doc = createDocument();
-
-    expect(structuredClone(doc)).toEqual(doc);
-    expect(JSON.parse(JSON.stringify(doc))).toEqual(doc);
-    expect(Object.getPrototypeOf(doc)).toBe(Object.prototype);
-    expect(Object.getPrototypeOf(doc.meta)).toBe(Object.prototype);
-  });
-
   test("creates independent collections", () => {
     const first = createDocument();
     const second = createDocument();

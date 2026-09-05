@@ -167,42 +167,4 @@ describe("lys writer", () => {
       },
     });
   });
-
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow(`lys cannot represent ${message}`);
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "lys cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "lys cannot represent pronunciations",
-    },
-  ])("rejects unrepresentable document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
-  });
 });

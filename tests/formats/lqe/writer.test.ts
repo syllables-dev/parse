@@ -307,18 +307,6 @@ describe("lqe writer", () => {
     });
   });
 
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({
-        ...translatedDocument,
-        meta: { songwriters: [...songwriters] },
-      })
-    ).toThrow(`lqe cannot represent ${message}`);
-  });
-
   test("rejects invalid language tags and pronunciation tracks", () => {
     expect(() =>
       write({

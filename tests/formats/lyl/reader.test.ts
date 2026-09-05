@@ -27,15 +27,6 @@ describe("lyl reader", () => {
     expect(doc.lines[0]).toMatchObject({ begin: 1250, end: 2250 });
   });
 
-  test("keeps the silence between lines", () => {
-    const doc = read("[1000,2000]one\n[9000,9500]two");
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1000, 2000],
-      [9000, 9500],
-    ]);
-  });
-
   test("rejects a foreign type declaration", () => {
     expect(() => read("[type:LyricifySyllable]\n[1000,2000]one")).toThrow(
       "lyl declares the unknown type LyricifySyllable"

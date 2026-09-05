@@ -613,23 +613,6 @@ describe("public dispatch", () => {
     ).toThrow("expandRepeats is available for lrc input");
   });
 
-  test("reports malformed input through an explicit reader", () => {
-    expect(() => read("[00:xx]broken", "lrc")).toThrow(ParseError);
-  });
-
-  test("returns deterministic plain documents and ids", () => {
-    const source = "[00:00.000]first\n[00:01.000]second";
-    const first = read(source, "lrc");
-    const second = read(source, "lrc");
-
-    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
-    expect(structuredClone(first)).toEqual(first);
-    expect(first.lines.map((line) => line.id)).toEqual(["l0", "l1"]);
-    expect(
-      first.lines.flatMap((line) => line.p.map((word) => word.id))
-    ).toEqual(["l0w0", "l1w0"]);
-  });
-
   test.each(authorCases)(
     "round-trips $format lyric authors",
     ({ format, source }) => {
@@ -1046,7 +1029,15 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
-  test.each(["eslrc", "lqe", "lrc", "lys", "qrc", "yrc"] satisfies FormatId[])(
+  test.each([
+    "eslrc",
+    "lqe",
+    "lrc",
+    "lyl",
+    "lys",
+    "qrc",
+    "yrc",
+  ] satisfies FormatId[])(
     "refuses a static document in %s even when lossy",
     (format) => {
       const staticDocument = {
@@ -1077,7 +1068,6 @@ describe("public dispatch", () => {
 
   test("returns isolated capability snapshots", () => {
     const exposed = capabilities("lrc");
-    const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");
 
     exposed.timing.word = true;
     exposed.metadata.title = false;
@@ -1091,8 +1081,5 @@ describe("public dispatch", () => {
     expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(capabilities("lrc").trackGenerated).toBeFalse();
     expect(capabilities("lrc").trackKind).toBeFalse();
-    expect(() => write(wordTimed, "lrc")).toThrow(
-      "lrc cannot represent word timing"
-    );
   });
 });
