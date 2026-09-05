@@ -44,7 +44,7 @@ write(doc, "lrc", { lossy: true });
 // "[by:]\n[00:00.000]Hello world"
 ```
 
-Call `losses(doc, format)` to see what a target would drop, then pass `{ lossy: true }` once you accept it.
+Call `losses(doc, format)` to see what a target would drop, then pass `{ lossy: true }` once you accept it. It lists what `lossy` waives, not whether the write will succeed, so a write can still throw for something no projection can fix.
 
 ## Timing
 
