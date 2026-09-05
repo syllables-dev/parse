@@ -1094,13 +1094,14 @@ describe("public dispatch", () => {
     const exposed = capabilities("lrc");
     const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");
 
-    exposed.wordTiming = true;
+    exposed.timing.word = true;
     exposed.metadata.title = false;
     exposed.trackGenerated = true;
     exposed.trackKind = true;
 
     expect(capabilities("lrc")).not.toBe(exposed);
-    expect(capabilities("lrc").wordTiming).toBeFalse();
+    expect(capabilities("lrc").timing).not.toBe(exposed.timing);
+    expect(capabilities("lrc").timing.word).toBeFalse();
     expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(capabilities("lrc").trackGenerated).toBeFalse();

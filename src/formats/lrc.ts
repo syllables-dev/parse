@@ -54,10 +54,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  timing: { line: true, static: false, word: false },
   trackGenerated: false,
   trackKind: false,
   translation: false,
-  wordTiming: false,
 } satisfies FormatCapabilities;
 
 function readTime(marker: string) {

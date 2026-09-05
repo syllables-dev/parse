@@ -66,7 +66,7 @@ export function checkWrite(
   capabilities: FormatCapabilities
 ): void {
   checkMetadata(doc, format, capabilities);
-  if (!capabilities.wordTiming && doc.timing === "word") {
+  if (!capabilities.timing.word && doc.timing === "word") {
     throw new Error(`${format} cannot represent word timing`);
   }
   if (

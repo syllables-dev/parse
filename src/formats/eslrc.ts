@@ -53,10 +53,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  timing: { line: false, static: false, word: true },
   trackGenerated: false,
   trackKind: false,
   translation: false,
-  wordTiming: true,
 } satisfies FormatCapabilities;
 
 function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
