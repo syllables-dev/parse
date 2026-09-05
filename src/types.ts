@@ -34,8 +34,8 @@ export interface LyricsDocument {
   meta: LyricsMeta;
   /** metadata for timed pronunciation tracks keyed by BCP 47 language tag. */
   pronunciationTracks?: Record<string, LyricsPronunciationTrack>;
-  /** the finest timing carried by the source document. */
-  timing: "line" | "word";
+  /** the finest timing carried by the source document. `static` leaves every begin and end at 0. */
+  timing: "line" | "static" | "word";
   /** metadata for untimed translation tracks keyed by BCP 47 language tag. */
   translationTracks?: Record<string, LyricsTranslationTrack>;
   /** the persisted schema version. */
