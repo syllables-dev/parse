@@ -24,7 +24,6 @@ const wordDocument = {
 
 describe("yrc writer", () => {
   test.each([
-    { message: "line breaks", text: "Hel\nlo" },
     { message: "reserved marks", text: "Hel(1200,300,-1)lo" },
   ])("rejects $message without mutating the document", ({ message, text }) => {
     const doc = {

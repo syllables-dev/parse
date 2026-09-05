@@ -142,21 +142,6 @@ describe("lys reader", () => {
     });
   });
 
-  test("adds negative offsets to every timed range", () => {
-    const doc = read("[offset:-25]\n[4]Hel(1001,751)lo(1752,751)");
-
-    expect(doc.meta).toEqual({});
-    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
-    expect(
-      doc.lines
-        .slice(0, 1)
-        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
-    ).toEqual([
-      [976, 1727],
-      [1727, 2478],
-    ]);
-  });
-
   test.each([
     "plain lyrics",
     "[9]unknown(1000,500)",

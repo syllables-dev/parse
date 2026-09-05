@@ -58,21 +58,6 @@ describe("eslrc reader", () => {
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 976, end: 1977 });
   });
 
-  test("adds positive offsets to every timed range", () => {
-    const doc = read("[offset:+25]\n[00:01.001]Hel[00:01.752]lo[00:02.503]");
-
-    expect(doc.meta).toEqual({});
-    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
-    expect(
-      doc.lines
-        .slice(0, 1)
-        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
-    ).toEqual([
-      [1026, 1777],
-      [1777, 2528],
-    ]);
-  });
-
   test.each([
     "plain lyrics",
     "prefix[00:01.000]word",

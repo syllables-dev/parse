@@ -314,13 +314,13 @@ describe("ttml reader", () => {
   test("reads past presentation and parameter vocabularies", () => {
     const source = makeTtml(
       '<div begin="1.000" end="3.000" region="r1"><p begin="1.000" end="3.000" region="r1" style="s1"><span begin="1.000" end="2.000" style="s1">Hi</span><br/><span begin="2.000" end="3.000">there</span></p></div>',
-      '<amll:meta key="album" value="Everything Goes On - Single"/>',
+      '<x:meta key="album" value="Single"/>',
       "Word",
       'dur="10.000" region="r1"'
     )
       .replace(
         "<tt ",
-        '<tt xmlns:amll="urn:example:amll" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
+        '<tt xmlns:x="urn:example:x" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
       )
       .replace(
         "<head>",

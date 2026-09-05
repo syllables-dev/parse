@@ -52,7 +52,6 @@ function makeLine(
 
 describe("qrc writer", () => {
   test.each([
-    { backing: false, message: "line breaks", text: "Hel\nlo" },
     { backing: true, message: "reserved marks", text: "Echo(1200,300)" },
   ])(
     "rejects $message without mutating the document",

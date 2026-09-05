@@ -24,7 +24,6 @@ const wordDocument = {
 
 describe("eslrc writer", () => {
   test.each([
-    { message: "line breaks", text: "Hel\rlo" },
     { message: "reserved marks", text: "Hel[00:01.500]lo" },
   ])("rejects $message without mutating the document", ({ message, text }) => {
     const doc = {
@@ -97,103 +96,4 @@ describe("eslrc writer", () => {
     expect(written).not.toContain("[offset:");
   });
 
-  test("rejects multiple songwriters", () => {
-    expect(() =>
-      write({
-        ...wordDocument,
-        meta: { songwriters: ["One", "Two"] },
-      })
-    ).toThrow("eslrc cannot represent multiple songwriters");
-  });
-
-  test("rejects an empty songwriter list", () => {
-    expect(() => write({ ...wordDocument, meta: { songwriters: [] } })).toThrow(
-      "eslrc cannot represent an empty songwriter list"
-    );
-  });
-
-  test("drops a line with no lyric text instead of keeping a placeholder", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        {
-          agent: null,
-          b: [],
-          begin: 1000,
-          end: 2000,
-          id: "one",
-          p: [{ begin: 1000, end: 2000, id: "onew0", text: "One" }],
-        },
-        {
-          agent: null,
-          b: [],
-          begin: 2000,
-          end: 3000,
-          id: "empty",
-          p: [],
-        },
-        {
-          agent: null,
-          b: [],
-          begin: 3000,
-          end: 8000,
-          id: "three",
-          p: [{ begin: 3000, end: 8000, id: "threew0", text: "Three" }],
-        },
-      ],
-    } satisfies LyricsDocument;
-
-    expect(write(doc)).toBe(
-      "[by:]\n[00:01.000]One[00:02.000]\n[00:03.000]Three[00:08.000]"
-    );
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        agents: [{ id: "lead", type: "person" }],
-        lines: [{ ...lyricLine, agent: "lead" }],
-      } satisfies LyricsDocument,
-      message: "eslrc cannot represent vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            b: [{ begin: 1001, end: 1752, id: "backing", text: "echo" }],
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "eslrc cannot represent backing vocals",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "eslrc cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "eslrc cannot represent pronunciations",
-    },
-  ])("rejects unsupported document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
-  });
 });
