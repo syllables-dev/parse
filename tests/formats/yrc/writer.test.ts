@@ -23,24 +23,23 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("yrc writer", () => {
-  test.each([
-    { message: "reserved marks", text: "Hel(1200,300,-1)lo" },
-  ])("rejects $message without mutating the document", ({ message, text }) => {
+  test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
       lines: [
         {
           ...lyricLine,
-          p: lyricLine.p.map((syllable, index) => ({
-            ...syllable,
-            text: index === 0 ? text : syllable.text,
-          })),
+          p: lyricLine.p.map((syllable, index) =>
+            index === 0 ? { ...syllable, text: "Hel(1200,300,-1)lo" } : syllable
+          ),
         },
       ],
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
-    expect(() => write(doc)).toThrow(`yrc cannot represent ${message} in text`);
+    expect(() => write(doc)).toThrow(
+      "yrc cannot represent reserved marks in text"
+    );
     expect(doc).toEqual(before);
   });
 

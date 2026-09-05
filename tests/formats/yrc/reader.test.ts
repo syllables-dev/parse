@@ -119,5 +119,4 @@ describe("yrc reader", () => {
   ])("throws ParseError for malformed or unsupported input", (source) => {
     expect(() => read(source)).toThrow(ParseError);
   });
-
 });

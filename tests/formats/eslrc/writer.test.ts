@@ -23,25 +23,22 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("eslrc writer", () => {
-  test.each([
-    { message: "reserved marks", text: "Hel[00:01.500]lo" },
-  ])("rejects $message without mutating the document", ({ message, text }) => {
+  test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
       lines: [
         {
           ...lyricLine,
-          p: lyricLine.p.map((syllable, index) => ({
-            ...syllable,
-            text: index === 0 ? text : syllable.text,
-          })),
+          p: lyricLine.p.map((syllable, index) =>
+            index === 0 ? { ...syllable, text: "Hel[00:01.500]lo" } : syllable
+          ),
         },
       ],
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
     expect(() => write(doc)).toThrow(
-      `eslrc cannot represent ${message} in text`
+      "eslrc cannot represent reserved marks in text"
     );
     expect(doc).toEqual(before);
   });
@@ -95,5 +92,4 @@ describe("eslrc writer", () => {
     ]);
     expect(written).not.toContain("[offset:");
   });
-
 });
