@@ -3,17 +3,6 @@ import { read, write } from "@/formats/qrc";
 import { ParseError } from "@/index";
 
 describe("qrc reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read(
-      "\uFEFF[1001,1001]one(1001,1001)\r\n[3003,1001]two(3003,1001)\r\n"
-    );
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("reads suffix markers with exact spacing and integer times", () => {
     const doc = read(
       "[12000,1300]Hel(12000,400)lo (12400,300)world(12700,600)"

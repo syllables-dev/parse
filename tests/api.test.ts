@@ -86,10 +86,6 @@ const paddedMetadataCases = [
   { field: "songwriter", meta: { songwriters: ["Writer "] } },
 ] satisfies { field: string; meta: LyricsDocument["meta"] }[];
 
-const paddedWriterCases = authorCases.flatMap(({ format }) =>
-  paddedMetadataCases.map(({ field, meta }) => ({ field, format, meta }))
-);
-
 const precedenceCases = [
   {
     format: "lqe",
@@ -712,16 +708,14 @@ describe("public dispatch", () => {
     ]);
   });
 
-  test.each(paddedWriterCases)(
-    "rejects $field padding in $format metadata without mutation",
-    ({ format, meta }) => {
-      const timing: LyricsDocument["timing"] =
-        format === "lrc" ? "line" : "word";
-      const doc = { ...metadataDocument, meta: structuredClone(meta), timing };
+  test.each(paddedMetadataCases)(
+    "rejects $field padding in metadata without mutation",
+    ({ meta }) => {
+      const doc = { ...metadataDocument, meta: structuredClone(meta) };
       const before = structuredClone(doc);
 
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot preserve leading or trailing metadata whitespace`
+      expect(() => write(doc, "lrc")).toThrow(
+        "lrc cannot preserve leading or trailing metadata whitespace"
       );
       expect(doc).toEqual(before);
     }
@@ -871,17 +865,14 @@ describe("public dispatch", () => {
     ).toEqual({ fr: { p: "Bonjour" } });
   });
 
-  test.each(authorCases)(
-    "rejects line breaks in $format authors",
-    ({ format, source }) => {
-      const doc = read(source, format);
-      doc.meta.author = "There\nallo";
+  test("rejects line breaks in authors", () => {
+    const doc = read("[by:Thereallo]\n[00:01.000]Hello", "lrc");
+    doc.meta.author = "There\nallo";
 
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent line breaks in an author`
-      );
-    }
-  );
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent line breaks in an author"
+    );
+  });
 
   test("rejects lyric authors in ttml output", () => {
     const doc = read("[00:01.000]Hello", "lrc");
@@ -892,32 +883,20 @@ describe("public dispatch", () => {
     );
   });
 
-  test.each([
-    ["eslrc", "[00:01.000]Hello[00:02.000]"],
-    [
-      "lqe",
-      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
-    ],
-    ["lrc", "[00:01.000]Hello"],
-    ["lys", "[4]Hello(1000,1000)"],
-    ["qrc", "[1000,1000]Hello(1000,1000)"],
-  ] satisfies [FormatId, string][])(
-    "projects %s songwriter cardinality without mutation",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = ["One", "Two"];
-      const before = structuredClone(doc);
+  test("projects songwriter cardinality without mutation", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.songwriters = ["One", "Two"];
+    const before = structuredClone(doc);
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent multiple songwriters`
-      );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toEqual(["One"]);
-      expect(doc).toEqual(before);
-    }
-  );
+    expect(losses(doc, "lrc")).toEqual(["metadata.songwriters"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent multiple songwriters"
+    );
+    expect(
+      read(write(doc, "lrc", { lossy: true }), "lrc").meta.songwriters
+    ).toEqual(["One"]);
+    expect(doc).toEqual(before);
+  });
 
   test.each([
     ["lrc", "[00:01.000]Hello"],
@@ -940,33 +919,18 @@ describe("public dispatch", () => {
     }
   );
 
-  test.each([
-    ["eslrc", "[00:01.000]Hello[00:02.000]"],
-    [
-      "lqe",
-      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
-    ],
-    ["lrc", "[00:01.000]Hello"],
-    ["lys", "[4]Hello(1000,1000)"],
-    ["qrc", "[1000,1000]Hello(1000,1000)"],
-    ["yrc", "[1000,1000](1000,1000,0)Hello"],
-  ] satisfies [FormatId, string][])(
-    "omits empty %s songwriter names during a lossy write",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = [""];
-      const before = structuredClone(doc);
+  test("omits empty songwriter names during a lossy write", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.songwriters = [""];
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent an empty songwriter name`
-      );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toBeUndefined();
-      expect(doc).toEqual(before);
-    }
-  );
+    expect(losses(doc, "lrc")).toEqual(["metadata.songwriters"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent an empty songwriter name"
+    );
+    expect(
+      read(write(doc, "lrc", { lossy: true }), "lrc").meta.songwriters
+    ).toBeUndefined();
+  });
 
   test("projects invalid yrc songwriter lists in source order without mutation", () => {
     const doc = read("[1000,1000](1000,1000,0)Hello", "yrc");

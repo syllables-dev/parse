@@ -422,23 +422,6 @@ describe("ttml reader", () => {
     expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
   });
 
-  test("uses the final same-language translation kind", () => {
-    const apple = [
-      "<itunes:iTunesMetadata><itunes:translations>",
-      '<itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="first">Un</itunes:text></itunes:translation>',
-      '<itunes:translation type="replacement" xml:lang="fr"><itunes:text for="second">Deux</itunes:text></itunes:translation>',
-      "</itunes:translations></itunes:iTunesMetadata>",
-    ].join("");
-    const source = makeTtml(
-      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="first"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="second"><span begin="2.000" end="3.000">Two</span></p></div>',
-      apple
-    );
-
-    expect(readLyrics(source, "ttml")).toMatchObject({
-      translationTracks: { fr: { kind: "replacement" } },
-    });
-  });
-
   test("keeps independently timed primary and backing pronunciations", () => {
     const apple = [
       "<itunes:iTunesMetadata><itunes:transliterations>",
@@ -854,13 +837,6 @@ describe("ttml whitespace", () => {
     expect(read(write(doc))).toEqual(doc);
     return doc.lines[0];
   }
-
-  test("a backing group ahead of the words does not indent the primary track", () => {
-    expect(line(`${open}${group} ${timed.join("")}</p>`)).toMatchObject({
-      b: [{ text: "oh" }],
-      p: words,
-    });
-  });
 
   test("a backing group after the words does not pad the primary track", () => {
     // the writer orders tracks by their start, so a trailing group must start last

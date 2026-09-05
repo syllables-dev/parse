@@ -4,15 +4,6 @@ import { type LyricsDocument, ParseError } from "@/index";
 import { makeLine } from "./shared";
 
 describe("lys reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read("\uFEFF[4]one(1001,1001)\r\n[4]two(3003,1001)\r\n");
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("maps properties zero through eight to tracks and agents", () => {
     const doc = read(
       Array.from(

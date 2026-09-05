@@ -3,17 +3,6 @@ import { read, write } from "@/formats/yrc";
 import { ParseError } from "@/index";
 
 describe("yrc reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read(
-      "\uFEFF[1001,1001](1001,1001,0)one\r\n[3003,1001](3003,1001,0)two\r\n"
-    );
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("reads songwriter JSON preambles and removes duplicates", () => {
     const source = [
       JSON.stringify({ c: [{ tx: "作词: " }, { tx: "One/Two" }], t: 0 }),

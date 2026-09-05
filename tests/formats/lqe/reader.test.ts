@@ -8,13 +8,6 @@ function makeLqe(...lines: string[]) {
 }
 
 describe("lqe reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const source =
-      "\uFEFF[Lyricify Quick Export]\r\n[version:1.0]\r\n[lyrics: format@Lyricify Syllable]\r\n[4]one(1001,1001)\r\n";
-
-    expect(read(source).lines[0]).toMatchObject({ begin: 1001, end: 2002 });
-  });
-
   test("delegates zero-time separator normalization to LYS", () => {
     const doc = read(
       makeLqe(

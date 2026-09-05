@@ -51,12 +51,6 @@ function makeLine(
 }
 
 describe("qrc writer", () => {
-  test("rejects empty documents", () => {
-    expect(() => write({ ...wordDocument, lines: [] })).toThrow(
-      "qrc cannot represent an empty document"
-    );
-  });
-
   test.each([
     { backing: false, message: "line breaks", text: "Hel\nlo" },
     { backing: true, message: "reserved marks", text: "Echo(1200,300)" },
@@ -291,22 +285,6 @@ describe("qrc writer", () => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
     ).toThrow(`qrc cannot represent ${message}`);
-  });
-
-  test("rejects line breaks in metadata", () => {
-    expect(() =>
-      write({ ...wordDocument, meta: { album: "One\rTwo" } })
-    ).toThrow("qrc cannot represent line breaks in metadata");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...wordDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "qrc cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test.each([

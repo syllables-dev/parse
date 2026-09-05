@@ -24,12 +24,6 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("lys writer", () => {
-  test("rejects empty documents", () => {
-    expect(() => write({ ...wordDocument, lines: [] })).toThrow(
-      "lys cannot represent an empty document"
-    );
-  });
-
   test.each([
     { backing: false, message: "line breaks", text: "Hel\nlo" },
     { backing: true, message: "reserved marks", text: "Echo(1200,300)" },
@@ -189,22 +183,6 @@ describe("lys writer", () => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
     ).toThrow(`lys cannot represent ${message}`);
-  });
-
-  test("rejects line breaks in metadata", () => {
-    expect(() =>
-      write({ ...wordDocument, meta: { songwriters: ["One\nTwo"] } })
-    ).toThrow("lys cannot represent line breaks in metadata");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...wordDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lys cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test.each([

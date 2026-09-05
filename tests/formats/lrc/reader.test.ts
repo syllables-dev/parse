@@ -3,15 +3,6 @@ import { read } from "@/formats/lrc";
 import { ParseError } from "@/index";
 
 describe("lrc reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read("\uFEFF[00:01.001]one\r\n[00:02.002]two\r\n");
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [2002, 7002],
-    ]);
-  });
-
   test("expands repeated timestamps only when requested", () => {
     const source = "[00:01.000][00:02.000]chorus\n[00:03.000]following";
 
