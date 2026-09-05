@@ -152,7 +152,7 @@ export function project(
   if (losses(doc, format, capabilities).length === 0) {
     return doc;
   }
-  const wordTimed = capabilities.timing.word || doc.timing === "line";
+  const wordTimed = doc.timing !== "word" || capabilities.timing.word;
   const lines = projectedLines(doc, format, capabilities, wordTimed);
   const pronunciationTracks = projectedPronunciationTracks(doc, capabilities);
   const translationTracks = projectedTranslationTracks(
@@ -166,7 +166,7 @@ export function project(
     lines,
     meta: projectedMeta(doc.meta, format, capabilities),
     ...(pronunciationTracks === undefined ? {} : { pronunciationTracks }),
-    timing: doc.timing === "word" && !wordTimed ? "line" : doc.timing,
+    timing: wordTimed ? doc.timing : "line",
     ...(translationTracks === undefined ? {} : { translationTracks }),
     version: doc.version,
   };

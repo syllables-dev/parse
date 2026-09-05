@@ -514,13 +514,30 @@ describe("public dispatch", () => {
   });
 
   test("converts through the detected reader and selected writer", () => {
-    const converted = convert("[00:01.250]One\n[00:02.000]Two", "eslrc");
+    const converted = convert(
+      "[00:01.250]One[00:02.000]\n[00:02.000]Two[00:07.000]",
+      "qrc"
+    );
 
     expect(converted).toBe(
-      "[by:]\n[00:01.250]One[00:02.000]\n[00:02.000]Two[00:07.000]"
+      "[by:]\n[1250,750]One(1250,750)\n[2000,5000]Two(2000,5000)"
     );
-    expect(detect(converted)).toBe("eslrc");
+    expect(detect(converted)).toBe("qrc");
   });
+
+  test.each(["eslrc", "lqe", "lys", "qrc", "yrc"] satisfies FormatId[])(
+    "refuses a line-timed document in %s even when lossy",
+    (format) => {
+      const doc = read("[00:01.250]One\n[00:02.000]Two", "lrc");
+
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent line timing`
+      );
+      expect(() => write(doc, format, { lossy: true })).toThrow(
+        `${format} cannot represent line timing`
+      );
+    }
+  );
 
   test("requires an explicit lossy QRC to TTML conversion", () => {
     const source = [
@@ -698,7 +715,9 @@ describe("public dispatch", () => {
   test.each(paddedWriterCases)(
     "rejects $field padding in $format metadata without mutation",
     ({ format, meta }) => {
-      const doc = { ...metadataDocument, meta: structuredClone(meta) };
+      const timing: LyricsDocument["timing"] =
+        format === "lrc" ? "line" : "word";
+      const doc = { ...metadataDocument, meta: structuredClone(meta), timing };
       const before = structuredClone(doc);
 
       expect(() => write(doc, format)).toThrow(
