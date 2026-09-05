@@ -1090,6 +1090,35 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
+  test.each(["eslrc", "lqe", "lrc", "lys", "qrc", "yrc"] satisfies FormatId[])(
+    "refuses a static document in %s even when lossy",
+    (format) => {
+      const staticDocument = {
+        agents: [],
+        lines: [
+          {
+            agent: null,
+            b: [],
+            begin: 0,
+            end: 0,
+            id: "l0",
+            p: [{ begin: 0, end: 0, id: "l0w0", text: "Hello" }],
+          },
+        ],
+        meta: {},
+        timing: "static",
+        version: 1,
+      } satisfies LyricsDocument;
+
+      expect(() => write(staticDocument, format)).toThrow(
+        `${format} cannot represent static timing`
+      );
+      expect(() => write(staticDocument, format, { lossy: true })).toThrow(
+        `${format} cannot represent static timing`
+      );
+    }
+  );
+
   test("returns isolated capability snapshots", () => {
     const exposed = capabilities("lrc");
     const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");

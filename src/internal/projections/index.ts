@@ -166,7 +166,7 @@ export function project(
     lines,
     meta: projectedMeta(doc.meta, format, capabilities),
     ...(pronunciationTracks === undefined ? {} : { pronunciationTracks }),
-    timing: wordTimed ? doc.timing : "line",
+    timing: doc.timing === "word" && !wordTimed ? "line" : doc.timing,
     ...(translationTracks === undefined ? {} : { translationTracks }),
     version: doc.version,
   };

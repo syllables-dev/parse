@@ -66,6 +66,9 @@ export function checkWrite(
   capabilities: FormatCapabilities
 ): void {
   checkMetadata(doc, format, capabilities);
+  if (!capabilities.timing.static && doc.timing === "static") {
+    throw new Error(`${format} cannot represent static timing`);
+  }
   if (!capabilities.timing.word && doc.timing === "word") {
     throw new Error(`${format} cannot represent word timing`);
   }
