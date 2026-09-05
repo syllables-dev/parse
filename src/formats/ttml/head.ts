@@ -305,7 +305,7 @@ function addTranslation(
   lineById: Map<string, LyricsLine>,
   offset: number,
   agentIds: Set<string>,
-  timing: "line" | "word"
+  timing: LyricsDocument["timing"]
 ) {
   if (!is(textLine, "text", itunesUri)) {
     throw new ParseError(`unsupported translated child <${textLine.name}>`);
@@ -380,7 +380,7 @@ export function readTranslations(
   lines: LyricsLine[],
   offset: number,
   agents: LyricsDocument["agents"],
-  timing: "line" | "word"
+  timing: LyricsDocument["timing"]
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
   const agentIds = new Set(agents.map((agent) => agent.id));
@@ -449,7 +449,7 @@ function addPron(
   offset: number,
   agentIds: Set<string>,
   variant: number,
-  timing: "line" | "word"
+  timing: LyricsDocument["timing"]
 ) {
   if (!is(textLine, "text", itunesUri)) {
     throw new ParseError(`unsupported transliterated child <${textLine.name}>`);
@@ -509,7 +509,7 @@ export function readProns(
   lines: LyricsLine[],
   offset: number,
   agents: LyricsDocument["agents"],
-  timing: "line" | "word"
+  timing: LyricsDocument["timing"]
 ) {
   const lineById = new Map(lines.map((line) => [line.id, line]));
   const agentIds = new Set(agents.map((agent) => agent.id));

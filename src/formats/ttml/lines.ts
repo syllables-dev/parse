@@ -388,7 +388,7 @@ export function checkTrack(
 function readTrack(
   nodes: XmlNode[],
   line: Pick<LyricsLine, "begin" | "end" | "agent">,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   offset: number,
   idPrefix: string,
   agentIds: Set<string>
@@ -425,7 +425,7 @@ function readTrack(
 function readLine(
   paragraph: XmlElement,
   lineIndex: number,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   inheritedAgent: string | null,
   agentIds: Set<string>,
   offset: number
@@ -442,7 +442,10 @@ function readLine(
   ]);
   const id = attr(paragraph, "key", itunesUri) ?? `L${lineIndex + 1}`;
   const agent = agentRef(paragraph, inheritedAgent, agentIds);
-  const range = readRange(paragraph, offset, `line ${id}`);
+  const range =
+    timing === "static"
+      ? { begin: 0, end: 0 }
+      : readRange(paragraph, offset, `line ${id}`);
   const roleValue = role(paragraph);
   // a paragraph carrying the role is backing in its entirety, so it never splits into two runs
   const whole = roleValue === "x-bg" ? blockNodes(paragraph) : [];
@@ -502,7 +505,7 @@ function readLine(
 function readDiv(
   division: XmlElement,
   firstIndex: number,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   inheritedAgent: string | null,
   agentIds: Set<string>,
   offset: number
@@ -525,7 +528,7 @@ function readDiv(
   const endText = attr(division, "end", null);
   if (
     (beginText === undefined) !== (endText === undefined) ||
-    (paragraphs.length > 0 && beginText === undefined)
+    (paragraphs.length > 0 && beginText === undefined && timing !== "static")
   ) {
     throw new ParseError(
       "populated ttml divisions require begin and end times"
@@ -570,7 +573,7 @@ function readDiv(
 
 export function readBody(
   body: XmlElement,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   agents: LyricsDocument["agents"],
   offset: number,
   rootAgent: string | undefined
@@ -582,7 +585,10 @@ export function readBody(
     key(ttmUri, "role"),
     ...presentation,
   ]);
-  const duration = readTime(needAttr(body, "dur", null), "ttml duration");
+  const durationText =
+    timing === "static" ? attr(body, "dur", null) : needAttr(body, "dur", null);
+  const duration =
+    durationText === undefined ? 0 : readTime(durationText, "ttml duration");
   const agentIds = new Set(agents.map((agent) => agent.id));
   const bodyAgent = agentRef(body, rootAgent ?? null, agentIds);
   const lines: LyricsLine[] = [];

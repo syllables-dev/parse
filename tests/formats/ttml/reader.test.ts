@@ -163,6 +163,58 @@ describe("ttml reader", () => {
     }
   );
 
+  test("reads an untimed document without any range", () => {
+    const source = makeTtml(
+      "<div><p>First line</p><p>Second line</p></div><div><p>Third line</p></div>",
+      "",
+      "None",
+      ""
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.timing).toBe("static");
+    expect(doc.lines).toEqual([
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L1",
+        p: [{ begin: 0, end: 0, id: "L1w0", text: "First line" }],
+      },
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L2",
+        p: [{ begin: 0, end: 0, id: "L2w0", text: "Second line" }],
+      },
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L3",
+        p: [{ begin: 0, end: 0, id: "L3w0", text: "Third line" }],
+      },
+    ]);
+    expect(doc.apple?.sections).toEqual([
+      { lines: ["L1", "L2"] },
+      { lines: ["L3"] },
+    ]);
+    expect(doc.apple?.body).toBeUndefined();
+  });
+
+  test("keeps a body duration declared by an untimed document", () => {
+    const doc = readLyrics(
+      makeTtml("<div><p>Only line</p></div>", "", "None"),
+      "ttml"
+    );
+
+    expect(doc.apple?.body).toEqual({ duration: 10_000 });
+  });
+
   test("rejects lyric offsets that shift timestamps below zero", () => {
     const apple =
       '<itunes:iTunesMetadata><itunes:audio lyricOffset="-1.250"/></itunes:iTunesMetadata>';
