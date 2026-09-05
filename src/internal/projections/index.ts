@@ -69,7 +69,7 @@ function basicLosses(
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
   const features: ConversionLoss[] = [];
-  if (!capabilities.wordTiming && doc.timing === "word") {
+  if (!capabilities.timing.word && doc.timing === "word") {
     features.push("wordTiming");
   }
   features.push(...lineLosses(doc, format));
@@ -152,7 +152,7 @@ export function project(
   if (losses(doc, format, capabilities).length === 0) {
     return doc;
   }
-  const wordTimed = capabilities.wordTiming || doc.timing === "line";
+  const wordTimed = doc.timing !== "word" || capabilities.timing.word;
   const lines = projectedLines(doc, format, capabilities, wordTimed);
   const pronunciationTracks = projectedPronunciationTracks(doc, capabilities);
   const translationTracks = projectedTranslationTracks(

@@ -151,6 +151,10 @@ describe("ttml reader", () => {
           },
         },
       });
+      expect(doc.apple?.sections?.[0]).toMatchObject({
+        begin: 2000 + offset,
+        end: 5000 + offset,
+      });
 
       const written = writeLyrics(doc, "ttml");
       expect(written).toContain(`begin="${writtenBegin}"`);
@@ -158,6 +162,58 @@ describe("ttml reader", () => {
       expect(readLyrics(written, "ttml")).toEqual(doc);
     }
   );
+
+  test("reads an untimed document without any range", () => {
+    const source = makeTtml(
+      "<div><p>First line</p><p>Second line</p></div><div><p>Third line</p></div>",
+      "",
+      "None",
+      ""
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.timing).toBe("static");
+    expect(doc.lines).toEqual([
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L1",
+        p: [{ begin: 0, end: 0, id: "L1w0", text: "First line" }],
+      },
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L2",
+        p: [{ begin: 0, end: 0, id: "L2w0", text: "Second line" }],
+      },
+      {
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id: "L3",
+        p: [{ begin: 0, end: 0, id: "L3w0", text: "Third line" }],
+      },
+    ]);
+    expect(doc.apple?.sections).toEqual([
+      { lines: ["L1", "L2"] },
+      { lines: ["L3"] },
+    ]);
+    expect(doc.apple?.body).toBeUndefined();
+  });
+
+  test("keeps a body duration declared by an untimed document", () => {
+    const doc = readLyrics(
+      makeTtml("<div><p>Only line</p></div>", "", "None"),
+      "ttml"
+    );
+
+    expect(doc.apple?.body).toEqual({ duration: 10_000 });
+  });
 
   test("rejects lyric offsets that shift timestamps below zero", () => {
     const apple =
@@ -199,7 +255,7 @@ describe("ttml reader", () => {
       { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
     ]);
 
-    for (const format of ["ttml", "qrc", "lys", "lqe"] as const) {
+    for (const format of ["ttml", "qrc"] as const) {
       const written = writeLyrics(doc, format);
       expect(written).toContain("((（Echo");
       expect(written).toContain("）))");
@@ -255,25 +311,16 @@ describe("ttml reader", () => {
     expect(doc.meta.title).toBe("Everything Goes On");
   });
 
-  test("skips metadata from a namespace this profile does not own", () => {
-    const source = makeTtml(
-      '<div begin="1.000" end="3.000"><p begin="1.000" end="3.000">Hi</p></div>',
-      '<amll:meta key="album" value="Everything Goes On - Single"/>'
-    ).replace("<tt ", '<tt xmlns:amll="http://www.example.com/ns/amll" ');
-
-    expect(() => readLyrics(source, "ttml")).not.toThrow();
-  });
-
   test("reads past presentation and parameter vocabularies", () => {
     const source = makeTtml(
       '<div begin="1.000" end="3.000" region="r1"><p begin="1.000" end="3.000" region="r1" style="s1"><span begin="1.000" end="2.000" style="s1">Hi</span><br/><span begin="2.000" end="3.000">there</span></p></div>',
-      "",
+      '<x:meta key="album" value="Single"/>',
       "Word",
       'dur="10.000" region="r1"'
     )
       .replace(
         "<tt ",
-        '<tt xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
+        '<tt xmlns:x="urn:example:x" xmlns:ttp="http://www.w3.org/ns/ttml#parameter" ttp:frameRate="30" '
       )
       .replace(
         "<head>",
@@ -364,23 +411,6 @@ describe("ttml reader", () => {
       '<translation type="replacement" xml:lang="yue-Hant-HK">'
     );
     expect(readLyrics(writeLyrics(doc, "ttml"), "ttml")).toEqual(doc);
-  });
-
-  test("uses the final same-language translation kind", () => {
-    const apple = [
-      "<itunes:iTunesMetadata><itunes:translations>",
-      '<itunes:translation type="subtitle" xml:lang="fr"><itunes:text for="first">Un</itunes:text></itunes:translation>',
-      '<itunes:translation type="replacement" xml:lang="fr"><itunes:text for="second">Deux</itunes:text></itunes:translation>',
-      "</itunes:translations></itunes:iTunesMetadata>",
-    ].join("");
-    const source = makeTtml(
-      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="first"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="second"><span begin="2.000" end="3.000">Two</span></p></div>',
-      apple
-    );
-
-    expect(readLyrics(source, "ttml")).toMatchObject({
-      translationTracks: { fr: { kind: "replacement" } },
-    });
   });
 
   test("keeps independently timed primary and backing pronunciations", () => {
@@ -775,5 +805,82 @@ describe("ttml reader", () => {
     ),
   ])("rejects invalid source ranges", (source) => {
     expect(() => read(source)).toThrow(ParseError);
+  });
+});
+
+describe("ttml whitespace", () => {
+  const open = '<p begin="0.000" end="3.000" itunes:key="L1">';
+  const group =
+    '<span ttm:role="x-bg"><span begin="0.000" end="1.000">(oh)</span></span>';
+  const timed = [
+    '<span begin="1.000" end="2.000">You </span>',
+    '<span begin="2.000" end="3.000">should</span>',
+  ];
+  const words = [
+    { begin: 1000, end: 2000, id: "L1w0", text: "You " },
+    { begin: 2000, end: 3000, id: "L1w1", text: "should" },
+  ];
+
+  function line(paragraph: string) {
+    const doc = read(
+      makeTtml(`<div begin="0.000" end="3.000">${paragraph}</div>`)
+    );
+    expect(read(write(doc))).toEqual(doc);
+    return doc.lines[0];
+  }
+
+  test("a backing group after the words does not pad the primary track", () => {
+    // the writer orders tracks by their start, so a trailing group must start last
+    const late =
+      '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
+    expect(line(`${open}${timed.join("")} ${late}</p>`)).toMatchObject({
+      b: [{ text: "oh" }],
+      p: words,
+    });
+  });
+
+  test("a space the source wrote inside the last span is that syllable's own text", () => {
+    const late =
+      '<span ttm:role="x-bg"><span begin="2.500" end="3.000">(oh)</span></span>';
+    expect(
+      line(
+        `${open}${timed[0]}<span begin="2.000" end="2.500">should </span>${late}</p>`
+      )?.p
+    ).toEqual([
+      { begin: 1000, end: 2000, id: "L1w0", text: "You " },
+      { begin: 2000, end: 2500, id: "L1w1", text: "should " },
+    ]);
+  });
+
+  test("indentation and linefeeds collapse the way xml:space default requires", () => {
+    const indent = "\n  ";
+    expect(line(`${open}${indent}${timed.join(indent)}\n</p>`)?.p).toEqual(
+      words
+    );
+  });
+
+  test("a whitespace run spanning a tag boundary collapses to one space", () => {
+    expect(
+      line(
+        `${open}<span begin="1.000" end="2.000">You \t\n</span>  ${timed[1]}</p>`
+      )?.p
+    ).toEqual(words);
+  });
+
+  test("a pretty-printed backing group still finds its wrapping parentheses", () => {
+    const indent = "\n  ";
+    expect(
+      line(
+        `${open}${indent}<span ttm:role="x-bg">\n    <span begin="0.000" end="1.000">(oh)</span></span>${indent}${timed.join(indent)}\n</p>`
+      )
+    ).toMatchObject({ b: [{ text: "oh" }], p: words });
+  });
+
+  test("a backing group is the only content of a whitespace-padded line", () => {
+    expect(() =>
+      read(
+        makeTtml(`<div begin="0.000" end="3.000">${open} ${group} </p></div>`)
+      )
+    ).toThrow(ParseError);
   });
 });

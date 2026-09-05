@@ -168,5 +168,6 @@ export function capabilities(format: FormatId): FormatCapabilities {
   return {
     ...codecs[format].capabilities,
     metadata: { ...codecs[format].capabilities.metadata },
+    timing: { ...codecs[format].capabilities.timing },
   };
 }

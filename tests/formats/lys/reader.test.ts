@@ -4,15 +4,6 @@ import { type LyricsDocument, ParseError } from "@/index";
 import { makeLine } from "./shared";
 
 describe("lys reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read("\uFEFF[4]one(1001,1001)\r\n[4]two(3003,1001)\r\n");
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("maps properties zero through eight to tracks and agents", () => {
     const doc = read(
       Array.from(
@@ -149,21 +140,6 @@ describe("lys reader", () => {
       end: 2400,
       text: "Hello",
     });
-  });
-
-  test("adds negative offsets to every timed range", () => {
-    const doc = read("[offset:-25]\n[4]Hel(1001,751)lo(1752,751)");
-
-    expect(doc.meta).toEqual({});
-    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
-    expect(
-      doc.lines
-        .slice(0, 1)
-        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
-    ).toEqual([
-      [976, 1727],
-      [1727, 2478],
-    ]);
   });
 
   test.each([

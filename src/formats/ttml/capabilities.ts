@@ -11,8 +11,8 @@ export const capabilities = {
     title: false,
   },
   pronunciation: true,
+  timing: { line: true, static: true, word: true },
   trackGenerated: true,
   trackKind: true,
   translation: true,
-  wordTiming: true,
 } satisfies FormatCapabilities;

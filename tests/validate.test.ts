@@ -31,6 +31,14 @@ describe("validate", () => {
     ]);
   });
 
+  test("reports nothing for a static document", () => {
+    const doc = createDocument();
+    doc.timing = "static";
+    doc.lines.push(timedLine("first", 0, 0), timedLine("second", 0, 0));
+
+    expect(validate(doc)).toEqual([]);
+  });
+
   // overlapping lines are valid layered vocals in ttml, lqe, lys, qrc, and yrc
   test("accepts overlapping lines", () => {
     const doc = createDocument();

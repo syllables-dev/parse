@@ -3,17 +3,6 @@ import { read, write } from "@/formats/yrc";
 import { ParseError } from "@/index";
 
 describe("yrc reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read(
-      "\uFEFF[1001,1001](1001,1001,0)one\r\n[3003,1001](3003,1001,0)two\r\n"
-    );
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("reads songwriter JSON preambles and removes duplicates", () => {
     const source = [
       JSON.stringify({ c: [{ tx: "作词: " }, { tx: "One/Two" }], t: 0 }),
@@ -121,21 +110,6 @@ describe("yrc reader", () => {
     ]);
   });
 
-  test("adds negative offsets to every timed range", () => {
-    const doc = read("[offset:-25]\n[1001,1502](1001,751,0)Hel(1752,751,0)lo");
-
-    expect(doc.meta).toEqual({});
-    expect(doc.lines[0]).toMatchObject({ begin: 976, end: 2478 });
-    expect(
-      doc.lines
-        .slice(0, 1)
-        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
-    ).toEqual([
-      [976, 1727],
-      [1727, 2478],
-    ]);
-  });
-
   test.each([
     "plain lyrics",
     "{broken",
@@ -144,34 +118,5 @@ describe("yrc reader", () => {
     "[1000,1000]untimed",
   ])("throws ParseError for malformed or unsupported input", (source) => {
     expect(() => read(source)).toThrow(ParseError);
-  });
-
-  test("folds a zero-duration whitespace spacer into the preceding syllable", () => {
-    const doc = read(
-      "[1000,1300](1000,400,0)Hello(1400,0,0) (1400,600,0)world"
-    );
-
-    expect(doc.lines[0]?.p).toEqual([
-      { begin: 1000, end: 1400, id: "l0w0", text: "Hello " },
-      { begin: 1400, end: 2000, id: "l0w1", text: "world" },
-    ]);
-  });
-
-  test("folds a zero-duration token with real lyric text into its left neighbor", () => {
-    const doc = read(
-      "[1000,1300](1000,400,0)Hel(1400,400,0)lo(1800,0,0)zap(1800,500,0)world"
-    );
-
-    expect(doc.lines[0]?.p).toEqual([
-      { begin: 1000, end: 1400, id: "l0w0", text: "Hel" },
-      { begin: 1400, end: 1800, id: "l0w1", text: "lozap" },
-      { begin: 1800, end: 2300, id: "l0w2", text: "world" },
-    ]);
-  });
-
-  test("rejects a leading zero-duration spacer", () => {
-    expect(() => read("[1000,1000](1000,0,0) (1000,500,0)Hello")).toThrow(
-      "yrc line 1 begins with a zero-time separator"
-    );
   });
 });

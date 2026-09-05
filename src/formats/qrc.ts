@@ -67,10 +67,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  timing: { line: false, static: false, word: true },
   trackGenerated: false,
   trackKind: false,
   translation: false,
-  wordTiming: true,
 } satisfies FormatCapabilities;
 
 function isWrapped(text: string) {

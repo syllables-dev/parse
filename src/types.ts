@@ -34,8 +34,8 @@ export interface LyricsDocument {
   meta: LyricsMeta;
   /** metadata for timed pronunciation tracks keyed by BCP 47 language tag. */
   pronunciationTracks?: Record<string, LyricsPronunciationTrack>;
-  /** the finest timing carried by the source document. */
-  timing: "line" | "word";
+  /** the finest timing carried by the source document. `static` leaves every begin and end at 0. */
+  timing: "line" | "static" | "word";
   /** metadata for untimed translation tracks keyed by BCP 47 language tag. */
   translationTracks?: Record<string, LyricsTranslationTrack>;
   /** the persisted schema version. */
@@ -299,8 +299,18 @@ export type ConversionLoss =
   | "pronunciations"
   | "translations"
   | "lyricText"
-  | "lineTiming"
+  | "lineRange"
   | "wordTiming";
+
+/** the timing granularities a format can encode. */
+export interface TimingCapabilities {
+  /** whether the format can encode line timing without word timing. */
+  line: boolean;
+  /** whether the format can encode lyrics with no timing at all. */
+  static: boolean;
+  /** whether the format can encode individual word or syllable timing. */
+  word: boolean;
+}
 
 /**
  * the lyric features a format can preserve when writing.
@@ -317,14 +327,14 @@ export interface FormatCapabilities {
   metadata: MetadataCapabilities;
   /** whether the format preserves timed pronunciation tracks. */
   pronunciation: boolean;
+  /** the timing granularities the format can encode. */
+  timing: TimingCapabilities;
   /** whether the format preserves the generated-text flag on translation and pronunciation tracks. */
   trackGenerated: boolean;
   /** whether the format preserves translation subtitle and replacement behavior. */
   trackKind: boolean;
   /** whether the format preserves translated text. */
   translation: boolean;
-  /** whether the format preserves individual word or syllable timing. */
-  wordTiming: boolean;
 }
 
 /**

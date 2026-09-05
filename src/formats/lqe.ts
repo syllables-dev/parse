@@ -53,10 +53,10 @@ export const capabilities = {
     title: true,
   },
   pronunciation: false,
+  timing: { line: false, static: false, word: true },
   trackGenerated: false,
   trackKind: false,
   translation: true,
-  wordTiming: true,
 } satisfies FormatCapabilities;
 
 function isSection(name: string | undefined): name is SectionKind {

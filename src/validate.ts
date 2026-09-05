@@ -79,11 +79,15 @@ function checkTiming(
  * reports timing and content problems without changing the document.
  *
  * legal overlapping lines remain in the document and are surfaced as findings.
+ * a static document carries no timing, so it never reports a problem.
  *
  * @param doc - the editable lyric document to inspect.
  * @returns problems in document and track order.
  */
 export function validate(doc: LyricsDocument): Problem[] {
+  if (doc.timing === "static") {
+    return [];
+  }
   const problems: Problem[] = [];
   let previousBegin: number | undefined;
 

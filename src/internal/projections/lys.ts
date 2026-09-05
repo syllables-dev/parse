@@ -34,7 +34,7 @@ export function lineLosses(doc: LyricsDocument, format: FormatId) {
           (line.p[0]?.begin !== line.begin || line.p[0]?.end !== line.end))
       );
     })
-      ? ["lineTiming" as const]
+      ? ["lineRange" as const]
       : [];
   }
   if (format !== "lqe" && format !== "lys") {
@@ -45,6 +45,6 @@ export function lineLosses(doc: LyricsDocument, format: FormatId) {
     const range = lysLineRange(line);
     return range.begin !== line.begin || range.end !== line.end;
   })
-    ? ["lineTiming" as const]
+    ? ["lineRange" as const]
     : [];
 }

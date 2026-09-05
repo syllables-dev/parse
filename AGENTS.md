@@ -15,6 +15,14 @@ Supported spokes:
 
 Any-to-any conversion is `write(read(text))`; codecs never import each other, with LQE as the one documented exception (it is a container that delegates its sections to other codecs).
 
+## Timing
+
+A document is `static`, `line`, or `word` timed, and `FormatCapabilities.timing` says which of the three a writer can encode. TTML encodes all three, LRC only line, every other format only word.
+
+Timing is never upscaled. A writer refuses a document it cannot encode, `lossy` included, because inventing word boundaries or timestamps the source never carried is fabrication, not loss. Downscaling word to line stays an ordinary lossy conversion and is reported by `losses` as `wordTiming`.
+
+Static documents leave every line and syllable `begin` and `end` at `0`. `validate` reports nothing for them, since every problem it can report is a timing problem.
+
 ## Rules
 
 - Always use the Bun toolchain: `bun` and `bunx`. Never `node`, `npm`, `pnpm`, or `npx`.

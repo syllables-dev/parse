@@ -36,6 +36,7 @@ export type {
   ReadOptions,
   Syllable,
   SyllableContent,
+  TimingCapabilities,
   WriteOptions,
 } from "@/types";
 export { validate } from "@/validate";

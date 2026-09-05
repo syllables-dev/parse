@@ -86,10 +86,6 @@ const paddedMetadataCases = [
   { field: "songwriter", meta: { songwriters: ["Writer "] } },
 ] satisfies { field: string; meta: LyricsDocument["meta"] }[];
 
-const paddedWriterCases = authorCases.flatMap(({ format }) =>
-  paddedMetadataCases.map(({ field, meta }) => ({ field, format, meta }))
-);
-
 const precedenceCases = [
   {
     format: "lqe",
@@ -296,160 +292,129 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("writes canonical lys and lqe duet sides as ttml person agents", () => {
-    const lyricRows =
-      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)";
-    const lqe = [
-      "[Lyricify Quick Export]",
-      "[version:1.0]",
-      "[lyrics: format@Lyricify Syllable]",
-      lyricRows,
-    ].join("\n");
+  test("writes lys duet sides as ttml agents", () => {
+    const paired = read(
+      "[4]Left(1000,500)\n[5]Right(2000,500)\n[5]Right again(3000,500)",
+      "lys"
+    );
+    const isolated = read("[5]Right(1000,500)", "lys");
 
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      const lyricDocument = read(format === "lys" ? lyricRows : lqe, format);
-
-      expect(lyricDocument.agents).toEqual([
-        { id: "v1", type: "person" },
-        { id: "v2", type: "person" },
-      ]);
-      expect(write(lyricDocument, "ttml")).toContain(
-        '<ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/>'
-      );
-    }
+    expect(paired.agents).toEqual([
+      { id: "v1", type: "person" },
+      { id: "v2", type: "person" },
+    ]);
+    expect(write(paired, "ttml")).toContain(
+      '<ttm:agent type="person" xml:id="v1"/><ttm:agent type="person" xml:id="v2"/>'
+    );
+    expect(isolated.agents).toEqual([{ id: "v2", type: "other" }]);
+    expect(write(isolated, "ttml")).toContain(
+      '<ttm:agent type="other" xml:id="v2"/>'
+    );
   });
 
-  test("writes an isolated lys or lqe right side as a ttml other agent", () => {
-    const lyricRow = "[5]Right(1000,500)";
-    const lqe = [
-      "[Lyricify Quick Export]",
-      "[version:1.0]",
-      "[lyrics: format@Lyricify Syllable]",
-      lyricRow,
-    ].join("\n");
-
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      const lyricDocument = read(format === "lys" ? lyricRow : lqe, format);
-
-      expect(lyricDocument.agents).toEqual([{ id: "v2", type: "other" }]);
-      expect(write(lyricDocument, "ttml")).toContain(
-        '<ttm:agent type="other" xml:id="v2"/>'
-      );
-    }
-  });
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "projects %s line bounds to timed syllable bounds",
-    (format) => {
-      const lyricDocument = {
-        agents: [],
-        lines: [
-          {
-            agent: null,
-            b: [{ begin: 1200, end: 1800, id: "l0b0", text: "Reply" }],
-            begin: 1000,
-            end: 2000,
-            id: "l0",
-            p: [{ begin: 1100, end: 1900, id: "l0w0", text: "Lead" }],
-          },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual(["lineTiming"]);
-      expect(() => write(lyricDocument, format)).toThrow(
-        "lys cannot represent the range of line l0"
-      );
-      expect(
-        read(write(lyricDocument, format, { lossy: true }), format).lines[0]
-      ).toMatchObject({
-        b: [{ begin: 1200, end: 1800, text: "Reply" }],
-        begin: 1100,
-        end: 1900,
-        p: [{ begin: 1100, end: 1900, text: "Lead" }],
-      });
-      expect(lyricDocument).toEqual(before);
-    }
-  );
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "silently drops empty %s lines without reporting a loss",
-    (format) => {
-      const lyricDocument = {
-        agents: [],
-        lines: [
-          {
-            agent: null,
-            b: [],
-            begin: 1000,
-            end: 1500,
-            id: "l0",
-            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
-          },
-          { agent: null, b: [], begin: 2000, end: 2500, id: "l1", p: [] },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual([]);
-      expect(read(write(lyricDocument, format), format).lines).toMatchObject([
-        { id: "l0", p: [{ text: "Lead" }] },
-      ]);
-      expect(lyricDocument).toEqual(before);
-    }
-  );
-
-  test.each(["lys", "lqe"] satisfies FormatId[])(
-    "removes orphan backing-only %s lines only during lossy writes",
-    (format) => {
-      const lyricDocument = {
-        agents: [{ id: "v1", type: "person" }],
-        lines: [
-          {
-            agent: "v1",
-            b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
-            begin: 1000,
-            end: 1500,
-            id: "l0",
-            p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
-          },
-          {
-            agent: "v1",
-            b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
-            begin: 2000,
-            end: 2500,
-            id: "l1",
-            p: [],
-          },
-        ],
-        meta: {},
-        timing: "word",
-        version: 1,
-      } satisfies LyricsDocument;
-      const before = structuredClone(lyricDocument);
-
-      expect(losses(lyricDocument, format)).toEqual(["backing"]);
-      expect(() => write(lyricDocument, format)).toThrow(
-        `${format} cannot preserve backing-only line l1`
-      );
-      expect(
-        read(write(lyricDocument, format, { lossy: true }), format).lines
-      ).toMatchObject([
+  test("projects lys line bounds to timed syllable bounds", () => {
+    const lyricDocument = {
+      agents: [],
+      lines: [
         {
-          b: [{ begin: 1200, end: 1500, text: "Reply" }],
+          agent: null,
+          b: [{ begin: 1200, end: 1800, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 2000,
           id: "l0",
-          p: [{ text: "Lead" }],
+          p: [{ begin: 1100, end: 1900, id: "l0w0", text: "Lead" }],
         },
-      ]);
-      expect(lyricDocument).toEqual(before);
-    }
-  );
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual(["lineRange"]);
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "lys cannot represent the range of line l0"
+    );
+    expect(
+      read(write(lyricDocument, "lys", { lossy: true }), "lys").lines[0]
+    ).toMatchObject({
+      b: [{ begin: 1200, end: 1800, text: "Reply" }],
+      begin: 1100,
+      end: 1900,
+      p: [{ begin: 1100, end: 1900, text: "Lead" }],
+    });
+    expect(lyricDocument).toEqual(before);
+  });
+
+  test("silently drops empty lys lines without reporting a loss", () => {
+    const lyricDocument = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+        },
+        { agent: null, b: [], begin: 2000, end: 2500, id: "l1", p: [] },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual([]);
+    expect(read(write(lyricDocument, "lys"), "lys").lines).toMatchObject([
+      { id: "l0", p: [{ text: "Lead" }] },
+    ]);
+    expect(lyricDocument).toEqual(before);
+  });
+
+  test("removes orphan backing-only lys lines only during lossy writes", () => {
+    const lyricDocument = {
+      agents: [{ id: "v1", type: "person" }],
+      lines: [
+        {
+          agent: "v1",
+          b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 1500,
+          id: "l0",
+          p: [{ begin: 1000, end: 1500, id: "l0w0", text: "Lead" }],
+        },
+        {
+          agent: "v1",
+          b: [{ begin: 2000, end: 2500, id: "l1b0", text: "Echo" }],
+          begin: 2000,
+          end: 2500,
+          id: "l1",
+          p: [],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "lys")).toEqual(["backing"]);
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "lys cannot preserve backing-only line l1"
+    );
+    expect(
+      read(write(lyricDocument, "lys", { lossy: true }), "lys").lines
+    ).toMatchObject([
+      {
+        b: [{ begin: 1200, end: 1500, text: "Reply" }],
+        id: "l0",
+        p: [{ text: "Lead" }],
+      },
+    ]);
+    expect(lyricDocument).toEqual(before);
+  });
 
   test("reports and removes LQE translations on orphan backing-only lines", () => {
     const lyricDocument = {
@@ -486,7 +451,7 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
-  test("rejects undeclared lys agents through both public writers", () => {
+  test("rejects undeclared lys agents", () => {
     const lyricDocument = {
       agents: [],
       lines: [
@@ -505,22 +470,37 @@ describe("public dispatch", () => {
     } satisfies LyricsDocument;
     const before = structuredClone(lyricDocument);
 
-    for (const format of ["lys", "lqe"] satisfies FormatId[]) {
-      expect(() => write(lyricDocument, format)).toThrow(
-        "line l0 references an undeclared lys agent"
-      );
-    }
+    expect(() => write(lyricDocument, "lys")).toThrow(
+      "line l0 references an undeclared lys agent"
+    );
     expect(lyricDocument).toEqual(before);
   });
 
   test("converts through the detected reader and selected writer", () => {
-    const converted = convert("[00:01.250]One\n[00:02.000]Two", "eslrc");
+    const converted = convert(
+      "[00:01.250]One[00:02.000]\n[00:02.000]Two[00:07.000]",
+      "qrc"
+    );
 
     expect(converted).toBe(
-      "[by:]\n[00:01.250]One[00:02.000]\n[00:02.000]Two[00:07.000]"
+      "[by:]\n[1250,750]One(1250,750)\n[2000,5000]Two(2000,5000)"
     );
-    expect(detect(converted)).toBe("eslrc");
+    expect(detect(converted)).toBe("qrc");
   });
+
+  test.each(["eslrc", "lqe", "lys", "qrc", "yrc"] satisfies FormatId[])(
+    "refuses a line-timed document in %s even when lossy",
+    (format) => {
+      const doc = read("[00:01.250]One\n[00:02.000]Two", "lrc");
+
+      expect(() => write(doc, format)).toThrow(
+        `${format} cannot represent line timing`
+      );
+      expect(() => write(doc, format, { lossy: true })).toThrow(
+        `${format} cannot represent line timing`
+      );
+    }
+  );
 
   test("requires an explicit lossy QRC to TTML conversion", () => {
     const source = [
@@ -607,7 +587,7 @@ describe("public dispatch", () => {
 
     expect(losses(lyricDocument, "lrc")).toEqual([
       "wordTiming",
-      "lineTiming",
+      "lineRange",
       "agents",
       "backing",
       "translations",
@@ -695,14 +675,14 @@ describe("public dispatch", () => {
     ]);
   });
 
-  test.each(paddedWriterCases)(
-    "rejects $field padding in $format metadata without mutation",
-    ({ format, meta }) => {
+  test.each(paddedMetadataCases)(
+    "rejects $field padding in metadata without mutation",
+    ({ meta }) => {
       const doc = { ...metadataDocument, meta: structuredClone(meta) };
       const before = structuredClone(doc);
 
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot preserve leading or trailing metadata whitespace`
+      expect(() => write(doc, "lrc")).toThrow(
+        "lrc cannot preserve leading or trailing metadata whitespace"
       );
       expect(doc).toEqual(before);
     }
@@ -852,17 +832,14 @@ describe("public dispatch", () => {
     ).toEqual({ fr: { p: "Bonjour" } });
   });
 
-  test.each(authorCases)(
-    "rejects line breaks in $format authors",
-    ({ format, source }) => {
-      const doc = read(source, format);
-      doc.meta.author = "There\nallo";
+  test("rejects line breaks in authors", () => {
+    const doc = read("[by:Thereallo]\n[00:01.000]Hello", "lrc");
+    doc.meta.author = "There\nallo";
 
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent line breaks in an author`
-      );
-    }
-  );
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent line breaks in an author"
+    );
+  });
 
   test("rejects lyric authors in ttml output", () => {
     const doc = read("[00:01.000]Hello", "lrc");
@@ -873,32 +850,20 @@ describe("public dispatch", () => {
     );
   });
 
-  test.each([
-    ["eslrc", "[00:01.000]Hello[00:02.000]"],
-    [
-      "lqe",
-      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
-    ],
-    ["lrc", "[00:01.000]Hello"],
-    ["lys", "[4]Hello(1000,1000)"],
-    ["qrc", "[1000,1000]Hello(1000,1000)"],
-  ] satisfies [FormatId, string][])(
-    "projects %s songwriter cardinality without mutation",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = ["One", "Two"];
-      const before = structuredClone(doc);
+  test("projects songwriter cardinality without mutation", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.songwriters = ["One", "Two"];
+    const before = structuredClone(doc);
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent multiple songwriters`
-      );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toEqual(["One"]);
-      expect(doc).toEqual(before);
-    }
-  );
+    expect(losses(doc, "lrc")).toEqual(["metadata.songwriters"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent multiple songwriters"
+    );
+    expect(
+      read(write(doc, "lrc", { lossy: true }), "lrc").meta.songwriters
+    ).toEqual(["One"]);
+    expect(doc).toEqual(before);
+  });
 
   test.each([
     ["lrc", "[00:01.000]Hello"],
@@ -921,33 +886,18 @@ describe("public dispatch", () => {
     }
   );
 
-  test.each([
-    ["eslrc", "[00:01.000]Hello[00:02.000]"],
-    [
-      "lqe",
-      "[Lyricify Quick Export]\n[version:1.0]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
-    ],
-    ["lrc", "[00:01.000]Hello"],
-    ["lys", "[4]Hello(1000,1000)"],
-    ["qrc", "[1000,1000]Hello(1000,1000)"],
-    ["yrc", "[1000,1000](1000,1000,0)Hello"],
-  ] satisfies [FormatId, string][])(
-    "omits empty %s songwriter names during a lossy write",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = [""];
-      const before = structuredClone(doc);
+  test("omits empty songwriter names during a lossy write", () => {
+    const doc = read("[00:01.000]Hello", "lrc");
+    doc.meta.songwriters = [""];
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent an empty songwriter name`
-      );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toBeUndefined();
-      expect(doc).toEqual(before);
-    }
-  );
+    expect(losses(doc, "lrc")).toEqual(["metadata.songwriters"]);
+    expect(() => write(doc, "lrc")).toThrow(
+      "lrc cannot represent an empty songwriter name"
+    );
+    expect(
+      read(write(doc, "lrc", { lossy: true }), "lrc").meta.songwriters
+    ).toBeUndefined();
+  });
 
   test("projects invalid yrc songwriter lists in source order without mutation", () => {
     const doc = read("[1000,1000](1000,1000,0)Hello", "yrc");
@@ -1025,7 +975,7 @@ describe("public dispatch", () => {
     };
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(losses(doc, "lrc")).toEqual(["lineRange"]);
     expect(() => write(doc, "lrc")).toThrow(
       "lrc cannot represent the end time of line l0"
     );
@@ -1076,7 +1026,7 @@ describe("public dispatch", () => {
     ];
     const before = structuredClone(doc);
 
-    expect(losses(doc, "lrc")).toEqual(["lineTiming"]);
+    expect(losses(doc, "lrc")).toEqual(["lineRange"]);
     const restored = read(write(doc, "lrc", { lossy: true }), "lrc");
 
     expect(restored.lines.map((line) => [line.begin, line.end])).toEqual([
@@ -1090,17 +1040,47 @@ describe("public dispatch", () => {
     expect(doc).toEqual(before);
   });
 
+  test.each(["eslrc", "lqe", "lrc", "lys", "qrc", "yrc"] satisfies FormatId[])(
+    "refuses a static document in %s even when lossy",
+    (format) => {
+      const staticDocument = {
+        agents: [],
+        lines: [
+          {
+            agent: null,
+            b: [],
+            begin: 0,
+            end: 0,
+            id: "l0",
+            p: [{ begin: 0, end: 0, id: "l0w0", text: "Hello" }],
+          },
+        ],
+        meta: {},
+        timing: "static",
+        version: 1,
+      } satisfies LyricsDocument;
+
+      expect(() => write(staticDocument, format)).toThrow(
+        `${format} cannot represent static timing`
+      );
+      expect(() => write(staticDocument, format, { lossy: true })).toThrow(
+        `${format} cannot represent static timing`
+      );
+    }
+  );
+
   test("returns isolated capability snapshots", () => {
     const exposed = capabilities("lrc");
     const wordTimed = read("[00:00.000]Hel[00:00.500]lo[00:01.000]", "eslrc");
 
-    exposed.wordTiming = true;
+    exposed.timing.word = true;
     exposed.metadata.title = false;
     exposed.trackGenerated = true;
     exposed.trackKind = true;
 
     expect(capabilities("lrc")).not.toBe(exposed);
-    expect(capabilities("lrc").wordTiming).toBeFalse();
+    expect(capabilities("lrc").timing).not.toBe(exposed.timing);
+    expect(capabilities("lrc").timing.word).toBeFalse();
     expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(capabilities("lrc").trackGenerated).toBeFalse();

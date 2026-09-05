@@ -13,7 +13,7 @@ import {
   ttmlUri,
   ttmUri,
 } from "@/formats/ttml/profile";
-import type { XmlElement, XmlNode } from "@/internal/xml";
+import type { XmlElement, XmlNode, XmlText } from "@/internal/xml";
 import type {
   LyricsDocument,
   LyricsLine,
@@ -31,19 +31,57 @@ interface BackingRun {
   nodes: XmlNode[];
 }
 
-// layout is a player's concern, not the lyric's; these carry no timing or text so they are
-// accepted and dropped rather than failing the read
+// region and style are layout, so they are accepted and dropped rather than failing the read
 const presentation = [key(null, "region"), key(null, "style")];
 
-// an element from another vocabulary carries no lyric text of ours, so it drops out of the
-// flow entirely rather than ending the line at an unreadable node
+const spacePattern = /[\t\n\r ]/u;
+const spaceOnly = /^[\t\n\r ]*$/u;
+
+// a foreign-vocabulary element carries no lyric text, so it drops out instead of ending the line
 function lyricNodes(nodes: XmlNode[]) {
   return nodes.filter(
     (node) =>
       node.kind === "text" ||
-      // <br> is a presentational break inside a paragraph this profile already models as one line
+      // <br> is presentational; this profile already models a paragraph as one line
       (owned(node.uri) && !is(node, "br", ttmlUri))
   );
+}
+
+// span nesting is flattened, so a whitespace run crossing a tag boundary stays one run
+function textNodes(nodes: XmlNode[]): XmlText[] {
+  return nodes.flatMap((node) =>
+    node.kind === "text" ? [node] : textNodes(lyricNodes(node.children))
+  );
+}
+
+// xml:space="default" normalization: a run of spaces collapses to one, block edges lose theirs
+function blockNodes(parent: XmlElement) {
+  const nodes = lyricNodes(parent.children);
+  const texts = textNodes(nodes);
+  let running = false;
+  let started = false;
+  for (const node of texts) {
+    let normalized = "";
+    for (const char of node.text) {
+      if (spacePattern.test(char)) {
+        normalized += running || !started ? "" : " ";
+        running = true;
+        continue;
+      }
+      normalized += char;
+      running = false;
+      started = true;
+    }
+    node.text = normalized;
+  }
+  // a run still open at the block edge is trailing
+  const trailing = running
+    ? texts.findLast((node) => node.text.length > 0)
+    : undefined;
+  if (trailing) {
+    trailing.text = trailing.text.slice(0, -1);
+  }
+  return nodes;
 }
 
 function isSpan(element: XmlElement) {
@@ -100,10 +138,18 @@ function keepsParentheses(nodes: XmlNode[]): boolean {
   );
 }
 
+// whitespace between two runs belongs to neither track, unlike a space inside an edge syllable
+function separated(nodes: XmlNode[]) {
+  const lyric = (node: XmlNode) =>
+    node.kind !== "text" || !spaceOnly.test(node.text);
+  const first = nodes.findIndex(lyric);
+  return first === -1 ? [] : nodes.slice(first, nodes.findLastIndex(lyric) + 1);
+}
+
 export function splitRuns(parent: XmlElement): Runs {
   const primary: XmlNode[] = [];
   let backing: BackingRun | null = null;
-  for (const child of lyricNodes(parent.children)) {
+  for (const child of blockNodes(parent)) {
     if (child.kind === "element" && role(child) === "x-bg") {
       if (!isSpan(child) || backing !== null) {
         throw new ParseError("ttml lines support one backing-vocal span");
@@ -111,7 +157,7 @@ export function splitRuns(parent: XmlElement): Runs {
       checkSpan(child);
       const nodes =
         attr(child, "begin", null) === undefined
-          ? lyricNodes(child.children)
+          ? separated(lyricNodes(child.children))
           : [child];
       backing = {
         keepParentheses:
@@ -123,7 +169,7 @@ export function splitRuns(parent: XmlElement): Runs {
       primary.push(child);
     }
   }
-  return { backing, primary };
+  return { backing, primary: separated(primary) };
 }
 
 function readWord(
@@ -342,7 +388,7 @@ export function checkTrack(
 function readTrack(
   nodes: XmlNode[],
   line: Pick<LyricsLine, "begin" | "end" | "agent">,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   offset: number,
   idPrefix: string,
   agentIds: Set<string>
@@ -379,7 +425,7 @@ function readTrack(
 function readLine(
   paragraph: XmlElement,
   lineIndex: number,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   inheritedAgent: string | null,
   agentIds: Set<string>,
   offset: number
@@ -396,16 +442,21 @@ function readLine(
   ]);
   const id = attr(paragraph, "key", itunesUri) ?? `L${lineIndex + 1}`;
   const agent = agentRef(paragraph, inheritedAgent, agentIds);
-  const range = readRange(paragraph, offset, `line ${id}`);
+  const range =
+    timing === "static"
+      ? { begin: 0, end: 0 }
+      : readRange(paragraph, offset, `line ${id}`);
   const roleValue = role(paragraph);
+  // a paragraph carrying the role is backing in its entirety, so it never splits into two runs
+  const whole = roleValue === "x-bg" ? blockNodes(paragraph) : [];
   const runs =
     roleValue === "x-bg"
       ? {
           backing: {
             keepParentheses:
               attr(paragraph, "parenthesis", itunesUri) === "keep" ||
-              keepsParentheses(lyricNodes(paragraph.children)),
-            nodes: lyricNodes(paragraph.children),
+              keepsParentheses(whole),
+            nodes: whole,
           },
           primary: [],
         }
@@ -454,7 +505,7 @@ function readLine(
 function readDiv(
   division: XmlElement,
   firstIndex: number,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   inheritedAgent: string | null,
   agentIds: Set<string>,
   offset: number
@@ -477,7 +528,7 @@ function readDiv(
   const endText = attr(division, "end", null);
   if (
     (beginText === undefined) !== (endText === undefined) ||
-    (paragraphs.length > 0 && beginText === undefined)
+    (paragraphs.length > 0 && beginText === undefined && timing !== "static")
   ) {
     throw new ParseError(
       "populated ttml divisions require begin and end times"
@@ -486,7 +537,7 @@ function readDiv(
   const range =
     beginText === undefined
       ? undefined
-      : readRange(division, 0, "ttml division");
+      : readRange(division, offset, "ttml division");
   const divAgent = agentRef(division, inheritedAgent, agentIds);
   const lines = paragraphs.map((paragraph, index) => {
     if (!is(paragraph, "p", ttmlUri)) {
@@ -520,9 +571,20 @@ function readDiv(
   };
 }
 
+function coversBody(
+  section: LyricsSection,
+  timing: LyricsDocument["timing"],
+  defaultBegin: number | undefined,
+  duration: number
+) {
+  return timing === "static"
+    ? section.begin === undefined && section.end === undefined
+    : section.begin === defaultBegin && section.end === duration;
+}
+
 export function readBody(
   body: XmlElement,
-  timing: "line" | "word",
+  timing: LyricsDocument["timing"],
   agents: LyricsDocument["agents"],
   offset: number,
   rootAgent: string | undefined
@@ -534,7 +596,10 @@ export function readBody(
     key(ttmUri, "role"),
     ...presentation,
   ]);
-  const duration = readTime(needAttr(body, "dur", null), "ttml duration");
+  const durationText =
+    timing === "static" ? attr(body, "dur", null) : needAttr(body, "dur", null);
+  const duration =
+    durationText === undefined ? 0 : readTime(durationText, "ttml duration");
   const agentIds = new Set(agents.map((agent) => agent.id));
   const bodyAgent = agentRef(body, rootAgent ?? null, agentIds);
   const lines: LyricsLine[] = [];
@@ -571,7 +636,7 @@ export function readBody(
     section !== undefined &&
     sections.length === 1 &&
     (lines.length === 0 ||
-      (section.begin === defaultBegin && section.end === duration)) &&
+      coversBody(section, timing, defaultBegin, duration)) &&
     section.lines.every((id, index) => id === lines[index]?.id) &&
     section.lines.length === lines.length &&
     section.agent === undefined &&

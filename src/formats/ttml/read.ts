@@ -23,7 +23,7 @@ function readTiming(root: XmlElement): {
   language?: string;
   lyricGenerationId?: string;
   rootFields?: LyricsElementAttributes;
-  timing: "line" | "word";
+  timing: LyricsDocument["timing"];
 } {
   if (!is(root, "tt", ttmlUri)) {
     throw new ParseError("ttml root must be <tt>");
@@ -33,11 +33,13 @@ function readTiming(root: XmlElement): {
     locale(root);
   }
   const timingText = needAttr(root, "timing", itunesUri).toLowerCase();
-  let timing: "line" | "word";
+  let timing: LyricsDocument["timing"];
   if (timingText === "line") {
     timing = "line";
   } else if (timingText === "word") {
     timing = "word";
+  } else if (timingText === "none") {
+    timing = "static";
   } else {
     throw new ParseError(`unsupported ttml timing ${timingText}`);
   }

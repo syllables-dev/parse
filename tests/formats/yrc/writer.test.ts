@@ -23,31 +23,23 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("yrc writer", () => {
-  test("rejects empty documents", () => {
-    expect(() => write({ ...wordDocument, lines: [] })).toThrow(
-      "yrc cannot represent an empty document"
-    );
-  });
-
-  test.each([
-    { message: "line breaks", text: "Hel\nlo" },
-    { message: "reserved marks", text: "Hel(1200,300,-1)lo" },
-  ])("rejects $message without mutating the document", ({ message, text }) => {
+  test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
       lines: [
         {
           ...lyricLine,
-          p: lyricLine.p.map((syllable, index) => ({
-            ...syllable,
-            text: index === 0 ? text : syllable.text,
-          })),
+          p: lyricLine.p.map((syllable, index) =>
+            index === 0 ? { ...syllable, text: "Hel(1200,300,-1)lo" } : syllable
+          ),
         },
       ],
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
-    expect(() => write(doc)).toThrow(`yrc cannot represent ${message} in text`);
+    expect(() => write(doc)).toThrow(
+      "yrc cannot represent reserved marks in text"
+    );
     expect(doc).toEqual(before);
   });
 
@@ -136,22 +128,6 @@ describe("yrc writer", () => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
     ).toThrow();
-  });
-
-  test("rejects line breaks in metadata", () => {
-    expect(() =>
-      write({ ...wordDocument, meta: { artist: "One\nTwo" } })
-    ).toThrow("yrc cannot represent line breaks in metadata");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...wordDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "yrc cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test.each([

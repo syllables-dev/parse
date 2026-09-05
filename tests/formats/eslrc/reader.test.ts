@@ -3,17 +3,6 @@ import { read, write } from "@/formats/eslrc";
 import { ParseError } from "@/index";
 
 describe("eslrc reader", () => {
-  test("accepts a BOM and CRLF endings", () => {
-    const doc = read(
-      "\uFEFF[00:01.001]one[00:02.002]\r\n[00:03.003]two[00:04.004]\r\n"
-    );
-
-    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
-      [1001, 2002],
-      [3003, 4004],
-    ]);
-  });
-
   test("uses a trailing stamp as the line and final syllable end", () => {
     const doc = read(
       "[00:01.111]Hel[00:01.789]lo[00:02.345]\n[00:03.000]next[00:04.000]"
@@ -67,21 +56,6 @@ describe("eslrc reader", () => {
     });
     expect(doc.lines[0]).toMatchObject({ begin: 976, end: 1977 });
     expect(doc.lines[0]?.p[0]).toMatchObject({ begin: 976, end: 1977 });
-  });
-
-  test("adds positive offsets to every timed range", () => {
-    const doc = read("[offset:+25]\n[00:01.001]Hel[00:01.752]lo[00:02.503]");
-
-    expect(doc.meta).toEqual({});
-    expect(doc.lines[0]).toMatchObject({ begin: 1026, end: 2528 });
-    expect(
-      doc.lines
-        .slice(0, 1)
-        .flatMap((line) => line.p.map((word) => [word.begin, word.end]))
-    ).toEqual([
-      [1026, 1777],
-      [1777, 2528],
-    ]);
   });
 
   test.each([

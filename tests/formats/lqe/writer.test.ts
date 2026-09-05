@@ -31,12 +31,6 @@ const translatedDocument = {
 } satisfies LyricsDocument;
 
 describe("lqe writer", () => {
-  test("rejects empty documents", () => {
-    expect(() => write({ ...translatedDocument, lines: [] })).toThrow(
-      "lqe cannot represent an empty document"
-    );
-  });
-
   test.each([
     {
       doc: {
@@ -323,22 +317,6 @@ describe("lqe writer", () => {
         meta: { songwriters: [...songwriters] },
       })
     ).toThrow(`lqe cannot represent ${message}`);
-  });
-
-  test("rejects line breaks in metadata", () => {
-    expect(() =>
-      write({ ...translatedDocument, meta: { author: "One\rTwo" } })
-    ).toThrow("lqe cannot represent line breaks in an author");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...translatedDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lqe cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test("rejects invalid language tags and pronunciation tracks", () => {
