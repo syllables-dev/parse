@@ -35,6 +35,57 @@ describe("ttml writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
+  test("writes an untimed document without any range", () => {
+    const doc = {
+      agents: [],
+      apple: { sections: [{ lines: ["L1", "L2"] }, { lines: ["L3"] }] },
+      lines: ["L1", "L2", "L3"].map((id) => ({
+        agent: null,
+        b: [],
+        begin: 0,
+        end: 0,
+        id,
+        p: [{ begin: 0, end: 0, id: `${id}w0`, text: `text ${id}` }],
+      })),
+      meta: {},
+      timing: "static",
+      version: 1,
+    } satisfies LyricsDocument;
+    const written = write(doc);
+
+    expect(written).toContain('itunes:timing="None"');
+    expect(written).toContain(
+      '<body><div><p itunes:key="L1">text L1</p><p itunes:key="L2">text L2</p></div><div><p itunes:key="L3">text L3</p></div></body>'
+    );
+    expect(written).not.toContain("begin=");
+    expect(written).not.toContain("dur=");
+    expect(read(written)).toEqual(doc);
+  });
+
+  test("keeps a declared body duration in an untimed document", () => {
+    const doc = {
+      agents: [],
+      apple: { body: { duration: 10_000 } },
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 0,
+          end: 0,
+          id: "L1",
+          p: [{ begin: 0, end: 0, id: "L1w0", text: "Only line" }],
+        },
+      ],
+      meta: {},
+      timing: "static",
+      version: 1,
+    } satisfies LyricsDocument;
+    const written = write(doc);
+
+    expect(written).toContain('<body dur="0:10.000">');
+    expect(read(written)).toEqual(doc);
+  });
+
   test("silently drops a line with no primary and no backing syllables", () => {
     const doc = {
       agents: [],

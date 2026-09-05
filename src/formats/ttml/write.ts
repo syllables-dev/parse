@@ -21,6 +21,12 @@ import type {
   WriteOptions,
 } from "@/types";
 
+const timingAttr = {
+  line: "Line",
+  static: "None",
+  word: "Word",
+} satisfies Record<LyricsDocument["timing"], string>;
+
 function checkTrack(
   syllables: Syllable[],
   line: LyricsLine,
@@ -269,7 +275,7 @@ function checkLines(doc: LyricsDocument, agentIds: string[]) {
   for (const line of doc.lines) {
     checkTime(line.begin, `line ${line.id} start`);
     checkTime(line.end, `line ${line.id} end`);
-    if (line.end <= line.begin) {
+    if (doc.timing !== "static" && line.end <= line.begin) {
       throw new RangeError(`line ${line.id} end must follow its start`);
     }
     if (line.agent !== null && !knownAgents.has(line.agent)) {
@@ -283,18 +289,18 @@ function checkLines(doc: LyricsDocument, agentIds: string[]) {
     checkTrack(
       line.p,
       line,
-      doc.timing === "line",
+      doc.timing !== "word",
       `line ${line.id} primary track`
     );
     checkTrack(
       line.b,
       line,
-      doc.timing === "line",
+      doc.timing !== "word",
       `line ${line.id} backing track`
     );
     checkAgents(line.p, knownAgents);
     checkAgents(line.b, knownAgents);
-    checkMaps(line, doc.timing === "line", knownAgents);
+    checkMaps(line, doc.timing !== "word", knownAgents);
   }
 }
 
@@ -386,10 +392,8 @@ function checkApple(doc: LyricsDocument, knownAgents: Set<string>) {
 }
 
 function checkDoc(doc: LyricsDocument) {
-  if (doc.version !== 1 || (doc.timing !== "line" && doc.timing !== "word")) {
-    throw new Error(
-      "ttml requires a version 1 line-timed or word-timed document"
-    );
+  if (doc.version !== 1 || !capabilities.timing[doc.timing]) {
+    throw new Error("ttml requires a version 1 document with known timing");
   }
   if (doc.meta.author !== undefined) {
     throw new Error("ttml cannot represent a lyric file author");
@@ -538,7 +542,7 @@ function writeTranslations(doc: LyricsDocument) {
       });
       const automatic = createdAttr(track.automaticallyCreated);
       const texts = translated.map(({ line, translation }) =>
-        writeTranslationLine(line, translation, doc.timing === "line")
+        writeTranslationLine(line, translation, doc.timing !== "word")
       );
       return `<translation type="${track.kind ?? "subtitle"}" xml:lang="${escapeAttr(language)}"${automatic}>${texts.join("")}</translation>`;
     })
@@ -568,7 +572,7 @@ function writeProns(doc: LyricsDocument) {
         const lyric = writeTracks(
           pronunciation.p,
           pronunciation.b,
-          doc.timing === "line"
+          doc.timing !== "word"
         );
         return `<text for="${escapeAttr(line.id)}"${pronunciation.begin === undefined ? "" : ` begin="${writeTime(pronunciation.begin)}"`}${pronunciation.end === undefined ? "" : ` end="${writeTime(pronunciation.end)}"`}${writeAttrs(pronunciation)}>${lyric}</text>`;
       });
@@ -577,10 +581,14 @@ function writeProns(doc: LyricsDocument) {
     .join("");
 }
 
-function writeLine(line: LyricsLine, lineTimed: boolean) {
+function writeLine(line: LyricsLine, timing: LyricsDocument["timing"]) {
   const agent =
     line.agent === null ? "" : ` ttm:agent="${escapeAttr(line.agent)}"`;
-  return `<p begin="${writeTime(line.begin)}" end="${writeTime(line.end)}" itunes:key="${escapeAttr(line.id)}"${agent}${writeAttrs({ keepParentheses: line.keepParentheses, role: line.role, xmlId: line.xmlId })}>${writeTracks(line.p, line.b, lineTimed)}</p>`;
+  const range =
+    timing === "static"
+      ? ""
+      : ` begin="${writeTime(line.begin)}" end="${writeTime(line.end)}"`;
+  return `<p${range} itunes:key="${escapeAttr(line.id)}"${agent}${writeAttrs({ keepParentheses: line.keepParentheses, role: line.role, xmlId: line.xmlId })}>${writeTracks(line.p, line.b, timing !== "word")}</p>`;
 }
 
 function writeSections(doc: LyricsDocument, duration: number) {
@@ -590,7 +598,11 @@ function writeSections(doc: LyricsDocument, duration: number) {
       return "<div/>";
     }
     const begin = Math.min(...doc.lines.map((line) => line.begin));
-    return `<div begin="${writeTime(begin)}" end="${writeTime(duration)}">${doc.lines.map((line) => writeLine(line, doc.timing === "line")).join("")}</div>`;
+    const range =
+      doc.timing === "static"
+        ? ""
+        : ` begin="${writeTime(begin)}" end="${writeTime(duration)}"`;
+    return `<div${range}>${doc.lines.map((line) => writeLine(line, doc.timing)).join("")}</div>`;
   }
   const lines = new Map(doc.lines.map((line) => [line.id, line]));
   const used = new Set<string>();
@@ -610,14 +622,14 @@ function writeSections(doc: LyricsDocument, duration: number) {
         section.begin === undefined || section.end === undefined
           ? ""
           : ` begin="${writeTime(section.begin)}" end="${writeTime(section.end)}"`;
-      if (members.length > 0 && range.length === 0) {
+      if (members.length > 0 && range.length === 0 && doc.timing !== "static") {
         throw new Error("populated Apple sections require begin and end times");
       }
       const part =
         section.part === undefined
           ? ""
           : ` itunes:songPart="${escapeAttr(section.part)}"`;
-      return `<div${range}${part}${writeAttrs(section)}>${members.map((line) => writeLine(line, doc.timing === "line")).join("")}</div>`;
+      return `<div${range}${part}${writeAttrs(section)}>${members.map((line) => writeLine(line, doc.timing)).join("")}</div>`;
     })
     .join("");
   if (used.size !== doc.lines.length) {
@@ -627,12 +639,17 @@ function writeSections(doc: LyricsDocument, duration: number) {
 }
 
 function writeBody(doc: LyricsDocument) {
+  const declared = doc.apple?.body?.duration;
   const duration =
-    doc.apple?.body?.duration ??
+    declared ??
     (doc.lines.length === 0
       ? 0
       : Math.max(...doc.lines.map((line) => line.end)));
-  return `<body dur="${writeTime(duration)}"${writeAttrs(doc.apple?.body ?? {})}>${writeSections(doc, duration)}</body>`;
+  const dur =
+    doc.timing === "static" && declared === undefined
+      ? ""
+      : ` dur="${writeTime(duration)}"`;
+  return `<body${dur}${writeAttrs(doc.apple?.body ?? {})}>${writeSections(doc, duration)}</body>`;
 }
 
 function droppingEmptyLines(doc: LyricsDocument): LyricsDocument {
@@ -704,7 +721,7 @@ export function write(
       : ` xml:lang="${escapeAttr(apple.language)}"`;
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${doc.timing === "word" ? "Word" : "Line"}"${lyricGenerationId}${language}${writeAttrs(apple?.root ?? {})}>`,
+    `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${timingAttr[doc.timing]}"${lyricGenerationId}${language}${writeAttrs(apple?.root ?? {})}>`,
     `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
     writeBody(doc),
     "</tt>",

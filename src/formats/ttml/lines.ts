@@ -571,6 +571,17 @@ function readDiv(
   };
 }
 
+function coversBody(
+  section: LyricsSection,
+  timing: LyricsDocument["timing"],
+  defaultBegin: number | undefined,
+  duration: number
+) {
+  return timing === "static"
+    ? section.begin === undefined && section.end === undefined
+    : section.begin === defaultBegin && section.end === duration;
+}
+
 export function readBody(
   body: XmlElement,
   timing: LyricsDocument["timing"],
@@ -625,7 +636,7 @@ export function readBody(
     section !== undefined &&
     sections.length === 1 &&
     (lines.length === 0 ||
-      (section.begin === defaultBegin && section.end === duration)) &&
+      coversBody(section, timing, defaultBegin, duration)) &&
     section.lines.every((id, index) => id === lines[index]?.id) &&
     section.lines.length === lines.length &&
     section.agent === undefined &&
