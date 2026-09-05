@@ -74,7 +74,6 @@ describe("lrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -87,7 +86,6 @@ describe("lrc writer", () => {
         "[ti:Song]",
         "[ar:Singer]",
         "[al:Album]",
-        "[by:Author]",
         "[au:Writer]",
         "[00:01.000]Hello",
       ].join("\n")
@@ -103,7 +101,6 @@ describe("lrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
@@ -123,16 +120,6 @@ describe("lrc writer", () => {
     expect(() =>
       write({ ...lineDocument, meta: { title: "Song\nTitle" } })
     ).toThrow("lrc cannot represent line breaks in metadata");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...lineDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lrc cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test("drops a line with no lyric text instead of keeping a placeholder", () => {
@@ -163,7 +150,7 @@ describe("lrc writer", () => {
       ],
     } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe("[by:]\n[00:01.000]One\n[00:03.000]Three");
+    expect(write(doc)).toBe("[00:01.000]One\n[00:03.000]Three");
   });
 
   test.each([

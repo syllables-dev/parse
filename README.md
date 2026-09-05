@@ -1,6 +1,6 @@
 # @syllables-dev/parse
 
-Readers and writers for Apple Music TTML, LRC, ESLRC, QRC, YRC, LYS, and LQE, built around one shared document schema.
+Readers and writers for Apple Music TTML, LRC, LYL, ESLRC, QRC, YRC, LYS, and LQE, built around one shared document schema.
 
 > [!NOTE]
 > Documentation is a work in progress. Everything below is accurate and covered by tests, but the package is pre-1.0 and the schema may still change between minor versions.
@@ -41,14 +41,14 @@ write(doc, "lrc");
 // throws: lrc cannot represent word timing
 
 write(doc, "lrc", { lossy: true });
-// "[by:]\n[00:00.000]Hello world"
+// "[00:00.000]Hello world"
 ```
 
-Call `losses(doc, format)` to see what a target would drop, then pass `{ lossy: true }` once you accept it.
+Call `losses(doc, format)` to see what a target would drop, then pass `{ lossy: true }` once you accept it. It lists what `lossy` waives, not whether the write will succeed, so a write can still throw for something no projection can fix.
 
 ## Timing
 
-A document is `static`, `line`, or `word` timed. TTML covers all three, LRC is line only, and the rest are word only.
+A document is `static`, `line`, or `word` timed. TTML covers all three, LRC and LYL are line only, and the rest are word only.
 
 Timing is never upscaled. Writing a line-timed document to QRC would mean inventing word boundaries the source never carried, so it is refused outright rather than fabricated, and `{ lossy: true }` does not change that.
 
@@ -61,6 +61,8 @@ write(doc, "qrc", { lossy: true });
 
 Going the other way is fine. Word to line drops detail that really is there, so it is an ordinary lossy write.
 
+Between the two line-timed formats, LRC infers each line's end from the next line's start, while LYL stores both ends, so LYL is the one that keeps the silence between lines.
+
 ## What each format preserves
 
 | | static | line | word | backing | agents | translation | pronunciation |
@@ -72,6 +74,7 @@ Going the other way is fine. Word to line drops detail that really is there, so 
 | YRC | | | ✓ | | | | |
 | ESLRC | | | ✓ | | | | |
 | LRC | | ✓ | | | | | |
+| LYL | | ✓ | | | | | |
 
 The first three columns are timing granularities. `agents` is tiered: `identity` keeps opaque IDs and types, `alignment` keeps duet-side attribution but may canonicalize them. All of it is available at runtime through `capabilities(format)`.
 
@@ -95,7 +98,7 @@ To pull in a single codec without the detection machinery:
 import { read, write } from "@syllables-dev/parse/ttml";
 ```
 
-That works for `ttml`, `lrc`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
+That works for `ttml`, `lrc`, `lyl`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
 
 ## Guarantees
 

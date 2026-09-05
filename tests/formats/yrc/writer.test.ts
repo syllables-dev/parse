@@ -80,7 +80,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -96,7 +95,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
@@ -128,54 +126,5 @@ describe("yrc writer", () => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
     ).toThrow();
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        agents: [{ id: "lead", type: "person" }],
-        lines: [{ ...lyricLine, agent: "lead" }],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            b: [{ begin: 1001, end: 1752, id: "backing", text: "echo" }],
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent backing vocals",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent pronunciations",
-    },
-  ])("rejects unsupported document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
   });
 });

@@ -3,7 +3,15 @@
  *
  * enhanced LRC with A2 word markers is represented as `lrc`.
  */
-export type FormatId = "ttml" | "lrc" | "eslrc" | "qrc" | "yrc" | "lys" | "lqe";
+export type FormatId =
+  | "ttml"
+  | "lrc"
+  | "lyl"
+  | "eslrc"
+  | "qrc"
+  | "yrc"
+  | "lys"
+  | "lqe";
 
 /**
  * a stable validation problem identifier suitable for localization and editor logic.
@@ -50,8 +58,6 @@ export interface LyricsMeta {
   album?: string;
   /** the primary artist name. */
   artist?: string;
-  /** the lyric file author. */
-  author?: string;
   /** the source offset in milliseconds, already applied to document timestamps. */
   offset?: number;
   /** Apple songwriter artist IDs aligned with {@link songwriters}. */
@@ -279,8 +285,6 @@ export interface MetadataCapabilities {
   album: boolean;
   /** whether the format preserves the primary artist name. */
   artist: boolean;
-  /** whether the format preserves lyric file authorship. */
-  author: boolean;
   /** whether the format preserves songwriter names. */
   songwriters: boolean;
   /** whether the format preserves the song title. */
@@ -293,7 +297,6 @@ export type ConversionLoss =
   | "backing"
   | "metadata.album"
   | "metadata.artist"
-  | "metadata.author"
   | "metadata.songwriters"
   | "metadata.title"
   | "pronunciations"

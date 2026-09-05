@@ -15,7 +15,7 @@ export function readTag(line: string) {
 }
 
 export function checkMetaText(meta: LyricsMeta, format: FormatId): void {
-  const fields = [meta.album, meta.artist, meta.author, meta.title];
+  const fields = [meta.album, meta.artist, meta.title];
   if (
     fields.some((text) => text !== undefined && lineBreak.test(text)) ||
     meta.songwriters?.some((name) => lineBreak.test(name))
@@ -32,11 +32,7 @@ export function checkMetaText(meta: LyricsMeta, format: FormatId): void {
   }
 }
 
-export function writeTags(
-  meta: LyricsMeta,
-  format: FormatId,
-  order: "author-first" | "standard" = "standard"
-): string[] {
+export function writeTags(meta: LyricsMeta, format: FormatId): string[] {
   checkMetaText(meta, format);
   if (meta.songwriters?.length === 0) {
     throw new Error(`${format} cannot represent an empty songwriter list`);
@@ -47,7 +43,6 @@ export function writeTags(
   if (meta.songwriters?.some((songwriter) => songwriter.length === 0)) {
     throw new Error(`${format} cannot represent an empty songwriter name`);
   }
-  const author = `[by:${meta.author === undefined ? "" : meta.author}]`;
   const fields = [
     ...(meta.title === undefined ? [] : [`[ti:${meta.title}]`]),
     ...(meta.artist === undefined ? [] : [`[ar:${meta.artist}]`]),
@@ -55,7 +50,5 @@ export function writeTags(
   ];
   const songwriterTag =
     meta.songwriters === undefined ? [] : [`[au:${meta.songwriters[0]}]`];
-  return order === "author-first"
-    ? [author, ...fields, ...songwriterTag]
-    : [...fields, author, ...songwriterTag];
+  return [...fields, ...songwriterTag];
 }

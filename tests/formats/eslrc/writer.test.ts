@@ -83,11 +83,10 @@ describe("eslrc writer", () => {
         title: "Song",
       },
     });
-    expect(written.split("\n").slice(0, 5)).toEqual([
+    expect(written.split("\n").slice(0, 4)).toEqual([
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
-      "[by:]",
       "[au:Writer]",
     ]);
     expect(written).not.toContain("[offset:");

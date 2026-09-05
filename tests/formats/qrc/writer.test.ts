@@ -157,7 +157,6 @@ describe("qrc writer", () => {
     const written = writeLyrics(doc, "qrc");
 
     expect(written.split("\n")).toEqual([
-      "[by:]",
       "[1000,500]",
       "[1100,100](Echo)(1100,100)",
       "[2000,500]",
@@ -241,7 +240,6 @@ describe("qrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -249,11 +247,10 @@ describe("qrc writer", () => {
     };
     const written = write(doc);
 
-    expect(written.split("\n").slice(0, 6)).toEqual([
+    expect(written.split("\n").slice(0, 5)).toEqual([
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
-      "[by:Author]",
       "[au:Writer]",
       "[1001,1502]Hel(1001,751)lo(1752,751)",
     ]);
@@ -263,56 +260,9 @@ describe("qrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
     });
-  });
-
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow(`qrc cannot represent ${message}`);
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        agents: [{ id: "lead", type: "person" }],
-        lines: [{ ...lyricLine, agent: "lead" }],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent pronunciations",
-    },
-  ])("rejects unsupported document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
   });
 });

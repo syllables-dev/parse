@@ -395,9 +395,6 @@ function checkDoc(doc: LyricsDocument) {
   if (doc.version !== 1 || !capabilities.timing[doc.timing]) {
     throw new Error("ttml requires a version 1 document with known timing");
   }
-  if (doc.meta.author !== undefined) {
-    throw new Error("ttml cannot represent a lyric file author");
-  }
   // title has a home in ttml's own vocabulary, artist and album do not
   if (doc.meta.artist !== undefined || doc.meta.album !== undefined) {
     throw new Error("ttml cannot represent artist or album metadata");

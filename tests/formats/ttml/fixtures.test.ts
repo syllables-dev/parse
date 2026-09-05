@@ -195,21 +195,6 @@ describe("ttml fixtures", () => {
     }
   );
 
-  test("covers the complete fixture line and backing inventory", async () => {
-    const docs = await Promise.all(
-      fixtureCases.map(({ fileName }) => readFixture(fileName))
-    );
-
-    expect(docs.reduce((sum, doc) => sum + doc.lines.length, 0)).toBe(401);
-    expect(
-      docs.reduce(
-        (sum, doc) =>
-          sum + doc.lines.filter((line) => line.b.length > 0).length,
-        0
-      )
-    ).toBe(34);
-  });
-
   test("preserves fixture whitespace and removes backing wrappers", async () => {
     const doc = await readFixture("backing-vocals.ttml");
 

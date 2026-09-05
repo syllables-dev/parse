@@ -22,6 +22,10 @@
       "types": "./dist/formats/lrc.d.ts",
       "import": "./dist/formats/lrc.js"
     },
+    "./lyl": {
+      "types": "./dist/formats/lyl.d.ts",
+      "import": "./dist/formats/lyl.js"
+    },
     "./eslrc": {
       "types": "./dist/formats/eslrc.d.ts",
       "import": "./dist/formats/eslrc.js"

@@ -39,6 +39,7 @@ const languageTag = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const lrcReservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
 const lysReservedStamp = /\(\d+,\d+\)/u;
 const offsetTag = /^\[offset:.*\]$/iu;
+// by is accepted but not really supported, we dont parse
 const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
 const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
 
@@ -48,7 +49,6 @@ export const capabilities = {
   metadata: {
     album: true,
     artist: true,
-    author: true,
     songwriters: true,
     title: true,
   },
@@ -425,7 +425,7 @@ export function write(
   const sections = [
     containerMark,
     "[version:1.0]",
-    ...writeTags(doc.meta, "lqe", "author-first"),
+    ...writeTags(doc.meta, "lqe"),
     "",
     "[lyrics: format@Lyricify Syllable]",
     writeLys({
@@ -439,10 +439,7 @@ export function write(
         p: line.p,
       })),
       meta: {},
-    })
-      .split("\n")
-      .slice(1)
-      .join("\n"),
+    }),
   ];
   const languages = [
     ...new Set(
@@ -459,9 +456,6 @@ export function write(
         language === "und" ? "" : `language@${language}, `
       }format@LRC]`,
       writeAlignedRows(translationDoc(doc, language))
-        .split("\n")
-        .slice(1)
-        .join("\n")
     );
   }
   return sections.join("\n");

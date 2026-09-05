@@ -7,6 +7,7 @@ Every format reads into a plain `LyricsDocument` object and writes back out from
 Supported spokes:
 - TTML (Apple Music lyric profile only, not generic W3C TTML)
 - LRC (absorbs A2 word tags when present; the A2 dialect is not its own format)
+- LYL (Lyricify Lines)
 - ESLRC
 - QRC
 - YRC
@@ -17,11 +18,17 @@ Any-to-any conversion is `write(read(text))`; codecs never import each other, wi
 
 ## Timing
 
-A document is `static`, `line`, or `word` timed, and `FormatCapabilities.timing` says which of the three a writer can encode. TTML encodes all three, LRC only line, every other format only word.
+A document is `static`, `line`, or `word` timed, and `FormatCapabilities.timing` says which of the three a writer can encode. TTML encodes all three, LRC and LYL only line, every other format only word.
 
 Timing is never upscaled. A writer refuses a document it cannot encode, `lossy` included, because inventing word boundaries or timestamps the source never carried is fabrication, not loss. Downscaling word to line stays an ordinary lossy conversion and is reported by `losses` as `wordTiming`.
 
 Static documents leave every line and syllable `begin` and `end` at `0`. `validate` reports nothing for them, since every problem it can report is a timing problem.
+
+## Metadata
+
+The `by` tag is not part of the schema. Apple TTML has no field for a lyric file author, and the project targets TTML, so no reader reads `[by:]` and no writer emits it. A `by` tag in input parses as a tag and is then ignored, never a malformed line. Do not add it back.
+
+Songwriters (`au`) stay, since TTML carries them.
 
 ## Rules
 
