@@ -34,34 +34,6 @@ const fixtureCases = [
   ["yrc/word-timed-credits.yrc", "yrc"],
 ] satisfies [string, FormatId][];
 
-const authorCases = [
-  {
-    format: "lrc",
-    source: "[by:Thereallo]\n[00:01.000]Hello",
-  },
-  {
-    format: "eslrc",
-    source: "[by:Thereallo]\n[00:01.000]Hello[00:02.000]",
-  },
-  {
-    format: "qrc",
-    source: "[by:Thereallo]\n[1000,1000]Hello(1000,1000)",
-  },
-  {
-    format: "yrc",
-    source: `${JSON.stringify({ c: [{ tx: "作词: Writer" }], t: 0 })}\n[by:Thereallo]\n[1000,1000](1000,1000,0)Hello`,
-  },
-  {
-    format: "lys",
-    source: "[by:Thereallo]\n[4]Hello(1000,1000)",
-  },
-  {
-    format: "lqe",
-    source:
-      "[Lyricify Quick Export]\n[version:1.0]\n[by:Thereallo]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)",
-  },
-] satisfies { format: FormatId; source: string }[];
-
 const metadataDocument = {
   agents: [],
   lines: [
@@ -83,7 +55,6 @@ const paddedMetadataCases = [
   { field: "title", meta: { title: " Song" } },
   { field: "artist", meta: { artist: "Artist " } },
   { field: "album", meta: { album: " Album " } },
-  { field: "author", meta: { author: " Author" } },
   { field: "songwriter", meta: { songwriters: ["Writer "] } },
 ] satisfies { field: string; meta: LyricsDocument["meta"] }[];
 
@@ -183,7 +154,7 @@ describe("public dispatch", () => {
       { begin: 1250, end: 2000, text: "One" },
       { begin: 2000, end: 7000, text: "Two" },
     ]);
-    expect(write(doc, "lrc")).toBe("[by:]\n[00:01.250]One\n[00:02.000]Two");
+    expect(write(doc, "lrc")).toBe("[00:01.250]One\n[00:02.000]Two");
     expect(doc).toEqual(before);
   });
 
@@ -273,7 +244,7 @@ describe("public dispatch", () => {
     const lqe = convert(ttml, "lqe");
 
     expect(read(ttml, "ttml").agents).toEqual(lyricDocument.agents);
-    expect(lys).toBe(`[by:]\n${expectedRows.join("\n")}`);
+    expect(lys).toBe(expectedRows.join("\n"));
     expect(lqe).toContain(expectedRows.join("\n"));
     for (const format of ["lys", "lqe"] satisfies FormatId[]) {
       const aligned = read(format === "lys" ? lys : lqe, format);
@@ -489,7 +460,7 @@ describe("public dispatch", () => {
     );
 
     expect(converted).toBe(
-      "[by:]\n[1250,750]One(1250,750)\n[2000,5000]Two(2000,5000)"
+      "[1250,750]One(1250,750)\n[2000,5000]Two(2000,5000)"
     );
     expect(detect(converted)).toBe("qrc");
   });
@@ -523,7 +494,6 @@ describe("public dispatch", () => {
     expect(doc.meta).toEqual({
       album: "Album",
       artist: "Artist",
-      author: "Writer",
       songwriters: ["Composer"],
       title: "Song",
     });
@@ -536,11 +506,10 @@ describe("public dispatch", () => {
     expect(losses(doc, "ttml")).toEqual([
       "metadata.album",
       "metadata.artist",
-      "metadata.author",
       "metadata.title",
     ]);
     expect(() => convert(source, "ttml")).toThrow(
-      "ttml cannot represent a lyric file author"
+      "ttml cannot represent artist or album metadata"
     );
 
     const converted = convert(source, "ttml", { lossy: true });
@@ -603,7 +572,7 @@ describe("public dispatch", () => {
       "lrc cannot represent word timing"
     );
     expect(write(lyricDocument, "lrc", { lossy: true })).toBe(
-      "[by:]\n[00:01.000]Hello\n[00:02.000]World"
+      "[00:01.000]Hello\n[00:02.000]World"
     );
   });
 
@@ -611,57 +580,6 @@ describe("public dispatch", () => {
     expect(() =>
       read("[0,500]Hi(0,500)", "qrc", { expandRepeats: true })
     ).toThrow("expandRepeats is available for lrc input");
-  });
-
-  test.each(authorCases)(
-    "round-trips $format lyric authors",
-    ({ format, source }) => {
-      const doc = read(source, format);
-      const restored = read(write(doc, format), format);
-
-      expect(doc.meta.author).toBe("Thereallo");
-      expect(
-        doc.lines
-          .slice(0, 1)
-          .flatMap((line) => line.p.map((syllable) => syllable.text))
-          .join("")
-      ).toBe("Hello");
-      expect(restored.meta.author).toBe("Thereallo");
-    }
-  );
-
-  test.each(authorCases)(
-    "treats empty $format authors as absent",
-    ({ format, source }) => {
-      const doc = read(source.replace("[by:Thereallo]", "[by:]"), format);
-
-      expect(doc.meta.author).toBeUndefined();
-      expect(
-        doc.lines
-          .slice(0, 1)
-          .flatMap((line) => line.p.map((syllable) => syllable.text))
-          .join("")
-      ).toBe("Hello");
-    }
-  );
-
-  test("trims whitespace inside lyric author tags", () => {
-    const doc = read("[by:  There:allo [mix]  ]\n[00:01.000]Hello", "lrc");
-
-    expect(doc.meta.author).toBe("There:allo [mix]");
-    expect(doc.lines[0]?.p[0]?.text).toBe("Hello");
-    expect(write(doc, "lrc").split("\n")[0]).toBe("[by:There:allo [mix]]");
-  });
-
-  test("places the lqe author directly after its version", () => {
-    const source =
-      "[Lyricify Quick Export]\n[version:1.0]\n[by:Thereallo]\n[lyrics: format@Lyricify Syllable]\n[4]Hello(1000,1000)";
-
-    expect(write(read(source, "lqe"), "lqe").split("\n").slice(0, 3)).toEqual([
-      "[Lyricify Quick Export]",
-      "[version:1.0]",
-      "[by:Thereallo]",
-    ]);
   });
 
   test.each(paddedMetadataCases)(
@@ -821,24 +739,6 @@ describe("public dispatch", () => {
     ).toEqual({ fr: { p: "Bonjour" } });
   });
 
-  test("rejects line breaks in authors", () => {
-    const doc = read("[by:Thereallo]\n[00:01.000]Hello", "lrc");
-    doc.meta.author = "There\nallo";
-
-    expect(() => write(doc, "lrc")).toThrow(
-      "lrc cannot represent line breaks in an author"
-    );
-  });
-
-  test("rejects lyric authors in ttml output", () => {
-    const doc = read("[00:01.000]Hello", "lrc");
-    doc.meta.author = "Thereallo";
-
-    expect(() => write(doc, "ttml")).toThrow(
-      "ttml cannot represent a lyric file author"
-    );
-  });
-
   test("projects songwriter cardinality without mutation", () => {
     const doc = read("[00:01.000]Hello", "lrc");
     doc.meta.songwriters = ["One", "Two"];
@@ -921,21 +821,6 @@ describe("public dispatch", () => {
     expect(read(write(doc, "lrc", { lossy: true }), "lrc").meta.title).toBe(
       "Song Title"
     );
-    expect(doc).toEqual(before);
-  });
-
-  test("omits a normalized-empty author during a lossy write", () => {
-    const doc = read("[00:01.000]Hello", "lrc");
-    doc.meta.author = " \r\n ";
-    const before = structuredClone(doc);
-
-    expect(losses(doc, "lrc")).toEqual(["metadata.author"]);
-    expect(() => write(doc, "lrc")).toThrow(
-      "lrc cannot represent line breaks in an author"
-    );
-    expect(
-      read(write(doc, "lrc", { lossy: true }), "lrc").meta.author
-    ).toBeUndefined();
     expect(doc).toEqual(before);
   });
 

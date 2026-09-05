@@ -22,9 +22,7 @@ const lineDocument = {
 
 describe("lyl writer", () => {
   test("declares the type and writes explicit line ends", () => {
-    expect(write(lineDocument)).toBe(
-      "[type:LyricifyLines]\n[by:]\n[1000,2000]Hello"
-    );
+    expect(write(lineDocument)).toBe("[type:LyricifyLines]\n[1000,2000]Hello");
   });
 
   test("rejects reserved marks without mutating the document", () => {

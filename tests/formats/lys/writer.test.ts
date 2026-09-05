@@ -79,7 +79,7 @@ describe("lys writer", () => {
       version: 1,
     } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe("[by:]\n[5]Guest(1000,500)");
+    expect(write(doc)).toBe("[5]Guest(1000,500)");
     expect(read(write(doc))).toEqual(doc);
   });
 
@@ -128,7 +128,6 @@ describe("lys writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -141,7 +140,6 @@ describe("lys writer", () => {
         "[ti:Song]",
         "[ar:Singer]",
         "[al:Album]",
-        "[by:Author]",
         "[au:Writer]",
         "[4]Hel(1001,751)lo(1752,751)",
       ].join("\n")
@@ -161,7 +159,6 @@ describe("lys writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },

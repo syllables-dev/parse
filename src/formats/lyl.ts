@@ -44,7 +44,6 @@ export const capabilities = {
   metadata: {
     album: true,
     artist: true,
-    author: true,
     songwriters: true,
     title: true,
   },
@@ -103,14 +102,12 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   ) {
     throw new ParseError(`lyl declares the unknown type ${declaredType}`);
   }
-  const author = tags.get("by");
   const offsetText = tags.get("offset");
   const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lyl");
   const songwriter = tags.get("au");
   const meta = {
     ...(tags.has("al") && { album: tags.get("al") }),
     ...(tags.has("ar") && { artist: tags.get("ar") }),
-    ...(author && { author }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(tags.has("ti") && { title: tags.get("ti") }),
   };

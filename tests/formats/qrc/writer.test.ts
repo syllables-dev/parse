@@ -157,7 +157,6 @@ describe("qrc writer", () => {
     const written = writeLyrics(doc, "qrc");
 
     expect(written.split("\n")).toEqual([
-      "[by:]",
       "[1000,500]",
       "[1100,100](Echo)(1100,100)",
       "[2000,500]",
@@ -241,7 +240,6 @@ describe("qrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -249,11 +247,10 @@ describe("qrc writer", () => {
     };
     const written = write(doc);
 
-    expect(written.split("\n").slice(0, 6)).toEqual([
+    expect(written.split("\n").slice(0, 5)).toEqual([
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
-      "[by:Author]",
       "[au:Writer]",
       "[1001,1502]Hel(1001,751)lo(1752,751)",
     ]);
@@ -263,7 +260,6 @@ describe("qrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },

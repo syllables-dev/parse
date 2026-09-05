@@ -80,7 +80,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -96,7 +95,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },

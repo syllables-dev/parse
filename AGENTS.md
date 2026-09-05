@@ -24,6 +24,12 @@ Timing is never upscaled. A writer refuses a document it cannot encode, `lossy` 
 
 Static documents leave every line and syllable `begin` and `end` at `0`. `validate` reports nothing for them, since every problem it can report is a timing problem.
 
+## Metadata
+
+The `by` tag is not part of the schema. Apple TTML has no field for a lyric file author, and the project targets TTML, so no reader reads `[by:]` and no writer emits it. A `by` tag in input parses as a tag and is then ignored, never a malformed line. Do not add it back.
+
+Songwriters (`au`) stay, since TTML carries them.
+
 ## Rules
 
 - Always use the Bun toolchain: `bun` and `bunx`. Never `node`, `npm`, `pnpm`, or `npx`.

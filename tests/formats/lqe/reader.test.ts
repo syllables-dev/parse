@@ -87,7 +87,6 @@ describe("lqe reader", () => {
     expect(doc.meta).toEqual({
       album: "Album",
       artist: "Singer",
-      author: "Author",
       songwriters: ["Writer"],
       title: "Song",
     });

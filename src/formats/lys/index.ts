@@ -58,7 +58,6 @@ export const capabilities = {
   metadata: {
     album: true,
     artist: true,
-    author: true,
     songwriters: true,
     title: true,
   },
@@ -200,7 +199,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const lines = makeLines(rows);
   const album = tags.get("al");
   const artist = tags.get("ar");
-  const author = tags.get("by");
   const songwriter = tags.get("au");
   const title = tags.get("ti");
   const agents: LyricsDocument["agents"] = [];
@@ -218,7 +216,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const meta: LyricsMeta = {
     ...(album !== undefined && { album }),
     ...(artist !== undefined && { artist }),
-    ...(author && { author }),
     ...(songwriter !== undefined && { songwriters: [songwriter] }),
     ...(title !== undefined && { title }),
   };

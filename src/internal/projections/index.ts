@@ -138,7 +138,6 @@ export function losses(
   return [
     ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
     ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
-    ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),
     ...lost(
       "metadata.songwriters",
       doc.meta.songwriters,
@@ -151,7 +150,7 @@ export function losses(
   ];
 }
 
-export function project(
+function project(
   doc: LyricsDocument,
   format: FormatId,
   capabilities: FormatCapabilities

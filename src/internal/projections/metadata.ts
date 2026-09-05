@@ -94,9 +94,6 @@ export function formatMetadataLosses(
   if (malformedText(meta.artist)) {
     features.push("metadata.artist");
   }
-  if (malformedText(meta.author)) {
-    features.push("metadata.author");
-  }
   if (
     capabilities.metadata.songwriters &&
     meta.songwriters !== undefined &&
@@ -112,9 +109,6 @@ export function formatMetadataLosses(
   }
   if (malformedText(meta.title)) {
     features.push("metadata.title");
-  }
-  if (meta.author === "") {
-    features.push("metadata.author");
   }
   return features;
 }
@@ -132,7 +126,6 @@ export function projectedMeta(
 ) {
   const album = projectedText(meta.album, format);
   const artist = projectedText(meta.artist, format);
-  const author = projectedText(meta.author, format);
   const songwriters = projectedSongwriters(meta.songwriters, format);
   const title = projectedText(meta.title, format);
   return {
@@ -143,11 +136,6 @@ export function projectedMeta(
     ...(capabilities.metadata.artist &&
       artist !== undefined && {
         artist,
-      }),
-    ...(capabilities.metadata.author &&
-      author !== undefined &&
-      author.length > 0 && {
-        author,
       }),
     ...(meta.offset !== undefined && { offset: meta.offset }),
     ...(capabilities.metadata.songwriters &&

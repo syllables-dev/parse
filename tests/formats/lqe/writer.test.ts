@@ -278,17 +278,15 @@ describe("lqe writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
       },
     });
 
-    expect(written.split("\n").slice(0, 9)).toEqual([
+    expect(written.split("\n").slice(0, 8)).toEqual([
       containerMark,
       "[version:1.0]",
-      "[by:Author]",
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
@@ -301,7 +299,6 @@ describe("lqe writer", () => {
     expect(read(written).meta).toEqual({
       album: "Album",
       artist: "Singer",
-      author: "Author",
       songwriters: ["Writer"],
       title: "Song",
     });

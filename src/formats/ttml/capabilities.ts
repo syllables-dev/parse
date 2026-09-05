@@ -6,7 +6,6 @@ export const capabilities = {
   metadata: {
     album: false,
     artist: false,
-    author: false,
     songwriters: true,
     title: false,
   },

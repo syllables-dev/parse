@@ -39,13 +39,9 @@ function checkMetadata(
   format: FormatId,
   capabilities: FormatCapabilities
 ): void {
-  if (doc.meta.author === "") {
-    throw new Error(`${format} cannot represent an empty lyric file author`);
-  }
   const unsupported = [
     ["album", capabilities.metadata.album, doc.meta.album],
     ["artist", capabilities.metadata.artist, doc.meta.artist],
-    ["author", capabilities.metadata.author, doc.meta.author],
     ["songwriter", capabilities.metadata.songwriters, doc.meta.songwriters],
     ["title", capabilities.metadata.title, doc.meta.title],
   ].find(
@@ -53,9 +49,6 @@ function checkMetadata(
   );
   if (unsupported) {
     throw new Error(`${format} cannot represent ${unsupported[0]} metadata`);
-  }
-  if (doc.meta.author !== undefined && lineBreak.test(doc.meta.author)) {
-    throw new Error(`${format} cannot represent line breaks in an author`);
   }
 }
 
