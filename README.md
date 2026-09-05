@@ -1,19 +1,8 @@
-<div align="center">
-
 # @syllables-dev/parse
 
-**Readers and writers for lyric formats, built around one shared document schema.**
+Readers and writers for Apple Music TTML, LRC, ESLRC, QRC, YRC, LYS, and LQE, built around one shared document schema.
 
-Apple Music TTML &middot; LRC &middot; ESLRC &middot; QRC &middot; YRC &middot; LYS &middot; LQE
-
-</div>
-
-<br>
-
-> [!NOTE]
-> Documentation is a work in progress. Everything below is accurate and covered by tests, but the package is pre-1.0 and the schema may still change between minor versions.
-
-<br>
+The package is pre-1.0. Everything documented here is covered by tests, but the schema may still change between minor versions.
 
 ## Install
 
@@ -21,15 +10,9 @@ Apple Music TTML &middot; LRC &middot; ESLRC &middot; QRC &middot; YRC &middot; 
 bun add @syllables-dev/parse
 ```
 
-<br>
-
 ## How it works
 
-Every format reads into a plain `LyricsDocument` and writes back out from it. Codecs never import each other, so any-to-any conversion is simply `write(read(text))`.
-
-<br>
-
-## Quick start
+Every format reads into a plain `LyricsDocument` and writes back out from it. Codecs never import each other, so converting between any two of them is just `write(read(text))`.
 
 ```ts
 import { convert, parse } from "@syllables-dev/parse";
@@ -41,11 +24,9 @@ const { doc, format } = parse(source);
 const lrc = convert(source, "lrc");
 ```
 
-<br>
-
 ## Lossy conversion
 
-Formats are not equally expressive. Writing is **strict by default**, so nothing is lost silently: you either get an error or you opt in.
+Formats are not equally expressive, and writing is strict by default. You either get an error or you opt in.
 
 ```ts
 import { losses, read, write } from "@syllables-dev/parse";
@@ -62,71 +43,62 @@ write(doc, "lrc", { lossy: true });
 // "[by:]\n[00:00.000]Hello world"
 ```
 
-Call `losses(doc, format)` first to see what a target cannot hold, then pass `{ lossy: true }` when you accept it.
+Call `losses(doc, format)` to see what a target would drop, then pass `{ lossy: true }` once you accept it.
 
-<br>
+## Timing
+
+A document is `static`, `line`, or `word` timed. TTML covers all three, LRC is line only, and the rest are word only.
+
+Timing is never upscaled. Writing a line-timed document to QRC would mean inventing word boundaries the source never carried, so it is refused outright rather than fabricated, and `{ lossy: true }` does not change that.
+
+```ts
+const doc = read("[00:01.000]Hello", "lrc");
+
+write(doc, "qrc", { lossy: true });
+// throws: qrc cannot represent line timing
+```
+
+Going the other way is fine. Word to line drops detail that really is there, so it is an ordinary lossy write.
 
 ## What each format preserves
 
-<div align="center">
+| | static | line | word | backing | agents | translation | pronunciation |
+|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| TTML | ✓ | ✓ | ✓ | ✓ | identity | ✓ | ✓ |
+| LQE | | | ✓ | ✓ | alignment | ✓ | |
+| LYS | | | ✓ | ✓ | alignment | | |
+| QRC | | | ✓ | ✓ | | | |
+| YRC | | | ✓ | | | | |
+| ESLRC | | | ✓ | | | | |
+| LRC | | ✓ | | | | | |
 
-| | word timing | backing | agents | translation | pronunciation |
-|:--|:--:|:--:|:--:|:--:|:--:|
-| **TTML** | ✓ | ✓ | identity | ✓ | ✓ |
-| **LQE** | ✓ | ✓ | alignment | ✓ | |
-| **LYS** | ✓ | ✓ | alignment | | |
-| **QRC** | ✓ | ✓ | | | |
-| **YRC** | ✓ | | | | |
-| **ESLRC** | ✓ | | | | |
-| **LRC** | | | | | |
-
-</div>
-
-`agents` is tiered: `identity` keeps opaque IDs and types, `alignment` keeps duet-side attribution but may canonicalize them. Query all of this at runtime with `capabilities(format)`.
-
-<br>
+The first three columns are timing granularities. `agents` is tiered: `identity` keeps opaque IDs and types, `alignment` keeps duet-side attribution but may canonicalize them. All of it is available at runtime through `capabilities(format)`.
 
 ## API
 
-<table>
-<tr><th align="left">Function</th><th align="left">Purpose</th></tr>
-<tr><td><code>detect(text)</code></td><td>Identify a format from content alone. Returns <code>null</code> when unrecognized.</td></tr>
-<tr><td><code>parse(text)</code></td><td>Detect and read in one step. Returns <code>{ doc, format }</code>.</td></tr>
-<tr><td><code>read(text, format)</code></td><td>Read text you already know the format of.</td></tr>
-<tr><td><code>write(doc, format)</code></td><td>Serialize a document. Throws when the format cannot represent it.</td></tr>
-<tr><td><code>convert(text, to)</code></td><td>Detect, read, and write in one step.</td></tr>
-<tr><td><code>losses(doc, format)</code></td><td>List what a target format would drop.</td></tr>
-<tr><td><code>capabilities(format)</code></td><td>What a format can preserve.</td></tr>
-<tr><td><code>validate(doc)</code></td><td>Structural problems in a document you built or edited.</td></tr>
-<tr><td><code>createDocument()</code></td><td>An empty document to build from.</td></tr>
-</table>
+- `detect(text)` identifies a format from content alone, or returns `null`.
+- `parse(text)` detects and reads in one step, returning `{ doc, format }`.
+- `read(text, format)` reads text whose format you already know.
+- `write(doc, format)` serializes a document, and throws when the format cannot represent it.
+- `convert(text, to)` detects, reads, and writes in one step.
+- `losses(doc, format)` lists what a target format would drop.
+- `capabilities(format)` reports what a format can preserve.
+- `validate(doc)` finds structural problems in a document you built or edited.
+- `createDocument()` returns an empty document to build from.
 
 `ParseError` and every public schema type are exported from the root.
 
-<br>
-
-### Subpath imports
-
-Pull in a single codec when you do not need detection:
+To pull in a single codec without the detection machinery:
 
 ```ts
 import { read, write } from "@syllables-dev/parse/ttml";
 ```
 
-Available for `ttml`, `lrc`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
-
-<br>
+That works for `ttml`, `lrc`, `eslrc`, `qrc`, `yrc`, `lys`, and `lqe`.
 
 ## Guarantees
 
-<table>
-<tr><td><b>Deterministic</b></td><td>Identical input always produces identical documents and IDs.</td></tr>
-<tr><td><b>Pure</b></td><td>Readers and writers never mutate their input.</td></tr>
-<tr><td><b>Plain data</b></td><td>Documents are JSON-serializable. No classes, Maps, or Dates.</td></tr>
-<tr><td><b>Absolute time</b></td><td>Every timestamp is an integer millisecond offset. Source offsets are applied on read.</td></tr>
-</table>
-
-<br>
+Identical input always produces identical documents and IDs. Readers and writers never mutate their input. Documents are JSON-serializable, with no classes, Maps, or Dates. Every timestamp is an integer millisecond offset, and any source offset is applied on read.
 
 ## License
 
