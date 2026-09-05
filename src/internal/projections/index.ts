@@ -6,8 +6,9 @@ import {
   projectedTranslationTracks,
   trackMetadataLosses,
 } from "@/internal/projections/lqe";
-import { projectedLrcLines } from "@/internal/projections/lrc";
-import { lineLosses, projectedLysLines } from "@/internal/projections/lys";
+import { lrcLineLosses, projectedLrcLines } from "@/internal/projections/lrc";
+import { lylLineLosses } from "@/internal/projections/lyl";
+import { lysLineLosses, projectedLysLines } from "@/internal/projections/lys";
 import {
   formatMetadataLosses,
   projectedMeta,
@@ -72,7 +73,13 @@ function basicLosses(
   if (!capabilities.timing.word && doc.timing === "word") {
     features.push("wordTiming");
   }
-  features.push(...lineLosses(doc, format));
+  if (format === "lrc") {
+    features.push(...lrcLineLosses(doc));
+  } else if (format === "lyl") {
+    features.push(...lylLineLosses(doc));
+  } else if (format === "lqe" || format === "lys") {
+    features.push(...lysLineLosses(doc));
+  }
   if (
     capabilities.agents === false &&
     (doc.agents.length > 0 || doc.lines.some((line) => line.agent !== null))

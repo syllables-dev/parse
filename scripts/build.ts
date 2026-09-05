@@ -5,6 +5,7 @@ const entrypoints = [
   "src/index.ts",
   "src/formats/ttml/index.ts",
   "src/formats/lrc.ts",
+  "src/formats/lyl.ts",
   "src/formats/eslrc.ts",
   "src/formats/qrc.ts",
   "src/formats/yrc.ts",

@@ -3,7 +3,15 @@
  *
  * enhanced LRC with A2 word markers is represented as `lrc`.
  */
-export type FormatId = "ttml" | "lrc" | "eslrc" | "qrc" | "yrc" | "lys" | "lqe";
+export type FormatId =
+  | "ttml"
+  | "lrc"
+  | "lyl"
+  | "eslrc"
+  | "qrc"
+  | "yrc"
+  | "lys"
+  | "lqe";
 
 /**
  * a stable validation problem identifier suitable for localization and editor logic.

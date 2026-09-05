@@ -13,6 +13,7 @@ function usesLyricTags(format: FormatId) {
     format === "eslrc" ||
     format === "lqe" ||
     format === "lrc" ||
+    format === "lyl" ||
     format === "lys" ||
     format === "qrc"
   );

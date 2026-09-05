@@ -19,6 +19,7 @@ const fixtureCases = [
   ["lqe/translation.lqe", "lqe"],
   ["lrc/header-by-tag.lrc", "lrc"],
   ["lrc/plain-cjk.lrc", "lrc"],
+  ["lyl/gapped-lines.lyl", "lyl"],
   ["lys/duet-values.lys", "lys"],
   ["lys/primary-background.lys", "lys"],
   ["qrc/cjk-per-char.qrc", "qrc"],
@@ -97,6 +98,11 @@ const precedenceCases = [
     format: "yrc",
     name: "yrc before qrc",
     source: "[1000,500](1000,500,0)Hello",
+  },
+  {
+    format: "qrc",
+    name: "qrc before lyl",
+    source: "[0,1300]Hel(0,400)lo(400,900)",
   },
   {
     format: "eslrc",

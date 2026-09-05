@@ -15,6 +15,16 @@ export function track(syllables: Syllable[], line: LyricsLine) {
   ];
 }
 
+// a line-timed writer emits one syllable spanning the line, so anything else is collapsed away
+export function primaryCoversLine(line: LyricsLine) {
+  const [first] = line.p;
+  return (
+    line.p.length <= 1 &&
+    (first === undefined ||
+      (first.begin === line.begin && first.end === line.end))
+  );
+}
+
 function projectedTrack(
   syllables: Syllable[],
   line: LyricsLine,
