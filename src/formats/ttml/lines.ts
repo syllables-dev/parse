@@ -547,7 +547,7 @@ function readDiv(
   const range =
     beginText === undefined
       ? undefined
-      : readRange(division, 0, "ttml division");
+      : readRange(division, offset, "ttml division");
   const divAgent = agentRef(division, inheritedAgent, agentIds);
   const lines = paragraphs.map((paragraph, index) => {
     if (!is(paragraph, "p", ttmlUri)) {

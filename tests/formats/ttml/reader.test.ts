@@ -151,6 +151,10 @@ describe("ttml reader", () => {
           },
         },
       });
+      expect(doc.apple?.sections?.[0]).toMatchObject({
+        begin: 2000 + offset,
+        end: 5000 + offset,
+      });
 
       const written = writeLyrics(doc, "ttml");
       expect(written).toContain(`begin="${writtenBegin}"`);
