@@ -7,6 +7,7 @@ import type {
   ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
+  LyricsLine,
 } from "@/types";
 
 // lrc infers each line end from the next line start, so any other end is rewritten
@@ -23,6 +24,21 @@ export function lrcLineLosses(doc: LyricsDocument): ConversionLoss[] {
     : [];
 }
 
+function foldedText(line: LyricsLine, primary: string) {
+  const backing = line.b
+    .map((syllable) => syllable.text)
+    .join("")
+    .trim();
+  if (backing.length === 0) {
+    return primary;
+  }
+  const wrapped =
+    backing.startsWith("(") && backing.endsWith(")") ? backing : `(${backing})`;
+  return primary.trim().length === 0
+    ? wrapped
+    : `${primary.trimEnd()} ${wrapped}`;
+}
+
 export function projectedLrcLines(
   doc: LyricsDocument,
   capabilities: FormatCapabilities,
@@ -37,12 +53,19 @@ export function projectedLrcLines(
   return orderedLines.map(({ line }, lineIndex) => {
     const { begin } = line;
     const end = orderedLines[lineIndex + 1]?.line.begin ?? begin + 5000;
-    const p = track(line.p, { ...line, begin, end });
+    const [primary] = track(line.p, { ...line, begin, end });
     return {
       ...projectedLine(line, capabilities, wordTimed, line.translations, false),
       begin,
       end,
-      p: p.length > 0 ? p : [{ begin, end, id: `${line.id}w0`, text: "" }],
+      p: [
+        {
+          begin,
+          end,
+          id: primary?.id ?? `${line.id}w0`,
+          text: foldedText(line, primary?.text ?? ""),
+        },
+      ],
     };
   });
 }

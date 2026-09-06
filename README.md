@@ -76,6 +76,8 @@ Between the two line-timed formats, LRC infers each line's end from the next lin
 | LRC | | ✓ | | | | | |
 | LYL | | ✓ | | | | | |
 
+LRC has no backing track, so a lossy LRC write folds each backing line into its parent line as parenthesized text: `[00:01.000]Main line (This is the background)`. It is still reported as a `backing` loss, since the backing timing is gone.
+
 The first three columns are timing granularities. `agents` is tiered: `identity` keeps opaque IDs and types, `alignment` keeps duet-side attribution but may canonicalize them. All of it is available at runtime through `capabilities(format)`.
 
 ## API

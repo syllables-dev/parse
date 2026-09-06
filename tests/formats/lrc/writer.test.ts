@@ -242,6 +242,37 @@ describe("lrc writer", () => {
     ).toThrow("lrc cannot represent pronunciations");
   });
 
+  test("folds backing vocals into the parent line during a lossy write", () => {
+    expect(
+      write(
+        {
+          ...lineDocument,
+          lines: [
+            {
+              ...lyricLine,
+              b: [
+                { begin: 2000, end: 3000, id: "b0", text: "This is the " },
+                { begin: 3000, end: 4000, id: "b1", text: "background" },
+              ],
+              p: [{ begin: 1000, end: 6000, id: "word", text: "Main line " }],
+            },
+            {
+              agent: null,
+              b: [{ begin: 6000, end: 7000, id: "b2", text: "(only echo)" }],
+              begin: 6000,
+              end: 11_000,
+              id: "orphan",
+              p: [],
+            },
+          ],
+        },
+        { lossy: true }
+      )
+    ).toBe(
+      "[00:01.000]Main line (This is the background)\n[00:06.000](only echo)"
+    );
+  });
+
   test("requires line ends derived from the following start", () => {
     expect(() =>
       write({

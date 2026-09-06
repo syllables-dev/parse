@@ -572,7 +572,7 @@ describe("public dispatch", () => {
       "lrc cannot represent word timing"
     );
     expect(write(lyricDocument, "lrc", { lossy: true })).toBe(
-      "[00:01.000]Hello\n[00:02.000]World"
+      "[00:01.000]Hello (Back)\n[00:02.000]World"
     );
   });
 
