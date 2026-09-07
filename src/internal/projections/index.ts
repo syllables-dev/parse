@@ -62,7 +62,12 @@ function projectedLines(
       format === "ttml"
     );
     const backing = backingLine(line, capabilities, wordTimed);
-    return backing === undefined ? [primary] : [primary, backing];
+    if (backing === undefined) {
+      return [primary];
+    }
+    return backing.begin < primary.begin
+      ? [backing, primary]
+      : [primary, backing];
   });
 }
 

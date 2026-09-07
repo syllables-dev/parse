@@ -23,7 +23,8 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("yrc writer", () => {
-  // yrc has no backing track, so lossy keeps the words as a parenthesized line of their own
+  // yrc has no backing track, so lossy keeps the words as a parenthesized line of their
+  // own, ordered ahead of the line when the backing starts first
   test("writes backing vocals as their own line when lossy", () => {
     const doc = {
       ...wordDocument,
@@ -36,7 +37,23 @@ describe("yrc writer", () => {
     } satisfies LyricsDocument;
 
     expect(write(doc, { lossy: true })).toBe(
-      "[1001,1502](1001,751,0)Hel(1752,751,0)lo\n[600,300](600,300,0)(Ooh)"
+      "[600,300](600,300,0)(Ooh)\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
+    );
+  });
+
+  test("keeps a backing line after the line it follows", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 2000, end: 2400, id: "l0b0", text: "Ooh" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[1001,1502](1001,751,0)Hel(1752,751,0)lo\n[2000,400](2000,400,0)(Ooh)"
     );
   });
 

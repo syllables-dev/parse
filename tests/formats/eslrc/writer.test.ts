@@ -23,7 +23,8 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("eslrc writer", () => {
-  // eslrc has no backing track, so lossy keeps the words as a parenthesized line of their own
+  // eslrc has no backing track, so lossy keeps the words as a parenthesized line of their
+  // own, ordered ahead of the line when the backing starts first
   test("writes backing vocals as their own line when lossy", () => {
     const doc = {
       ...wordDocument,
@@ -36,7 +37,7 @@ describe("eslrc writer", () => {
     } satisfies LyricsDocument;
 
     expect(write(doc, { lossy: true })).toBe(
-      "[00:01.001]Hel[00:01.752]lo[00:02.503]\n[00:00.600](Ooh)[00:00.900]"
+      "[00:00.600](Ooh)[00:00.900]\n[00:01.001]Hel[00:01.752]lo[00:02.503]"
     );
   });
 
