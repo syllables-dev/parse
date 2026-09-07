@@ -1,6 +1,11 @@
 import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
-function checkTrack(line: LyricsLine, syllables: Syllable[]): Problem[] {
+// a backing run may anticipate its line, matching the ttml x-bg span's own begin
+function checkTrack(
+  line: LyricsLine,
+  syllables: Syllable[],
+  backing = false
+): Problem[] {
   const problems: Problem[] = [];
   let previousBegin: number | undefined;
 
@@ -31,7 +36,7 @@ function checkTrack(line: LyricsLine, syllables: Syllable[]): Problem[] {
         message: "syllable ends before it begins",
       });
     }
-    if (syllable.begin < line.begin || syllable.end > line.end) {
+    if ((!backing && syllable.begin < line.begin) || syllable.end > line.end) {
       problems.push({
         code: "syllable-outside-line",
         id: syllable.id,
@@ -95,14 +100,14 @@ export function validate(doc: LyricsDocument): Problem[] {
     problems.push(
       ...checkTiming(line, previousBegin),
       ...checkTrack(line, line.p),
-      ...checkTrack(line, line.b)
+      ...checkTrack(line, line.b, true)
     );
     for (const pronunciation of Object.values(line.pronunciations ?? {})) {
       for (const entry of [pronunciation, ...(pronunciation.variants ?? [])]) {
         if (entry) {
           problems.push(
             ...checkTrack(line, entry.p),
-            ...checkTrack(line, entry.b)
+            ...checkTrack(line, entry.b, true)
           );
         }
       }

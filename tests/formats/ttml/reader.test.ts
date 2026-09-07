@@ -579,6 +579,24 @@ describe("ttml reader", () => {
     });
   });
 
+  test("keeps a backing run that starts before its line", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="2.000" end="3.000" itunes:key="early"><span begin="2.000" end="3.000">Lead</span><span ttm:role="x-bg"><span begin="1.200" end="1.800">(Echo)</span></span></p></div>'
+    );
+    const [line] = read(source).lines;
+
+    expect(line).toMatchObject({ begin: 2000, end: 3000 });
+    expect(line?.b[0]).toMatchObject({ begin: 1200, end: 1800, text: "Echo" });
+  });
+
+  test("rejects a backing run that outlasts its line", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="late"><span begin="1.000" end="2.000">Lead</span><span ttm:role="x-bg"><span begin="1.200" end="2.800">(Echo)</span></span></p></div>'
+    );
+
+    expect(() => read(source)).toThrow(ParseError);
+  });
+
   test("rejects backing-only lyric lines", () => {
     const source = makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span ttm:role="x-bg"><span begin="1.100" end="1.800">(Echo)</span></span></p></div>'
@@ -789,9 +807,6 @@ describe("ttml reader", () => {
     ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="0.500" end="1.500">Text</span></p></div>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span><span begin="0.500" end="1.500" ttm:role="x-bg">(Echo)</span></p></div>'
     ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',

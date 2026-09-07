@@ -31,7 +31,8 @@ function checkTrack(
   syllables: Syllable[],
   line: LyricsLine,
   lineTimed: boolean,
-  label: string
+  label: string,
+  backing = false
 ) {
   for (const syllable of syllables) {
     checkTime(syllable.begin, `syllable ${syllable.id} start`);
@@ -41,7 +42,7 @@ function checkTrack(
         `syllable ${syllable.id} end must not precede its start`
       );
     }
-    if (syllable.begin < line.begin || syllable.end > line.end) {
+    if ((!backing && syllable.begin < line.begin) || syllable.end > line.end) {
       throw new RangeError(
         `syllable ${syllable.id} must stay within line ${line.id}`
       );
@@ -60,7 +61,8 @@ function checkTrack(
         ),
         line,
         lineTimed,
-        label
+        label,
+        backing
       );
     }
   }
@@ -125,7 +127,13 @@ function checkPronunciation(
     checkAgents(entry.p, knownAgents);
     checkAgents(entry.b, knownAgents);
     checkTrack(entry.p, line, lineTimed, label);
-    checkTrack(entry.b, line, lineTimed, `${label} backing pronunciation`);
+    checkTrack(
+      entry.b,
+      line,
+      lineTimed,
+      `${label} backing pronunciation`,
+      true
+    );
   }
 }
 
@@ -155,7 +163,8 @@ function checkTranslation(
       translation.bWords,
       line,
       lineTimed,
-      `${language} backing translation`
+      `${language} backing translation`,
+      true
     );
     if (
       translation.b === undefined ||
@@ -296,7 +305,8 @@ function checkLines(doc: LyricsDocument, agentIds: string[]) {
       line.b,
       line,
       doc.timing !== "word",
-      `line ${line.id} backing track`
+      `line ${line.id} backing track`,
+      true
     );
     checkAgents(line.p, knownAgents);
     checkAgents(line.b, knownAgents);

@@ -371,12 +371,16 @@ export function untimed(nodes: XmlNode[]) {
   return lyric;
 }
 
+// backing run may anticipate its line
+// <span ttm:role="x-bg"> carries its own begin
 export function checkTrack(
   syllables: Syllable[],
-  line: Pick<LyricsLine, "begin" | "end" | "id">
+  line: Pick<LyricsLine, "begin" | "end" | "id">,
+  backing = false
 ) {
   const outside = syllables.find(
-    (syllable) => syllable.begin < line.begin || syllable.end > line.end
+    (syllable) =>
+      (!backing && syllable.begin < line.begin) || syllable.end > line.end
   );
   if (outside) {
     throw new ParseError(
@@ -498,7 +502,7 @@ function readLine(
     );
   }
   checkTrack(lyricLine.p, lyricLine);
-  checkTrack(lyricLine.b, lyricLine);
+  checkTrack(lyricLine.b, lyricLine, true);
   return lyricLine;
 }
 
