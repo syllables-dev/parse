@@ -24,6 +24,20 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("lys writer", () => {
+  test("writes a backing row that starts before its line", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 400, end: 900, id: "echo", text: "Ooh" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc)).toBe("[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)");
+  });
+
   test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
