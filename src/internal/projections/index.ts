@@ -1,4 +1,4 @@
-import { projectedLine } from "@/internal/projections/line";
+import { backingLine, projectedLine } from "@/internal/projections/line";
 import {
   lqeTranslationLosses,
   projectedLqeLines,
@@ -53,15 +53,17 @@ function projectedLines(
       projectedLine(line, capabilities, wordTimed, line.translations, false)
     );
   }
-  return doc.lines.map((line) =>
-    projectedLine(
+  return doc.lines.flatMap((line) => {
+    const primary = projectedLine(
       line,
       capabilities,
       wordTimed,
       line.translations,
       format === "ttml"
-    )
-  );
+    );
+    const backing = backingLine(line, capabilities, wordTimed);
+    return backing === undefined ? [primary] : [primary, backing];
+  });
 }
 
 function basicLosses(

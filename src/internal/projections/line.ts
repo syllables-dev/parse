@@ -33,6 +33,26 @@ function projectedTrack(
   return wordTimed ? syllables : track(syllables, line);
 }
 
+// a format without a backing track keeps the words as their own parenthesized line
+// rather than dropping them, so lossy output loses the track but not the lyric
+export function backingLine(
+  line: LyricsLine,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+): LyricsLine | undefined {
+  if (capabilities.backing || line.b.length === 0) {
+    return;
+  }
+  const begin = Math.min(...line.b.map((syllable) => syllable.begin));
+  const end = Math.max(...line.b.map((syllable) => syllable.end));
+  const wrapped = line.b.map((syllable, index) => ({
+    ...syllable,
+    text: `${index === 0 ? "(" : ""}${syllable.text}${index === line.b.length - 1 ? ")" : ""}`,
+  }));
+  const bare = { ...line, b: [], begin, end, id: `${line.id}b`, p: wrapped };
+  return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };
+}
+
 export function projectedLine(
   line: LyricsLine,
   capabilities: FormatCapabilities,

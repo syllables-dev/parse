@@ -23,6 +23,23 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("eslrc writer", () => {
+  // eslrc has no backing track, so lossy keeps the words as a parenthesized line of their own
+  test("writes backing vocals as their own line when lossy", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 600, end: 900, id: "l0b0", text: "Ooh" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[00:01.001]Hel[00:01.752]lo[00:02.503]\n[00:00.600](Ooh)[00:00.900]"
+    );
+  });
+
   test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
