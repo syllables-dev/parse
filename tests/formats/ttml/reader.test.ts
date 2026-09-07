@@ -255,7 +255,7 @@ describe("ttml reader", () => {
       { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
     ]);
 
-    for (const format of ["ttml", "qrc"] as const) {
+    for (const format of ["ttml"] as const) {
       const written = writeLyrics(doc, format);
       expect(written).toContain("((（Echo");
       expect(written).toContain("）))");

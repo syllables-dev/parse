@@ -1,4 +1,4 @@
-import { projectedLine } from "@/internal/projections/line";
+import { backingLine, projectedLine } from "@/internal/projections/line";
 import type { FormatCapabilities, LyricsDocument, LyricsLine } from "@/types";
 
 interface QrcProjectionRow {
@@ -132,7 +132,7 @@ export function projectedQrcLines(
   wordTimed: boolean
 ) {
   const unwrapped = qrcTextLosses(doc);
-  return doc.lines.map((line, lineIndex) => {
+  return doc.lines.flatMap((line, lineIndex) => {
     const pair = unwrapped.has(lineIndex) ? qrcWrappingPair(line) : undefined;
     const p =
       pair === undefined
@@ -147,12 +147,14 @@ export function projectedQrcLines(
             }
             return { ...syllable, text };
           });
-    return projectedLine(
+    const primary = projectedLine(
       { ...line, p },
       capabilities,
       wordTimed,
       line.translations,
       false
     );
+    const backing = backingLine(line, capabilities, wordTimed);
+    return backing === undefined ? [primary] : [primary, backing];
   });
 }

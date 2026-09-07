@@ -65,7 +65,7 @@ describe("qrc writer", () => {
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
-    expect(() => write(doc)).toThrow(
+    expect(() => write(doc, { lossy: true })).toThrow(
       "qrc cannot represent reserved marks in text"
     );
     expect(doc).toEqual(before);
@@ -138,7 +138,7 @@ describe("qrc writer", () => {
     });
   });
 
-  test("preserves leading and adjacent backing-only lines", () => {
+  test("writes leading and adjacent backing-only lines as parenthesized rows", () => {
     const doc = {
       ...wordDocument,
       lines: [
@@ -154,16 +154,14 @@ describe("qrc writer", () => {
       ],
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
-    const written = writeLyrics(doc, "qrc");
+    const written = write(doc, { lossy: true });
 
+    // qrc has no backing marker, so each backing run becomes an ordinary parenthesized row
     expect(written.split("\n")).toEqual([
-      "[1000,500]",
       "[1100,100](Echo)(1100,100)",
-      "[2000,500]",
       "[2100,100](Answer)(2100,100)",
       "[3000,500]Lead(3000,500)",
     ]);
-    expect(readLyrics(written, "qrc")).toEqual(doc);
     expect(doc).toEqual(before);
   });
 

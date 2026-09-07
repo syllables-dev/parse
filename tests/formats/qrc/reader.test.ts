@@ -27,7 +27,9 @@ describe("qrc reader", () => {
     expect(doc.lines[0]?.b).toEqual([
       { begin: 1500, end: 2500, id: "l0b0", text: "Echo" },
     ]);
-    expect(read(write(doc))).toEqual(doc);
+    expect(write(doc, { lossy: true })).toBe(
+      "[1000,2000]Lead(1000,2000)\n[1500,1000](Echo)(1500,1000)"
+    );
   });
 
   test("preserves overlapping lyric rows", () => {
