@@ -69,7 +69,14 @@ export function backingLine(
         : `${first ? "(" : ""}${text}${last ? ")" : ""}`,
     };
   });
-  const bare = { ...line, b: [], begin, end, id: `${line.id}b`, p: wrapped };
+  const bare = {
+    ...projectedLine(line, capabilities, wordTimed, undefined, false),
+    b: [],
+    begin,
+    end,
+    id: `${line.id}b`,
+    p: wrapped,
+  };
   return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };
 }
 

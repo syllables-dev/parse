@@ -393,6 +393,35 @@ describe("public dispatch", () => {
     expect(lyricDocument).toEqual(before);
   });
 
+  test("drops the agent of a promoted backing line the target cannot encode", () => {
+    const lyricDocument = {
+      agents: [{ id: "v1", type: "person" }],
+      lines: [
+        {
+          agent: "v1",
+          b: [{ begin: 1200, end: 1500, id: "l0b0", text: "Reply" }],
+          begin: 1000,
+          end: 2000,
+          id: "l0",
+          p: [{ begin: 1000, end: 2000, id: "l0p0", text: "Lead" }],
+        },
+      ],
+      meta: {},
+      timing: "word",
+      version: 1,
+    } satisfies LyricsDocument;
+    const before = structuredClone(lyricDocument);
+
+    expect(losses(lyricDocument, "qrc")).toEqual(["agents", "backing"]);
+    expect(() => write(lyricDocument, "qrc")).toThrow(
+      "qrc cannot represent vocal agents"
+    );
+    expect(
+      read(write(lyricDocument, "qrc", { lossy: true }), "qrc").lines
+    ).toMatchObject([{ p: [{ text: "Lead" }] }, { p: [{ text: "(Reply)" }] }]);
+    expect(lyricDocument).toEqual(before);
+  });
+
   test("reports and removes LQE translations on orphan backing-only lines", () => {
     const lyricDocument = {
       agents: [],
