@@ -75,27 +75,7 @@ const fixtureCases = [
       { id: "v1", type: "person" },
       { id: "v2000", type: "other" },
     ],
-    fileName: "pronunciation.ttml",
-    firstLine: {
-      agent: "v1",
-      begin: 649,
-      end: 3257,
-      id: "L1",
-      text: "無敵の笑顔で荒らすメディア",
-      word: { begin: 649, end: 1456, id: "L1w0", text: "無敵の" },
-    },
-    lineCount: 74,
-    meta: { songwriters: ["Ayase"] },
-    pronunciationLanguages: ["ja-Latn"],
-    timing: "word",
-    translationLanguages: ["en-US"],
-  },
-  {
-    agents: [
-      { id: "v1", type: "person" },
-      { id: "v2000", type: "other" },
-    ],
-    fileName: "translation.ttml",
+    fileName: "translation-pronunciation.ttml",
     firstLine: {
       agent: "v1",
       begin: 649,
@@ -219,16 +199,13 @@ describe("ttml fixtures", () => {
   });
 
   test("keeps every fixture translation and pronunciation line", async () => {
-    const docs = await Promise.all(
-      ["pronunciation.ttml", "translation.ttml"].map(readFixture)
-    );
-    for (const doc of docs) {
-      expect(
-        doc.lines.filter((line) => line.translations?.["en-US"])
-      ).toHaveLength(74);
-      expect(
-        doc.lines.filter((line) => line.pronunciations?.["ja-Latn"])
-      ).toHaveLength(74);
-    }
+    const doc = await readFixture("translation-pronunciation.ttml");
+
+    expect(
+      doc.lines.filter((line) => line.translations?.["en-US"])
+    ).toHaveLength(74);
+    expect(
+      doc.lines.filter((line) => line.pronunciations?.["ja-Latn"])
+    ).toHaveLength(74);
   });
 });
