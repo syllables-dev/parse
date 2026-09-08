@@ -503,11 +503,7 @@ describe("public dispatch", () => {
         .map((syllable) => syllable.text)
         .join("")
     ).toBe("Hello world");
-    expect(losses(doc, "ttml")).toEqual([
-      "metadata.album",
-      "metadata.artist",
-      "metadata.title",
-    ]);
+    expect(losses(doc, "ttml")).toEqual(["metadata.album", "metadata.artist"]);
     expect(() => convert(source, "ttml")).toThrow(
       "ttml cannot represent artist or album metadata"
     );
@@ -515,7 +511,10 @@ describe("public dispatch", () => {
     const converted = convert(source, "ttml", { lossy: true });
     const restored = read(converted, "ttml");
 
-    expect(restored.meta).toEqual({ songwriters: ["Composer"] });
+    expect(restored.meta).toEqual({
+      songwriters: ["Composer"],
+      title: "Song",
+    });
     expect(
       restored.lines
         .flatMap((line) => line.p)

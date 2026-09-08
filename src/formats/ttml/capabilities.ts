@@ -7,7 +7,7 @@ export const capabilities = {
     album: false,
     artist: false,
     songwriters: true,
-    title: false,
+    title: true,
   },
   pronunciation: true,
   timing: { line: true, static: true, word: true },
