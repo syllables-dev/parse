@@ -88,56 +88,6 @@ describe("qrc writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("preserves adjacent wrapped primary lines", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [makeLine("l0", 1000, "(One)"), makeLine("l1", 2000, "（Two）")],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual([]);
-    expect(readLyrics(writeLyrics(doc, "qrc"), "qrc")).toEqual(doc);
-  });
-
-  test("preserves mixed outer parentheses as primary lyric text", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        makeLine("l0", 1000, "One"),
-        makeLine("l1", 2000, "(Two）"),
-        makeLine("l2", 3000, "Three"),
-      ],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual([]);
-    expect(readLyrics(writeLyrics(doc, "qrc"), "qrc")).toEqual(doc);
-  });
-
-  test("keeps adjacent wrapped primaries while projecting a later isolated row", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        makeLine("l0", 1000, "(One)"),
-        makeLine("l1", 2000, "（Two）"),
-        makeLine("l2", 3000, "Three"),
-        makeLine("l3", 4000, "(Four)"),
-        makeLine("l4", 5000, "Five"),
-      ],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual(["lyricText"]);
-    expect(
-      readLyrics(writeLyrics(doc, "qrc", { lossy: true }), "qrc")
-    ).toMatchObject({
-      lines: [
-        { p: [{ text: "(One)" }] },
-        { p: [{ text: "（Two）" }] },
-        { p: [{ text: "Three" }] },
-        { p: [{ text: "Four" }] },
-        { p: [{ text: "Five" }] },
-      ],
-    });
-  });
-
   test("writes leading and adjacent backing-only lines as parenthesized rows", () => {
     const doc = {
       ...wordDocument,
@@ -183,54 +133,6 @@ describe("qrc writer", () => {
     ]);
     expect(doc).toEqual(before);
   });
-
-  test.each([
-    { close: ")", open: "(", text: "ASCII" },
-    { close: "）", open: "（", text: "full-width" },
-  ])(
-    "reports and projects an isolated $text wrapped primary without mutation",
-    ({ close, open }) => {
-      const wrapped = {
-        agent: null,
-        b: [],
-        begin: 2000,
-        end: 2500,
-        id: "l1",
-        p: [
-          { begin: 2000, end: 2100, id: "l1w0", text: open },
-          { begin: 2100, end: 2200, id: "l1w1", text: "Two" },
-          { begin: 2200, end: 2300, id: "l1w2", text: close },
-        ],
-      } satisfies LyricsLine;
-      const doc = {
-        ...wordDocument,
-        lines: [
-          makeLine("l0", 1000, "One"),
-          wrapped,
-          makeLine("l2", 3000, "Three"),
-        ],
-      } satisfies LyricsDocument;
-      const before = structuredClone(doc);
-
-      expect(findLosses(doc, "qrc")).toEqual(["lyricText"]);
-      expect(() => writeLyrics(doc, "qrc")).toThrow(
-        "qrc cannot preserve lyric text"
-      );
-
-      const restored = readLyrics(
-        writeLyrics(doc, "qrc", { lossy: true }),
-        "qrc"
-      );
-
-      expect(restored.lines[1]?.p).toEqual([
-        { begin: 2000, end: 2100, id: "l1w0", text: "" },
-        { begin: 2100, end: 2200, id: "l1w1", text: "Two" },
-        { begin: 2200, end: 2300, id: "l1w2", text: "" },
-      ]);
-      expect(restored.lines[1]).toMatchObject({ begin: 2000, end: 2500 });
-      expect(doc).toEqual(before);
-    }
-  );
 
   test("round-trips metadata and consumes document offsets", () => {
     const doc = {

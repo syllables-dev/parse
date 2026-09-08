@@ -7,7 +7,7 @@
 
 import { ParseError } from "@/errors";
 import { readTag, writeTags } from "@/internal/lyric-tags";
-import { prepare, qrcTextLosses } from "@/internal/projections";
+import { prepare } from "@/internal/projections";
 import {
   foldSpacers,
   readTimedWords,
@@ -39,7 +39,6 @@ interface QrcRow {
   begin: number;
   end: number;
   words: TimedWord[];
-  wrapped: boolean;
 }
 
 const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
@@ -60,23 +59,6 @@ export const capabilities = {
   trackKind: false,
   translation: false,
 } satisfies FormatCapabilities;
-
-function isWrapped(text: string) {
-  return (
-    (text.startsWith("(") && text.endsWith(")")) ||
-    (text.startsWith("（") && text.endsWith("）"))
-  );
-}
-
-function unwrapWords(words: TimedWord[]): TimedWord[] {
-  return words.map((word, index) => ({
-    ...word,
-    text: word.text.slice(
-      index === 0 ? 1 : 0,
-      index === words.length - 1 ? -1 : undefined
-    ),
-  }));
-}
 
 function makeTrack(
   words: TimedWord[],
@@ -139,36 +121,22 @@ function readRow(
     begin,
     end: begin + duration,
     words,
-    wrapped: isWrapped(words.map((word) => word.text).join("")),
   };
 }
 
+// qrc carries no backing marker, so brackets stay ordinary text and every row is a lyric line
 function makeLines(rows: QrcRow[]): LyricsLine[] {
-  const lines: LyricsLine[] = [];
-  for (const [rowIndex, row] of rows.entries()) {
-    const isBacking =
-      row.wrapped &&
-      !rows[rowIndex - 1]?.wrapped &&
-      !rows[rowIndex + 1]?.wrapped;
-    const mainLine = lines.at(-1);
-    if (isBacking && mainLine) {
-      mainLine.begin = Math.min(mainLine.begin, row.begin);
-      mainLine.end = Math.max(mainLine.end, row.end);
-      mainLine.b.push(...makeTrack(unwrapWords(row.words), mainLine.id, "b"));
-      continue;
-    }
-
+  return rows.map((row, rowIndex) => {
     const lineId = `l${rowIndex}`;
-    lines.push({
+    return {
       agent: null,
-      b: isBacking ? makeTrack(unwrapWords(row.words), lineId, "b") : [],
+      b: [],
       begin: row.begin,
       end: row.end,
       id: lineId,
-      p: isBacking ? [] : makeTrack(row.words, lineId, "w"),
-    });
-  }
-  return lines;
+      p: makeTrack(row.words, lineId, "w"),
+    };
+  });
 }
 
 export function read(text: string, options: ReadOptions = {}): LyricsDocument {
@@ -247,9 +215,6 @@ export function write(
     for (const syllable of [...line.p, ...line.b]) {
       checkText(syllable.text, "qrc", reservedStamp);
     }
-  }
-  if (!options.lossy && qrcTextLosses(doc).size > 0) {
-    throw new Error("qrc cannot preserve lyric text");
   }
   const lyricRows = doc.lines.map((line) =>
     writeRow(line.begin, line.end, line.p, false)

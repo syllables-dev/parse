@@ -13,7 +13,7 @@ import {
   formatMetadataLosses,
   projectedMeta,
 } from "@/internal/projections/metadata";
-import { projectedQrcLines, qrcTextLosses } from "@/internal/projections/qrc";
+import { projectedQrcLines } from "@/internal/projections/qrc";
 import type {
   ConversionLoss,
   FormatCapabilities,
@@ -21,9 +21,6 @@ import type {
   LyricsDocument,
   WriteOptions,
 } from "@/types";
-
-// biome-ignore lint/performance/noBarrelFile: re-exports qrc's loss detector so codecs have one entry point into this folder
-export { qrcTextLosses } from "@/internal/projections/qrc";
 
 function lost(
   field: ConversionLoss,
@@ -122,9 +119,6 @@ function trackLossFeatures(
         lqeTranslationLosses({ ...doc, lines: projectedLysLines(doc) })))
   ) {
     features.push("translations");
-  }
-  if (format === "qrc" && qrcTextLosses(doc).size > 0) {
-    features.push("lyricText");
   }
   if (
     (!capabilities.pronunciation &&
