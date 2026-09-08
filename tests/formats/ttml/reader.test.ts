@@ -114,6 +114,18 @@ describe("ttml reader", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
+  test("shifts the body duration with the offset so full-length lyrics still read", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="10.000"><p begin="1.000" end="10.000" itunes:key="full"><span begin="1.000" end="10.000">Hello</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:audio lyricOffset="1.000"/></itunes:iTunesMetadata>'
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]).toMatchObject({ begin: 2000, end: 11_000 });
+    // the shifted section still covers the body, so no explicit sections are kept
+    expect(doc.apple?.sections).toBeUndefined();
+  });
+
   test.each([
     { offset: 1250, sourceOffset: "+1.250", writtenBegin: "0:03.250" },
     { offset: -1250, sourceOffset: "-1.250", writtenBegin: "0:00.750" },

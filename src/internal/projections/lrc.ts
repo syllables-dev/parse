@@ -12,9 +12,8 @@ import type {
   LyricsLine,
 } from "@/types";
 
-// lrc infers each line end from the next line start, so any other end is rewritten.
-// text-empty lines never reach the file, so the check must skip them too or it
-// measures a neighbour the writer will have dropped
+// lrc infers each line end from the next line start, so any other end is rewritten
+// text-empty lines never reach the file, so the check must skip them too or it measures a neighbour the writer will have dropped
 export function lrcLineLosses(doc: LyricsDocument): ConversionLoss[] {
   const written = doc.lines.filter(hasLyricText);
   return written.some((line, lineIndex) => {

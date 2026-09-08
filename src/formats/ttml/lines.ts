@@ -10,6 +10,7 @@ import {
   owned,
   readRange,
   readTime,
+  shiftTime,
   ttmlUri,
   ttmUri,
 } from "@/formats/ttml/profile";
@@ -601,8 +602,15 @@ export function readBody(
   ]);
   const durationText =
     timing === "static" ? attr(body, "dur", null) : needAttr(body, "dur", null);
+  // dur is a file-time value like every range here, so it shifts with lyricOffset too
   const duration =
-    durationText === undefined ? 0 : readTime(durationText, "ttml duration");
+    durationText === undefined
+      ? 0
+      : shiftTime(
+          readTime(durationText, "ttml duration"),
+          offset,
+          "ttml duration"
+        );
   const agentIds = new Set(agents.map((agent) => agent.id));
   const bodyAgent = agentRef(body, rootAgent ?? null, agentIds);
   const lines: LyricsLine[] = [];
