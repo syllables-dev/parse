@@ -29,6 +29,7 @@ import {
 } from "@/internal/write-check";
 import type {
   FormatCapabilities,
+  FormatId,
   LyricsDocument,
   LyricsLine,
   LyricsMeta,
@@ -246,23 +247,25 @@ function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
 
 export function write(
   source: LyricsDocument,
-  options: WriteOptions = {}
+  options: WriteOptions = {},
+  // lqe delegates its lyrics section here and reports errors under its own name
+  format: FormatId = "lys"
 ): string {
-  const prepared = prepare(source, capabilities, "lys", options);
+  const prepared = prepare(source, capabilities, format, options);
   const doc = {
     ...prepared,
     lines: prepared.lines.filter(hasLyricText),
   };
-  checkLines(doc, "lys");
-  checkWrite(doc, "lys", capabilities);
+  checkLines(doc, format);
+  checkWrite(doc, format, capabilities);
   for (const line of doc.lines) {
     for (const syllable of [...line.p, ...line.b]) {
-      checkText(syllable.text, "lys", reservedStamp);
+      checkText(syllable.text, format, reservedStamp);
     }
   }
   for (const line of doc.lines) {
     if (line.p.length === 0 && line.b.length > 0) {
-      throw new Error(`lys cannot preserve backing-only line ${line.id}`);
+      throw new Error(`${format} cannot preserve backing-only line ${line.id}`);
     }
   }
   const lyricRows: string[] = [];
@@ -271,7 +274,9 @@ export function write(
     const begin = Math.min(...syllables.map((syllable) => syllable.begin));
     const end = Math.max(...syllables.map((syllable) => syllable.end));
     if (begin !== line.begin || end !== line.end) {
-      throw new Error(`lys cannot represent the range of line ${line.id}`);
+      throw new Error(
+        `${format} cannot represent the range of line ${line.id}`
+      );
     }
     if (line.p.length > 0) {
       lyricRows.push(writeRow(side + 3, line.p, false));
@@ -280,5 +285,5 @@ export function write(
       lyricRows.push(writeRow(side + 6, line.b, true));
     }
   }
-  return [...writeTags(doc.meta, "lys"), ...lyricRows].join("\n");
+  return [...writeTags(doc.meta, format), ...lyricRows].join("\n");
 }

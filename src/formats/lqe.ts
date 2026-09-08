@@ -428,18 +428,22 @@ export function write(
     ...writeTags(doc.meta, "lqe"),
     "",
     "[lyrics: format@Lyricify Syllable]",
-    writeLys({
-      ...doc,
-      lines: doc.lines.map((line) => ({
-        agent: line.agent,
-        b: line.b,
-        begin: line.begin,
-        end: line.end,
-        id: line.id,
-        p: line.p,
-      })),
-      meta: {},
-    }),
+    writeLys(
+      {
+        ...doc,
+        lines: doc.lines.map((line) => ({
+          agent: line.agent,
+          b: line.b,
+          begin: line.begin,
+          end: line.end,
+          id: line.id,
+          p: line.p,
+        })),
+        meta: {},
+      },
+      {},
+      "lqe"
+    ),
   ];
   const languages = [
     ...new Set(
