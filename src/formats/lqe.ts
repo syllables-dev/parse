@@ -39,7 +39,7 @@ const languageTag = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const lrcReservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
 const lysReservedStamp = /\(\d+,\d+\)/u;
 const offsetTag = /^\[offset:.*\]$/iu;
-// by is accepted but not really supported, we dont parse
+// by parses as a tag so it is not a malformed line, then goes nowhere: the schema has no author
 const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
 const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
 

@@ -33,8 +33,12 @@ function projectedTrack(
   return wordTimed ? syllables : track(syllables, line);
 }
 
-// a format without a backing track keeps the words as their own parenthesized line
-// rather than dropping them, so lossy output loses the track but not the lyric
+export function alreadyWrapped(text: string) {
+  return text.startsWith("(") && text.endsWith(")");
+}
+
+// a format without a backing track keeps the words as their own parenthesized line,
+// so lossy output loses the track but not the lyric
 export function backingLine(
   line: LyricsLine,
   capabilities: FormatCapabilities,
@@ -45,9 +49,17 @@ export function backingLine(
   }
   const begin = Math.min(...line.b.map((syllable) => syllable.begin));
   const end = Math.max(...line.b.map((syllable) => syllable.end));
+  const carriesParens = alreadyWrapped(
+    line.b
+      .map((syllable) => syllable.text)
+      .join("")
+      .trim()
+  );
   const wrapped = line.b.map((syllable, index) => ({
     ...syllable,
-    text: `${index === 0 ? "(" : ""}${syllable.text}${index === line.b.length - 1 ? ")" : ""}`,
+    text: carriesParens
+      ? syllable.text
+      : `${index === 0 ? "(" : ""}${syllable.text}${index === line.b.length - 1 ? ")" : ""}`,
   }));
   const bare = { ...line, b: [], begin, end, id: `${line.id}b`, p: wrapped };
   return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };

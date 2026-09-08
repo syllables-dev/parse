@@ -1,4 +1,5 @@
 import {
+  alreadyWrapped,
   primaryCoversLine,
   projectedLine,
   track,
@@ -32,8 +33,7 @@ function foldedText(line: LyricsLine, primary: string) {
   if (backing.length === 0) {
     return primary;
   }
-  const wrapped =
-    backing.startsWith("(") && backing.endsWith(")") ? backing : `(${backing})`;
+  const wrapped = alreadyWrapped(backing) ? backing : `(${backing})`;
   return primary.trim().length === 0
     ? wrapped
     : `${primary.trimEnd()} ${wrapped}`;

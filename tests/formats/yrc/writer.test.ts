@@ -41,6 +41,25 @@ describe("yrc writer", () => {
     );
   });
 
+  test("does not re-wrap backing vocals that already carry parens", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [
+            { begin: 600, end: 750, id: "l0b0", text: "(Ooh" },
+            { begin: 750, end: 900, id: "l0b1", text: " ah)" },
+          ],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[600,300](600,150,0)(Ooh(750,150,0) ah)\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
+    );
+  });
+
   test("keeps a backing line after the line it follows", () => {
     const doc = {
       ...wordDocument,

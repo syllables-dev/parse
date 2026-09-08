@@ -1,6 +1,6 @@
 import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
-// a backing run may anticipate its line, matching the ttml x-bg span's own begin
+// a backing run may start before its line, as an x-bg span does
 function checkTrack(
   line: LyricsLine,
   syllables: Syllable[],

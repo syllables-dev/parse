@@ -371,8 +371,7 @@ export function untimed(nodes: XmlNode[]) {
   return lyric;
 }
 
-// backing run may anticipate its line
-// <span ttm:role="x-bg"> carries its own begin
+// an x-bg span carries its own begin, so a backing run may start before its line
 export function checkTrack(
   syllables: Syllable[],
   line: Pick<LyricsLine, "begin" | "end" | "id">,
