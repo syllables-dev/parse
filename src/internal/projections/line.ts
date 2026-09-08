@@ -55,12 +55,20 @@ export function backingLine(
       .join("")
       .trim()
   );
-  const wrapped = line.b.map((syllable, index) => ({
-    ...syllable,
-    text: carriesParens
-      ? syllable.text
-      : `${index === 0 ? "(" : ""}${syllable.text}${index === line.b.length - 1 ? ")" : ""}`,
-  }));
+  const wrapped = line.b.map((syllable, index) => {
+    const first = index === 0;
+    const last = index === line.b.length - 1;
+    const text = syllable.text.slice(
+      first ? syllable.text.length - syllable.text.trimStart().length : 0,
+      last ? syllable.text.trimEnd().length : undefined
+    );
+    return {
+      ...syllable,
+      text: carriesParens
+        ? text
+        : `${first ? "(" : ""}${text}${last ? ")" : ""}`,
+    };
+  });
   const bare = { ...line, b: [], begin, end, id: `${line.id}b`, p: wrapped };
   return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };
 }
