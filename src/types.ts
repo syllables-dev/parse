@@ -301,7 +301,6 @@ export type ConversionLoss =
   | "metadata.title"
   | "pronunciations"
   | "translations"
-  | "lyricText"
   | "lineRange"
   | "wordTiming";
 
