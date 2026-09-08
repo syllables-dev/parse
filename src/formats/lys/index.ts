@@ -267,9 +267,8 @@ export function write(
   }
   const lyricRows: string[] = [];
   for (const [line, side] of lysSideLines(doc)) {
-    // a backing run may anticipate the line, so only its end widens the row range
     const syllables = [...line.p, ...line.b];
-    const begin = Math.min(...line.p.map((syllable) => syllable.begin));
+    const begin = Math.min(...syllables.map((syllable) => syllable.begin));
     const end = Math.max(...syllables.map((syllable) => syllable.end));
     if (begin !== line.begin || end !== line.end) {
       throw new Error(`lys cannot represent the range of line ${line.id}`);
