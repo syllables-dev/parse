@@ -7,7 +7,7 @@ import {
   trackMetadataLosses,
 } from "@/internal/projections/lqe";
 import { lrcLineLosses, projectedLrcLines } from "@/internal/projections/lrc";
-import { lylLineLosses } from "@/internal/projections/lyl";
+import { lylLineLosses, projectedLylLines } from "@/internal/projections/lyl";
 import { lysLineLosses, projectedLysLines } from "@/internal/projections/lys";
 import {
   formatMetadataLosses,
@@ -38,6 +38,9 @@ function projectedLines(
 ) {
   if (format === "lrc") {
     return projectedLrcLines(doc, capabilities, wordTimed);
+  }
+  if (format === "lyl") {
+    return projectedLylLines(doc, capabilities, wordTimed);
   }
   if (format === "lqe") {
     return projectedLqeLines(doc, capabilities, wordTimed);

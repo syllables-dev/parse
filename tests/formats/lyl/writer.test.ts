@@ -54,6 +54,44 @@ describe("lyl writer", () => {
     });
   });
 
+  test("collapses a line-timed primary track that does not span its line", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        {
+          ...lyricLine,
+          end: 3000,
+          p: [{ begin: 1000, end: 1800, id: "l0w0", text: "Hello" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(() => write(doc)).toThrow(
+      "lyl cannot represent the primary syllable range of line l0"
+    );
+    expect(write(doc, { lossy: true })).toBe(
+      "[type:LyricifyLines]\n[1000,3000]Hello"
+    );
+  });
+
+  test("keeps a collapsed backing track as its own parenthesized line", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 2000, end: 3000, id: "l0b0", text: "oh yeah" }],
+          end: 3000,
+          p: [{ begin: 1000, end: 1800, id: "l0w0", text: "Hello" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[type:LyricifyLines]\n[1000,3000]Hello\n[2000,3000](oh yeah)"
+    );
+  });
+
   test("rejects an inverted line range", () => {
     expect(() =>
       write({
