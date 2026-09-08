@@ -4,6 +4,7 @@ import {
   projectedLine,
   track,
 } from "@/internal/projections/line";
+import { hasLyricText } from "@/internal/write-check";
 import type {
   ConversionLoss,
   FormatCapabilities,
@@ -11,13 +12,16 @@ import type {
   LyricsLine,
 } from "@/types";
 
-// lrc infers each line end from the next line start, so any other end is rewritten
+// lrc infers each line end from the next line start, so any other end is rewritten.
+// text-empty lines never reach the file, so the check must skip them too or it
+// measures a neighbour the writer will have dropped
 export function lrcLineLosses(doc: LyricsDocument): ConversionLoss[] {
-  return doc.lines.some((line, lineIndex) => {
-    const earlier = doc.lines[lineIndex - 1];
+  const written = doc.lines.filter(hasLyricText);
+  return written.some((line, lineIndex) => {
+    const earlier = written[lineIndex - 1];
     return (
       (earlier !== undefined && line.begin <= earlier.begin) ||
-      line.end !== (doc.lines[lineIndex + 1]?.begin ?? line.begin + 5000) ||
+      line.end !== (written[lineIndex + 1]?.begin ?? line.begin + 5000) ||
       !primaryCoversLine(line)
     );
   })
@@ -45,6 +49,7 @@ export function projectedLrcLines(
   wordTimed: boolean
 ) {
   const orderedLines = doc.lines
+    .filter(hasLyricText)
     .map((line, order) => ({ line, order }))
     .sort(
       (left, right) =>

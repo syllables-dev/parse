@@ -273,6 +273,36 @@ describe("lrc writer", () => {
     );
   });
 
+  test("derives ends across a dropped text-empty line", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        { ...lyricLine, end: 2000 },
+        {
+          ...lyricLine,
+          begin: 2000,
+          end: 3000,
+          id: "blank",
+          p: [{ begin: 2000, end: 3000, id: "blankw0", text: "   " }],
+        },
+        {
+          ...lyricLine,
+          begin: 3000,
+          end: 8000,
+          id: "last",
+          p: [{ begin: 3000, end: 8000, id: "lastw0", text: "Bye" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(() => write(doc)).toThrow(
+      "lrc cannot represent the end time of line line"
+    );
+    expect(write(doc, { lossy: true })).toBe(
+      "[00:01.000]Hello\n[00:03.000]Bye"
+    );
+  });
+
   test("requires line ends derived from the following start", () => {
     expect(() =>
       write({
