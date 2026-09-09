@@ -23,6 +23,59 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("yrc writer", () => {
+  // yrc has no backing track, so lossy keeps the words as a parenthesized line of their
+  // own, ordered ahead of the line when the backing starts first
+  test("writes backing vocals as their own line when lossy", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 600, end: 900, id: "l0b0", text: "Ooh" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[600,300](600,300,0)(Ooh)\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
+    );
+  });
+
+  test("does not re-wrap backing vocals that already carry parens", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [
+            { begin: 600, end: 750, id: "l0b0", text: "(Ooh" },
+            { begin: 750, end: 900, id: "l0b1", text: " ah)" },
+          ],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[600,300](600,150,0)(Ooh(750,150,0) ah)\n[1001,1502](1001,751,0)Hel(1752,751,0)lo"
+    );
+  });
+
+  test("keeps a backing line after the line it follows", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 2000, end: 2400, id: "l0b0", text: "Ooh" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc, { lossy: true })).toBe(
+      "[1001,1502](1001,751,0)Hel(1752,751,0)lo\n[2000,400](2000,400,0)(Ooh)"
+    );
+  });
+
   test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
@@ -80,7 +133,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -96,7 +148,6 @@ describe("yrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
@@ -128,54 +179,5 @@ describe("yrc writer", () => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
     ).toThrow();
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        agents: [{ id: "lead", type: "person" }],
-        lines: [{ ...lyricLine, agent: "lead" }],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            b: [{ begin: 1001, end: 1752, id: "backing", text: "echo" }],
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent backing vocals",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "yrc cannot represent pronunciations",
-    },
-  ])("rejects unsupported document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
   });
 });

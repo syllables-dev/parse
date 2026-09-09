@@ -52,7 +52,7 @@ describe("lys reader", () => {
     } satisfies LyricsDocument;
 
     expect(write(doc)).toBe(
-      "[by:]\n[4]First(1000,500)\n[5]Second(2000,500)\n[4]Third(3000,500)"
+      "[4]First(1000,500)\n[5]Second(2000,500)\n[4]Third(3000,500)"
     );
   });
 
@@ -130,7 +130,6 @@ describe("lys reader", () => {
     expect(doc.meta).toEqual({
       album: "Album",
       artist: "Singer",
-      author: "Author",
       songwriters: ["Writer"],
       title: "Song",
     });

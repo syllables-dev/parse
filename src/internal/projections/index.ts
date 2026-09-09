@@ -1,4 +1,4 @@
-import { projectedLine } from "@/internal/projections/line";
+import { backingLine, projectedLine } from "@/internal/projections/line";
 import {
   lqeTranslationLosses,
   projectedLqeLines,
@@ -6,13 +6,14 @@ import {
   projectedTranslationTracks,
   trackMetadataLosses,
 } from "@/internal/projections/lqe";
-import { projectedLrcLines } from "@/internal/projections/lrc";
-import { lineLosses, projectedLysLines } from "@/internal/projections/lys";
+import { lrcLineLosses, projectedLrcLines } from "@/internal/projections/lrc";
+import { lylLineLosses, projectedLylLines } from "@/internal/projections/lyl";
+import { lysLineLosses, projectedLysLines } from "@/internal/projections/lys";
 import {
   formatMetadataLosses,
   projectedMeta,
 } from "@/internal/projections/metadata";
-import { projectedQrcLines, qrcTextLosses } from "@/internal/projections/qrc";
+import { projectedQrcLines } from "@/internal/projections/qrc";
 import type {
   ConversionLoss,
   FormatCapabilities,
@@ -20,9 +21,6 @@ import type {
   LyricsDocument,
   WriteOptions,
 } from "@/types";
-
-// biome-ignore lint/performance/noBarrelFile: re-exports qrc's loss detector so codecs have one entry point into this folder
-export { qrcTextLosses } from "@/internal/projections/qrc";
 
 function lost(
   field: ConversionLoss,
@@ -41,6 +39,9 @@ function projectedLines(
   if (format === "lrc") {
     return projectedLrcLines(doc, capabilities, wordTimed);
   }
+  if (format === "lyl") {
+    return projectedLylLines(doc, capabilities, wordTimed);
+  }
   if (format === "lqe") {
     return projectedLqeLines(doc, capabilities, wordTimed);
   }
@@ -52,15 +53,22 @@ function projectedLines(
       projectedLine(line, capabilities, wordTimed, line.translations, false)
     );
   }
-  return doc.lines.map((line) =>
-    projectedLine(
+  return doc.lines.flatMap((line) => {
+    const primary = projectedLine(
       line,
       capabilities,
       wordTimed,
       line.translations,
       format === "ttml"
-    )
-  );
+    );
+    const backing = backingLine(line, capabilities, wordTimed);
+    if (backing === undefined) {
+      return [primary];
+    }
+    return backing.begin < primary.begin
+      ? [backing, primary]
+      : [primary, backing];
+  });
 }
 
 function basicLosses(
@@ -72,7 +80,13 @@ function basicLosses(
   if (!capabilities.timing.word && doc.timing === "word") {
     features.push("wordTiming");
   }
-  features.push(...lineLosses(doc, format));
+  if (format === "lrc") {
+    features.push(...lrcLineLosses(doc));
+  } else if (format === "lyl") {
+    features.push(...lylLineLosses(doc));
+  } else if (format === "lqe" || format === "lys") {
+    features.push(...lysLineLosses(doc));
+  }
   if (
     capabilities.agents === false &&
     (doc.agents.length > 0 || doc.lines.some((line) => line.agent !== null))
@@ -109,9 +123,6 @@ function trackLossFeatures(
   ) {
     features.push("translations");
   }
-  if (format === "qrc" && qrcTextLosses(doc).size > 0) {
-    features.push("lyricText");
-  }
   if (
     (!capabilities.pronunciation &&
       (doc.pronunciationTracks !== undefined ||
@@ -131,7 +142,6 @@ export function losses(
   return [
     ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
     ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
-    ...lost("metadata.author", doc.meta.author, capabilities.metadata.author),
     ...lost(
       "metadata.songwriters",
       doc.meta.songwriters,
@@ -144,7 +154,7 @@ export function losses(
   ];
 }
 
-export function project(
+function project(
   doc: LyricsDocument,
   format: FormatId,
   capabilities: FormatCapabilities

@@ -1,4 +1,9 @@
-import type { FormatId, LyricsDocument, LyricsLine, Syllable } from "@/types";
+import type {
+  ConversionLoss,
+  LyricsDocument,
+  LyricsLine,
+  Syllable,
+} from "@/types";
 
 function hasPrimary(
   line: LyricsLine
@@ -21,30 +26,11 @@ export function projectedLysLines(doc: LyricsDocument) {
   });
 }
 
-export function lineLosses(doc: LyricsDocument, format: FormatId) {
-  if (format === "lrc") {
-    return doc.lines.some((line, lineIndex) => {
-      const earlier = doc.lines[lineIndex - 1];
-      const end = doc.lines[lineIndex + 1]?.begin ?? line.begin + 5000;
-      return (
-        (earlier !== undefined && line.begin <= earlier.begin) ||
-        line.end !== end ||
-        line.p.length > 1 ||
-        (line.p.length === 1 &&
-          (line.p[0]?.begin !== line.begin || line.p[0]?.end !== line.end))
-      );
-    })
-      ? ["lineRange" as const]
-      : [];
-  }
-  if (format !== "lqe" && format !== "lys") {
-    return [];
-  }
-  const timedLines = doc.lines.filter(hasPrimary);
-  return timedLines.some((line) => {
+export function lysLineLosses(doc: LyricsDocument): ConversionLoss[] {
+  return doc.lines.filter(hasPrimary).some((line) => {
     const range = lysLineRange(line);
     return range.begin !== line.begin || range.end !== line.end;
   })
-    ? ["lineRange" as const]
+    ? ["lineRange"]
     : [];
 }

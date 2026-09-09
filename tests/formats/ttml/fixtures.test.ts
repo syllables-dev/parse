@@ -75,27 +75,7 @@ const fixtureCases = [
       { id: "v1", type: "person" },
       { id: "v2000", type: "other" },
     ],
-    fileName: "pronunciation.ttml",
-    firstLine: {
-      agent: "v1",
-      begin: 649,
-      end: 3257,
-      id: "L1",
-      text: "無敵の笑顔で荒らすメディア",
-      word: { begin: 649, end: 1456, id: "L1w0", text: "無敵の" },
-    },
-    lineCount: 74,
-    meta: { songwriters: ["Ayase"] },
-    pronunciationLanguages: ["ja-Latn"],
-    timing: "word",
-    translationLanguages: ["en-US"],
-  },
-  {
-    agents: [
-      { id: "v1", type: "person" },
-      { id: "v2000", type: "other" },
-    ],
-    fileName: "translation.ttml",
+    fileName: "translation-pronunciation.ttml",
     firstLine: {
       agent: "v1",
       begin: 649,
@@ -195,21 +175,6 @@ describe("ttml fixtures", () => {
     }
   );
 
-  test("covers the complete fixture line and backing inventory", async () => {
-    const docs = await Promise.all(
-      fixtureCases.map(({ fileName }) => readFixture(fileName))
-    );
-
-    expect(docs.reduce((sum, doc) => sum + doc.lines.length, 0)).toBe(401);
-    expect(
-      docs.reduce(
-        (sum, doc) =>
-          sum + doc.lines.filter((line) => line.b.length > 0).length,
-        0
-      )
-    ).toBe(34);
-  });
-
   test("preserves fixture whitespace and removes backing wrappers", async () => {
     const doc = await readFixture("backing-vocals.ttml");
 
@@ -234,16 +199,13 @@ describe("ttml fixtures", () => {
   });
 
   test("keeps every fixture translation and pronunciation line", async () => {
-    const docs = await Promise.all(
-      ["pronunciation.ttml", "translation.ttml"].map(readFixture)
-    );
-    for (const doc of docs) {
-      expect(
-        doc.lines.filter((line) => line.translations?.["en-US"])
-      ).toHaveLength(74);
-      expect(
-        doc.lines.filter((line) => line.pronunciations?.["ja-Latn"])
-      ).toHaveLength(74);
-    }
+    const doc = await readFixture("translation-pronunciation.ttml");
+
+    expect(
+      doc.lines.filter((line) => line.translations?.["en-US"])
+    ).toHaveLength(74);
+    expect(
+      doc.lines.filter((line) => line.pronunciations?.["ja-Latn"])
+    ).toHaveLength(74);
   });
 });

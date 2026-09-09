@@ -49,7 +49,6 @@ export const capabilities = {
   metadata: {
     album: true,
     artist: true,
-    author: true,
     songwriters: true,
     title: true,
   },
@@ -177,7 +176,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   }
   const album = tags.get("al");
   const artist = tags.get("ar");
-  const author = tags.get("by");
   const offsetText = tags.get("offset");
   const offset = offsetText === undefined ? 0 : readOffset(offsetText, "yrc");
   const title = tags.get("ti");
@@ -200,7 +198,6 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
       meta: {
         ...(album !== undefined && { album }),
         ...(artist !== undefined && { artist }),
-        ...(author && { author }),
         ...(songwriters.length > 0 && { songwriters }),
         ...(title !== undefined && { title }),
       },
@@ -265,7 +262,6 @@ export function write(
     ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
     ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
     ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    `[by:${doc.meta.author === undefined ? "" : doc.meta.author}]`,
     ...(doc.meta.songwriters?.length === 1
       ? [`[au:${doc.meta.songwriters[0]}]`]
       : []),

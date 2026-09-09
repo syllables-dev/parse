@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { read, write } from "@/formats/qrc";
+import { read } from "@/formats/qrc";
 import { ParseError } from "@/index";
 
 describe("qrc reader", () => {
@@ -14,20 +14,6 @@ describe("qrc reader", () => {
       { begin: 12_400, end: 12_700, id: "l0w1", text: "lo " },
       { begin: 12_700, end: 13_300, id: "l0w2", text: "world" },
     ]);
-  });
-
-  test("joins an isolated wrapped row as backing vocals", () => {
-    const doc = read(
-      "[1000,2000]Lead(1000,2000)\n[1500,1000](Echo)(1500,1000)"
-    );
-
-    expect(doc.lines).toHaveLength(1);
-    expect(doc.lines[0]).toMatchObject({ begin: 1000, end: 3000 });
-    expect(doc.lines[0]?.p[0]?.text).toBe("Lead");
-    expect(doc.lines[0]?.b).toEqual([
-      { begin: 1500, end: 2500, id: "l0b0", text: "Echo" },
-    ]);
-    expect(read(write(doc))).toEqual(doc);
   });
 
   test("preserves overlapping lyric rows", () => {
@@ -55,7 +41,6 @@ describe("qrc reader", () => {
     expect(doc.meta).toEqual({
       album: "Album",
       artist: "Singer",
-      author: "Author",
       songwriters: ["Writer"],
       title: "Song",
     });

@@ -437,7 +437,7 @@ function readWordTrack(
     lineTimed
   );
   const track = backing ? unwrap(syllables, keepParentheses) : syllables;
-  checkTrack(track, line);
+  checkTrack(track, line, backing);
   return track;
 }
 

@@ -15,12 +15,69 @@ export function track(syllables: Syllable[], line: LyricsLine) {
   ];
 }
 
+// a line-timed writer emits one syllable spanning the line, so anything else is collapsed away
+export function primaryCoversLine(line: LyricsLine) {
+  const [first] = line.p;
+  return (
+    line.p.length <= 1 &&
+    (first === undefined ||
+      (first.begin === line.begin && first.end === line.end))
+  );
+}
+
 function projectedTrack(
   syllables: Syllable[],
   line: LyricsLine,
   wordTimed: boolean
 ) {
   return wordTimed ? syllables : track(syllables, line);
+}
+
+export function alreadyWrapped(text: string) {
+  return text.startsWith("(") && text.endsWith(")");
+}
+
+// a format without a backing track keeps the words as their own parenthesized line,
+// so lossy output loses the track but not the lyric
+export function backingLine(
+  line: LyricsLine,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+): LyricsLine | undefined {
+  if (capabilities.backing || line.b.length === 0) {
+    return;
+  }
+  const begin = Math.min(...line.b.map((syllable) => syllable.begin));
+  const end = Math.max(...line.b.map((syllable) => syllable.end));
+  const carriesParens = alreadyWrapped(
+    line.b
+      .map((syllable) => syllable.text)
+      .join("")
+      .trim()
+  );
+  const wrapped = line.b.map((syllable, index) => {
+    const first = index === 0;
+    const last = index === line.b.length - 1;
+    const text = syllable.text.slice(
+      first ? syllable.text.length - syllable.text.trimStart().length : 0,
+      last ? syllable.text.trimEnd().length : undefined
+    );
+    return {
+      ...syllable,
+      text: carriesParens
+        ? text
+        : `${first ? "(" : ""}${text}${last ? ")" : ""}`,
+    };
+  });
+  const bare = {
+    ...projectedLine(line, capabilities, wordTimed, undefined, false),
+    b: [],
+    begin,
+    end,
+    id: `${line.id}b`,
+    p: wrapped,
+  };
+  return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };
 }
 
 export function projectedLine(

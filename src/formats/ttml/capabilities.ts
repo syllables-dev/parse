@@ -6,9 +6,8 @@ export const capabilities = {
   metadata: {
     album: false,
     artist: false,
-    author: false,
     songwriters: true,
-    title: false,
+    title: true,
   },
   pronunciation: true,
   timing: { line: true, static: true, word: true },

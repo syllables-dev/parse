@@ -31,7 +31,7 @@ describe("lqe reader", () => {
         "",
         "[translation: language@zh-Hans, format@LRC]",
         "[00:01.000]你好",
-        "[00:01.200](回声)"
+        "[00:01.200]回声"
       )
     );
 
@@ -52,7 +52,7 @@ describe("lqe reader", () => {
         "",
         "[translation: format@LRC]",
         "[00:01.000]",
-        "[00:01.200]()"
+        "[00:01.200]"
       )
     );
 
@@ -87,7 +87,6 @@ describe("lqe reader", () => {
     expect(doc.meta).toEqual({
       album: "Album",
       artist: "Singer",
-      author: "Author",
       songwriters: ["Writer"],
       title: "Song",
     });
@@ -124,7 +123,7 @@ describe("lqe reader", () => {
         "",
         "[translation: format@LRC]",
         "[00:01.000]Meaning",
-        "[00:01.200](Reply)"
+        "[00:01.200]Reply"
       )
     );
 

@@ -15,6 +15,11 @@ import {
   write as writeLrc,
 } from "@/formats/lrc";
 import {
+  capabilities as lylCapabilities,
+  read as readLyl,
+  write as writeLyl,
+} from "@/formats/lyl";
+import {
   capabilities as lysCapabilities,
   read as readLys,
   write as writeLys,
@@ -54,6 +59,7 @@ const codecs = {
   },
   lqe: { capabilities: lqeCapabilities, read: readLqe, write: writeLqe },
   lrc: { capabilities: lrcCapabilities, read: readLrc, write: writeLrc },
+  lyl: { capabilities: lylCapabilities, read: readLyl, write: writeLyl },
   lys: { capabilities: lysCapabilities, read: readLys, write: writeLys },
   qrc: { capabilities: qrcCapabilities, read: readQrc, write: writeQrc },
   ttml: {
@@ -69,6 +75,8 @@ const ttmlRoot =
 const yrcRow = /^\[\d+,\d+\]\(\d+,\d+,\d+\)/u;
 const qrcRow = /^\[\d+,\d+\].*\(\d+,\d+\)/u;
 const lysRow = /^\[\d+\].*\(\d+,\d+\)/u;
+const lylTypeTag = /^\[type:\s*LyricifyLines\s*\]$/iu;
+const lylRow = /^\[\d+,\d+\]/u;
 const eslrcRow =
   /^\[\d+:\d{1,2}(?:[.:]\d{1,3})?\][^[]+\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
 const lrcRow = /^(?:\[\d+:\d{1,2}(?:[.:]\d{1,3})?\])+/u;
@@ -104,6 +112,9 @@ export function detect(text: string): FormatId | null {
   }
   if (lines.some((line) => lysRow.test(line))) {
     return "lys";
+  }
+  if (lines.some((line) => lylTypeTag.test(line.trim()) || lylRow.test(line))) {
+    return "lyl";
   }
   if (lines.some((line) => eslrcRow.test(line))) {
     return "eslrc";

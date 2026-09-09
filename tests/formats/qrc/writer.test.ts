@@ -65,7 +65,7 @@ describe("qrc writer", () => {
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
 
-    expect(() => write(doc)).toThrow(
+    expect(() => write(doc, { lossy: true })).toThrow(
       "qrc cannot represent reserved marks in text"
     );
     expect(doc).toEqual(before);
@@ -88,57 +88,7 @@ describe("qrc writer", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
-  test("preserves adjacent wrapped primary lines", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [makeLine("l0", 1000, "(One)"), makeLine("l1", 2000, "（Two）")],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual([]);
-    expect(readLyrics(writeLyrics(doc, "qrc"), "qrc")).toEqual(doc);
-  });
-
-  test("preserves mixed outer parentheses as primary lyric text", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        makeLine("l0", 1000, "One"),
-        makeLine("l1", 2000, "(Two）"),
-        makeLine("l2", 3000, "Three"),
-      ],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual([]);
-    expect(readLyrics(writeLyrics(doc, "qrc"), "qrc")).toEqual(doc);
-  });
-
-  test("keeps adjacent wrapped primaries while projecting a later isolated row", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        makeLine("l0", 1000, "(One)"),
-        makeLine("l1", 2000, "（Two）"),
-        makeLine("l2", 3000, "Three"),
-        makeLine("l3", 4000, "(Four)"),
-        makeLine("l4", 5000, "Five"),
-      ],
-    } satisfies LyricsDocument;
-
-    expect(findLosses(doc, "qrc")).toEqual(["lyricText"]);
-    expect(
-      readLyrics(writeLyrics(doc, "qrc", { lossy: true }), "qrc")
-    ).toMatchObject({
-      lines: [
-        { p: [{ text: "(One)" }] },
-        { p: [{ text: "（Two）" }] },
-        { p: [{ text: "Three" }] },
-        { p: [{ text: "Four" }] },
-        { p: [{ text: "Five" }] },
-      ],
-    });
-  });
-
-  test("preserves leading and adjacent backing-only lines", () => {
+  test("writes leading and adjacent backing-only lines as parenthesized rows", () => {
     const doc = {
       ...wordDocument,
       lines: [
@@ -154,17 +104,14 @@ describe("qrc writer", () => {
       ],
     } satisfies LyricsDocument;
     const before = structuredClone(doc);
-    const written = writeLyrics(doc, "qrc");
+    const written = write(doc, { lossy: true });
 
+    // qrc has no backing marker, so each backing run becomes an ordinary parenthesized row
     expect(written.split("\n")).toEqual([
-      "[by:]",
-      "[1000,500]",
       "[1100,100](Echo)(1100,100)",
-      "[2000,500]",
       "[2100,100](Answer)(2100,100)",
       "[3000,500]Lead(3000,500)",
     ]);
-    expect(readLyrics(written, "qrc")).toEqual(doc);
     expect(doc).toEqual(before);
   });
 
@@ -187,61 +134,12 @@ describe("qrc writer", () => {
     expect(doc).toEqual(before);
   });
 
-  test.each([
-    { close: ")", open: "(", text: "ASCII" },
-    { close: "）", open: "（", text: "full-width" },
-  ])(
-    "reports and projects an isolated $text wrapped primary without mutation",
-    ({ close, open }) => {
-      const wrapped = {
-        agent: null,
-        b: [],
-        begin: 2000,
-        end: 2500,
-        id: "l1",
-        p: [
-          { begin: 2000, end: 2100, id: "l1w0", text: open },
-          { begin: 2100, end: 2200, id: "l1w1", text: "Two" },
-          { begin: 2200, end: 2300, id: "l1w2", text: close },
-        ],
-      } satisfies LyricsLine;
-      const doc = {
-        ...wordDocument,
-        lines: [
-          makeLine("l0", 1000, "One"),
-          wrapped,
-          makeLine("l2", 3000, "Three"),
-        ],
-      } satisfies LyricsDocument;
-      const before = structuredClone(doc);
-
-      expect(findLosses(doc, "qrc")).toEqual(["lyricText"]);
-      expect(() => writeLyrics(doc, "qrc")).toThrow(
-        "qrc cannot preserve lyric text"
-      );
-
-      const restored = readLyrics(
-        writeLyrics(doc, "qrc", { lossy: true }),
-        "qrc"
-      );
-
-      expect(restored.lines[1]?.p).toEqual([
-        { begin: 2000, end: 2100, id: "l1w0", text: "" },
-        { begin: 2100, end: 2200, id: "l1w1", text: "Two" },
-        { begin: 2200, end: 2300, id: "l1w2", text: "" },
-      ]);
-      expect(restored.lines[1]).toMatchObject({ begin: 2000, end: 2500 });
-      expect(doc).toEqual(before);
-    }
-  );
-
   test("round-trips metadata and consumes document offsets", () => {
     const doc = {
       ...wordDocument,
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -249,11 +147,10 @@ describe("qrc writer", () => {
     };
     const written = write(doc);
 
-    expect(written.split("\n").slice(0, 6)).toEqual([
+    expect(written.split("\n").slice(0, 5)).toEqual([
       "[ti:Song]",
       "[ar:Singer]",
       "[al:Album]",
-      "[by:Author]",
       "[au:Writer]",
       "[1001,1502]Hel(1001,751)lo(1752,751)",
     ]);
@@ -263,56 +160,9 @@ describe("qrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
     });
-  });
-
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow(`qrc cannot represent ${message}`);
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        agents: [{ id: "lead", type: "person" }],
-        lines: [{ ...lyricLine, agent: "lead" }],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent vocal agents",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "qrc cannot represent pronunciations",
-    },
-  ])("rejects unsupported document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
   });
 });

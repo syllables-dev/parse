@@ -74,7 +74,6 @@ describe("lrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -87,7 +86,6 @@ describe("lrc writer", () => {
         "[ti:Song]",
         "[ar:Singer]",
         "[al:Album]",
-        "[by:Author]",
         "[au:Writer]",
         "[00:01.000]Hello",
       ].join("\n")
@@ -103,7 +101,6 @@ describe("lrc writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
@@ -123,16 +120,6 @@ describe("lrc writer", () => {
     expect(() =>
       write({ ...lineDocument, meta: { title: "Song\nTitle" } })
     ).toThrow("lrc cannot represent line breaks in metadata");
-  });
-
-  test("rejects an empty author without mutation", () => {
-    const doc = { ...lineDocument, meta: { author: "" } };
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lrc cannot represent an empty lyric file author"
-    );
-    expect(doc).toEqual(before);
   });
 
   test("drops a line with no lyric text instead of keeping a placeholder", () => {
@@ -163,7 +150,7 @@ describe("lrc writer", () => {
       ],
     } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe("[by:]\n[00:01.000]One\n[00:03.000]Three");
+    expect(write(doc)).toBe("[00:01.000]One\n[00:03.000]Three");
   });
 
   test.each([
@@ -253,6 +240,67 @@ describe("lrc writer", () => {
         ],
       })
     ).toThrow("lrc cannot represent pronunciations");
+  });
+
+  test("folds backing vocals into the parent line during a lossy write", () => {
+    expect(
+      write(
+        {
+          ...lineDocument,
+          lines: [
+            {
+              ...lyricLine,
+              b: [
+                { begin: 2000, end: 3000, id: "b0", text: "This is the " },
+                { begin: 3000, end: 4000, id: "b1", text: "background" },
+              ],
+              p: [{ begin: 1000, end: 6000, id: "word", text: "Main line " }],
+            },
+            {
+              agent: null,
+              b: [{ begin: 6000, end: 7000, id: "b2", text: "(only echo)" }],
+              begin: 6000,
+              end: 11_000,
+              id: "orphan",
+              p: [],
+            },
+          ],
+        },
+        { lossy: true }
+      )
+    ).toBe(
+      "[00:01.000]Main line (This is the background)\n[00:06.000](only echo)"
+    );
+  });
+
+  test("derives ends across a dropped text-empty line", () => {
+    const doc = {
+      ...lineDocument,
+      lines: [
+        { ...lyricLine, end: 2000 },
+        {
+          ...lyricLine,
+          begin: 2000,
+          end: 3000,
+          id: "blank",
+          p: [{ begin: 2000, end: 3000, id: "blankw0", text: "   " }],
+        },
+        {
+          ...lyricLine,
+          begin: 3000,
+          end: 8000,
+          id: "last",
+          p: [{ begin: 3000, end: 8000, id: "lastw0", text: "Bye" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(() => write(doc)).toThrow(
+      "lrc cannot represent the end time of line line"
+    );
+    expect(write(doc, { lossy: true })).toBe(
+      "[00:01.000]Hello\n[00:03.000]Bye"
+    );
   });
 
   test("requires line ends derived from the following start", () => {

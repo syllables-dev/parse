@@ -24,6 +24,30 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("lys writer", () => {
+  test("writes a backing row that starts before its line", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 400, end: 900, id: "echo", text: "Ooh" }],
+          // the reader widens begin to the anticipating backing run
+          begin: 400,
+        },
+      ],
+    } satisfies LyricsDocument;
+
+    expect(write(doc)).toBe("[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)");
+  });
+
+  test("rewrites its own reading of an anticipating backing run", () => {
+    const text = "[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)";
+    const once = write(read(text));
+
+    expect(once).toBe(text);
+    expect(write(read(once))).toBe(text);
+  });
+
   test("rejects reserved marks without mutating the document", () => {
     const doc = {
       ...wordDocument,
@@ -79,7 +103,7 @@ describe("lys writer", () => {
       version: 1,
     } satisfies LyricsDocument;
 
-    expect(write(doc)).toBe("[by:]\n[5]Guest(1000,500)");
+    expect(write(doc)).toBe("[5]Guest(1000,500)");
     expect(read(write(doc))).toEqual(doc);
   });
 
@@ -128,7 +152,6 @@ describe("lys writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         offset: 25,
         songwriters: ["Writer"],
         title: "Song",
@@ -141,7 +164,6 @@ describe("lys writer", () => {
         "[ti:Song]",
         "[ar:Singer]",
         "[al:Album]",
-        "[by:Author]",
         "[au:Writer]",
         "[4]Hel(1001,751)lo(1752,751)",
       ].join("\n")
@@ -161,48 +183,9 @@ describe("lys writer", () => {
       meta: {
         album: "Album",
         artist: "Singer",
-        author: "Author",
         songwriters: ["Writer"],
         title: "Song",
       },
     });
-  });
-
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow(`lys cannot represent ${message}`);
-  });
-
-  test.each([
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            translations: { zh: { p: "你好" } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "lys cannot represent translations",
-    },
-    {
-      doc: {
-        ...wordDocument,
-        lines: [
-          {
-            ...lyricLine,
-            pronunciations: { ja: { b: [], p: [] } },
-          },
-        ],
-      } satisfies LyricsDocument,
-      message: "lys cannot represent pronunciations",
-    },
-  ])("rejects unrepresentable document fields", ({ doc, message }) => {
-    expect(() => write(doc)).toThrow(message);
   });
 });

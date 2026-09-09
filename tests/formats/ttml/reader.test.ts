@@ -114,6 +114,18 @@ describe("ttml reader", () => {
     expect(read(write(doc))).toEqual(doc);
   });
 
+  test("shifts the body duration with the offset so full-length lyrics still read", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="10.000"><p begin="1.000" end="10.000" itunes:key="full"><span begin="1.000" end="10.000">Hello</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:audio lyricOffset="1.000"/></itunes:iTunesMetadata>'
+    );
+    const doc = readLyrics(source, "ttml");
+
+    expect(doc.lines[0]).toMatchObject({ begin: 2000, end: 11_000 });
+    // the shifted section still covers the body, so no explicit sections are kept
+    expect(doc.apple?.sections).toBeUndefined();
+  });
+
   test.each([
     { offset: 1250, sourceOffset: "+1.250", writtenBegin: "0:03.250" },
     { offset: -1250, sourceOffset: "-1.250", writtenBegin: "0:00.750" },
@@ -255,7 +267,7 @@ describe("ttml reader", () => {
       { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
     ]);
 
-    for (const format of ["ttml", "qrc"] as const) {
+    for (const format of ["ttml"] as const) {
       const written = writeLyrics(doc, format);
       expect(written).toContain("((（Echo");
       expect(written).toContain("）))");
@@ -579,6 +591,24 @@ describe("ttml reader", () => {
     });
   });
 
+  test("keeps a backing run that starts before its line", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="2.000" end="3.000" itunes:key="early"><span begin="2.000" end="3.000">Lead</span><span ttm:role="x-bg"><span begin="1.200" end="1.800">(Echo)</span></span></p></div>'
+    );
+    const [line] = read(source).lines;
+
+    expect(line).toMatchObject({ begin: 2000, end: 3000 });
+    expect(line?.b[0]).toMatchObject({ begin: 1200, end: 1800, text: "Echo" });
+  });
+
+  test("rejects a backing run that outlasts its line", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="late"><span begin="1.000" end="2.000">Lead</span><span ttm:role="x-bg"><span begin="1.200" end="2.800">(Echo)</span></span></p></div>'
+    );
+
+    expect(() => read(source)).toThrow(ParseError);
+  });
+
   test("rejects backing-only lyric lines", () => {
     const source = makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span ttm:role="x-bg"><span begin="1.100" end="1.800">(Echo)</span></span></p></div>'
@@ -789,9 +819,6 @@ describe("ttml reader", () => {
     ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="0.500" end="1.500">Text</span></p></div>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span><span begin="0.500" end="1.500" ttm:role="x-bg">(Echo)</span></p></div>'
     ),
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" itunes:key="line"><span begin="1.000" end="2.000">Text</span></p></div>',
