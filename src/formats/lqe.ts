@@ -41,7 +41,6 @@ const lysReservedStamp = /\(\d+,\d+\)/u;
 const offsetTag = /^\[offset:.*\]$/iu;
 // by parses as a tag so it is not a malformed line, then goes nowhere: the schema has no author
 const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
-const wrappingParens = /^(?:\((.*)\)|（(.*)）)$/su;
 
 export const capabilities = {
   agents: "alignment",
@@ -224,15 +223,12 @@ function addTranslation(
     assigned.set(target.line, lineTracks);
     const existing = target.line.translations?.[language];
     const text = translationLine.p.map((syllable) => syllable.text).join("");
-    const wrapped = wrappingParens.exec(text);
     target.line.translations = {
       ...target.line.translations,
       [language]: {
         p: existing === undefined ? "" : existing.p,
         ...(existing?.b !== undefined && { b: existing.b }),
-        ...(target.track === "p"
-          ? { p: text }
-          : { b: wrapped ? wrapped[0].slice(1, -1) : text }),
+        ...(target.track === "p" ? { p: text } : { b: text }),
       },
     };
   }
@@ -334,10 +330,7 @@ function addRow(
     }
     return;
   }
-  rows.push({
-    begin: firstSyllable.begin,
-    text: track === "backing" ? `(${text})` : text,
-  });
+  rows.push({ begin: firstSyllable.begin, text });
 }
 
 function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
