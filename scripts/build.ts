@@ -20,6 +20,7 @@ const bundle = await Bun.build({
   format: "esm",
   minify: true,
   outdir: "dist",
+  root: "src",
   target: "browser",
 });
 
@@ -30,7 +31,8 @@ if (!bundle.success) {
   process.exit(1);
 }
 
-// declarations come from tsgo; Bun.build does not emit them
+// declarations come from tsgo
+// Bun.build does not emit
 const types = Bun.spawnSync(["tsgo", "-p", "tsconfig.build.json"], {
   stderr: "inherit",
   stdout: "inherit",
@@ -40,8 +42,6 @@ if (types.exitCode !== 0) {
   process.exit(types.exitCode);
 }
 
-// tsgo emits "@/..." specifiers verbatim since it has no notion of the dist
-// layout; matching only "from"/"import(" keeps prose and other strings intact
 await Promise.all(
   (await readdir("dist", { recursive: true }))
     .filter((name) => name.endsWith(".d.ts"))
