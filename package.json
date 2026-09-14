@@ -47,9 +47,15 @@
       "import": "./dist/formats/lqe.js"
     }
   },
-  "files": ["dist", "LICENSE", "README.md"],
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "bun scripts/build.ts",
+    "prepublishOnly": "bun run build",
+    "release": "npm publish --registry=https://registry.npmjs.org && npm publish --registry=https://npm.pkg.github.com",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "test": "bun test",
