@@ -504,6 +504,19 @@ function addPron(
   };
 }
 
+function pronunciationLanguage(transliteration: XmlElement) {
+  checkAttrs(transliteration, [
+    key(null, "type"),
+    key(null, "automaticallyCreated"),
+    key(xmlUri, "lang"),
+  ]);
+  const type = attr(transliteration, "type", null);
+  if (type !== undefined && type !== "pronunciation") {
+    throw new ParseError("unsupported transliteration type");
+  }
+  return locale(transliteration);
+}
+
 export function readProns(
   containers: XmlElement[],
   lines: LyricsLine[],
@@ -524,11 +537,7 @@ export function readProns(
           `unsupported transliteration element <${transliteration.name}>`
         );
       }
-      checkAttrs(transliteration, [
-        key(null, "automaticallyCreated"),
-        key(xmlUri, "lang"),
-      ]);
-      const language = locale(transliteration);
+      const language = pronunciationLanguage(transliteration);
       const automaticallyCreated = readCreated(transliteration);
       const current = tracks[language];
       const variant =
