@@ -513,8 +513,9 @@ function pronunciationLanguage(transliteration: XmlElement) {
     key(null, "automaticallyCreated"),
     key(xmlUri, "lang"),
   ]);
-  const type = attr(transliteration, "type", null);
-  if (type !== undefined && type !== "pronunciation") {
+  if (
+    (attr(transliteration, "type", null) ?? "pronunciation") !== "pronunciation"
+  ) {
     throw new ParseError("unsupported transliteration type");
   }
   return locale(transliteration);
