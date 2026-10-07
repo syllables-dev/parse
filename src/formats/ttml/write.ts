@@ -389,6 +389,15 @@ function checkApple(doc: LyricsDocument, knownAgents: Set<string>) {
   if (apple.leadingSilence !== undefined) {
     checkTime(apple.leadingSilence, "Apple leading silence");
   }
+  const lyricOffset = apple.audio?.lyricOffset;
+  if (lyricOffset !== undefined) {
+    if (!Number.isSafeInteger(lyricOffset)) {
+      throw new RangeError("Apple lyric offset must be a safe integer");
+    }
+    if (apple.audio?.role !== "spatial") {
+      throw new Error("Apple lyric offset requires the spatial audio role");
+    }
+  }
   const duration = apple.body?.duration;
   if (duration !== undefined) {
     checkTime(duration, "Apple body duration");
@@ -714,10 +723,11 @@ export function write(
     apple?.leadingSilence === undefined
       ? ""
       : ` leadingSilence="${writeTime(apple.leadingSilence)}"`;
+  const lyricOffset = apple?.audio?.lyricOffset;
   const audio =
     apple?.audio?.role === undefined && apple?.audio?.spatial === undefined
       ? ""
-      : `<audio${apple.audio?.role === undefined ? "" : ` role="${escapeAttr(apple.audio.role)}"`}${apple.audio?.spatial === undefined ? "" : ` spatial="${apple.audio.spatial}"`}/>`;
+      : `<audio${lyricOffset === undefined ? "" : ` lyricOffset="${lyricOffset < 0 ? "-" : ""}${writeTime(Math.abs(lyricOffset))}"`}${apple.audio?.role === undefined ? "" : ` role="${escapeAttr(apple.audio.role)}"`}${apple.audio?.spatial === undefined ? "" : ` spatial="${apple.audio.spatial}"`}/>`;
   const lyricGenerationId =
     apple?.lyricGenerationId === undefined
       ? ""

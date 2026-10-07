@@ -126,6 +126,18 @@ describe("ttml reader", () => {
     expect(doc.apple?.sections).toBeUndefined();
   });
 
+  test("keeps a spatial lyric offset as metadata without shifting timestamps", () => {
+    const source = makeTtml(
+      '<div begin="1.000" end="10.000"><p begin="1.000" end="10.000" itunes:key="full"><span begin="1.000" end="10.000">Hello</span></p></div>',
+      '<itunes:iTunesMetadata><itunes:audio lyricOffset="0.975" role="spatial"/></itunes:iTunesMetadata>'
+    );
+    const doc = read(source);
+
+    expect(doc.lines[0]).toMatchObject({ begin: 1000, end: 10_000 });
+    expect(doc.apple?.audio).toEqual({ lyricOffset: 975, role: "spatial" });
+    expect(read(write(doc))).toEqual(doc);
+  });
+
   test.each([
     { offset: 1250, sourceOffset: "+1.250", writtenBegin: "0:03.250" },
     { offset: -1250, sourceOffset: "-1.250", writtenBegin: "0:00.750" },

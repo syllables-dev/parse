@@ -125,8 +125,11 @@ function readAudio(children: XmlElement[]) {
             )
           );
         })();
+  // a spatial offset aligns the atmos master, so applying it would put every other stream about a second late
+  const spatialOffset = role === "spatial";
   return {
-    ...(offset === undefined ? {} : { offset }),
+    ...(offset === undefined || spatialOffset ? {} : { offset }),
+    ...(offset !== undefined && spatialOffset ? { lyricOffset: offset } : {}),
     ...(role === undefined ? {} : { role }),
     ...(spatial === undefined ? {} : { spatial: boolStart.test(spatial) }),
   };

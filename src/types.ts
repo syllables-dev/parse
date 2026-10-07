@@ -161,6 +161,8 @@ export interface AppleLyrics {
 
 /** audio attributes stored in Apple Music TTML metadata. */
 export interface LyricsAudio {
+  /** Apple's lyric offset in milliseconds for the spatial master, kept as metadata and never applied to timestamps. */
+  lyricOffset?: number;
   /** the raw Apple audio role, including `spatial`. */
   role?: string;
   /** whether Apple marks the lyric timing for spatial audio. */
