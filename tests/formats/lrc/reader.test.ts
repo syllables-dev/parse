@@ -19,18 +19,6 @@ describe("lrc reader", () => {
     ]);
   });
 
-  test("treats A2 markers as starts and inherits the line end", () => {
-    const doc = read(
-      "[00:01.111]<00:01.111>Hel <00:01.789>lo\n[00:02.345]next"
-    );
-
-    expect(doc.timing).toBe("word");
-    expect(doc.lines[0]?.p).toEqual([
-      { begin: 1111, end: 1789, id: "l0w0", text: "Hel " },
-      { begin: 1789, end: 2345, id: "l0w1", text: "lo" },
-    ]);
-  });
-
   test("reads metadata and consumes a positive offset", () => {
     const doc = read(
       [

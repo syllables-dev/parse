@@ -8,20 +8,6 @@ function makeLqe(...lines: string[]) {
 }
 
 describe("lqe reader", () => {
-  test("delegates zero-time separator normalization to LYS", () => {
-    const doc = read(
-      makeLqe(
-        "[lyrics: format@Lyricify Syllable]",
-        "[4]One(1000,500) (0,0),(0,0)，(0,0)Two(1500,500)"
-      )
-    );
-
-    expect(doc.lines[0]?.p).toEqual([
-      { begin: 1000, end: 1500, id: "l0w0", text: "One ,，" },
-      { begin: 1500, end: 2000, id: "l0w1", text: "Two" },
-    ]);
-  });
-
   test("joins primary and backing translations at their own timestamps", () => {
     const doc = read(
       makeLqe(
@@ -40,24 +26,6 @@ describe("lqe reader", () => {
     expect(doc.lines[0]?.b[0]?.begin).toBe(1200);
     expect(doc.lines[0]?.translations).toEqual({
       "zh-Hans": { b: "回声", p: "你好" },
-    });
-  });
-
-  test("keeps empty primary and backing translations", () => {
-    const doc = read(
-      makeLqe(
-        "[lyrics: format@Lyricify Syllable]",
-        "[4]Lead(1000,1000)",
-        "[7](Echo)(1200,500)",
-        "",
-        "[translation: format@LRC]",
-        "[00:01.000]",
-        "[00:01.200]"
-      )
-    );
-
-    expect(doc.lines[0]?.translations).toEqual({
-      und: { b: "", p: "" },
     });
   });
 

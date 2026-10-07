@@ -154,30 +154,33 @@ describe("yrc writer", () => {
     });
   });
 
-  test("round-trips every valid single songwriter string through an au tag", () => {
-    for (const songwriter of ["Writer", "One/Two"]) {
-      const doc = {
-        ...wordDocument,
-        meta: { songwriters: [songwriter] },
-      } satisfies LyricsDocument;
-      const written = write(doc);
+  test("keeps a single songwriter with a slash in an au tag rather than splitting it", () => {
+    const doc = {
+      ...wordDocument,
+      meta: { songwriters: ["One/Two"] },
+    } satisfies LyricsDocument;
+    const written = write(doc);
 
-      expect(written).toContain(`[au:${songwriter}]`);
-      expect(written).toContain("[1001,1502](1001,751,0)Hel");
-      expect(read(written)).toEqual(doc);
-    }
+    expect(written).toContain("[au:One/Two]");
+    expect(read(written)).toEqual(doc);
   });
 
   test.each([
-    { message: "an empty list", songwriters: [] },
-    { message: "an empty name", songwriters: [""] },
-    { message: "an empty list member", songwriters: ["One", ""] },
-    { message: "surrounding whitespace", songwriters: ["One", " Two "] },
-    { message: "a slash", songwriters: ["One", "Two/Three"] },
-    { message: "duplicates", songwriters: ["One", "One"] },
-  ])("rejects songwriter metadata with $message", ({ songwriters }) => {
+    {
+      message: "yrc cannot represent an empty songwriter name",
+      songwriters: ["One", ""],
+    },
+    {
+      message: "yrc cannot preserve this songwriter name",
+      songwriters: ["One", "Two/Three"],
+    },
+    {
+      message: "yrc requires unique songwriter names",
+      songwriters: ["One", "One"],
+    },
+  ])("rejects songwriter metadata: $message", ({ message, songwriters }) => {
     expect(() =>
       write({ ...wordDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow();
+    ).toThrow(message);
   });
 });

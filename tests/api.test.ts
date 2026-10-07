@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
-import { write as writeTtml } from "@/formats/ttml";
 import type { FormatId, LyricsDocument } from "@/index";
 import {
   capabilities,
@@ -550,7 +549,6 @@ describe("public dispatch", () => {
         .join("")
     ).toBe("Hello world");
     expect(write(doc, "ttml", { lossy: true })).toBe(converted);
-    expect(writeTtml(doc, { lossy: true })).toBe(converted);
     expect(doc).toEqual(before);
   });
 

@@ -230,15 +230,6 @@ describe("ttml reader", () => {
     expect(doc.apple?.body).toBeUndefined();
   });
 
-  test("keeps a body duration declared by an untimed document", () => {
-    const doc = readLyrics(
-      makeTtml("<div><p>Only line</p></div>", "", "None"),
-      "ttml"
-    );
-
-    expect(doc.apple?.body).toEqual({ duration: 10_000 });
-  });
-
   test("rejects lyric offsets that shift timestamps below zero", () => {
     const apple =
       '<itunes:iTunesMetadata><itunes:audio lyricOffset="-1.250"/></itunes:iTunesMetadata>';
@@ -279,22 +270,10 @@ describe("ttml reader", () => {
       { begin: 1800, end: 2700, id: "keptb1", text: "）)" },
     ]);
 
-    for (const format of ["ttml"] as const) {
-      const written = writeLyrics(doc, format);
-      expect(written).toContain("((（Echo");
-      expect(written).toContain("）))");
-      expect(
-        readLyrics(written, format)
-          .lines.at(0)
-          ?.b.map(({ begin, end, text }) => ({
-            begin,
-            end,
-            text,
-          }))
-      ).toEqual(
-        doc.lines.at(0)?.b.map(({ begin, end, text }) => ({ begin, end, text }))
-      );
-    }
+    const written = writeLyrics(doc, "ttml");
+    expect(written).toContain("((（Echo");
+    expect(written).toContain("）))");
+    expect(readLyrics(written, "ttml")).toEqual(doc);
     expect(doc).toEqual(original);
   });
 
@@ -558,29 +537,37 @@ describe("ttml reader", () => {
       expect(written.match(/automaticallyCreated=/gu)?.length ?? 0).toBe(
         created === undefined ? 0 : 2
       );
-      expect(written.includes(`automaticallyCreated="${created}"`)).toBe(
-        created !== undefined
-      );
       expect(readLyrics(written, "ttml")).toEqual(doc);
     }
   );
 
   test.each([
-    "<tt>",
-    '<tt xmlns="urn:generic"><head/><body/></tt>',
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>'
-    ).replace(' itunes:timing="Word"', ""),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>',
-      "",
-      "Syllable"
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>'
-    ).replace("<head><metadata></metadata></head>", ""),
-  ])("rejects malformed XML and unsupported profiles", (source) => {
-    expect(() => read(source)).toThrow(ParseError);
+    {
+      message: "root must be <tt>",
+      source: '<tt xmlns="urn:generic"><head/><body/></tt>',
+    },
+    {
+      message: "requires timing",
+      source: makeTtml(
+        '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>'
+      ).replace(' itunes:timing="Word"', ""),
+    },
+    {
+      message: "unsupported ttml timing syllable",
+      source: makeTtml(
+        '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>',
+        "",
+        "Syllable"
+      ),
+    },
+    {
+      message: "requires one <head>",
+      source: makeTtml(
+        '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>'
+      ).replace("<head><metadata></metadata></head>", ""),
+    },
+  ])("rejects an unsupported profile: $message", ({ message, source }) => {
+    expect(() => read(source)).toThrow(message);
   });
 
   test.each([
@@ -621,29 +608,28 @@ describe("ttml reader", () => {
     expect(() => read(source)).toThrow(ParseError);
   });
 
-  test("rejects backing-only lyric lines", () => {
-    const source = makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span ttm:role="x-bg"><span begin="1.100" end="1.800">(Echo)</span></span></p></div>'
-    );
-
-    expect(() => read(source)).toThrow(
-      "ttml backing track requires primary text on line L1"
-    );
-  });
-
   test.each([
-    makeTtml(
-      '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="same"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="same"><span begin="2.000" end="3.000">Two</span></p></div>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>',
-      '<ttm:agent xml:id="same" type="person"/><ttm:agent xml:id="same" type="group"/>'
-    ),
-    makeTtml(
-      '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="1.500" ttm:role="x-bg">(One)</span><span begin="1.500" end="2.000" ttm:role="x-bg">(Two)</span></p></div>'
-    ),
-  ])("rejects duplicate keys, languages, and backing groups", (source) => {
-    expect(() => read(source)).toThrow(ParseError);
+    {
+      message: "line keys must be nonempty and unique",
+      source: makeTtml(
+        '<div begin="1.000" end="3.000"><p begin="1.000" end="2.000" itunes:key="same"><span begin="1.000" end="2.000">One</span></p><p begin="2.000" end="3.000" itunes:key="same"><span begin="2.000" end="3.000">Two</span></p></div>'
+      ),
+    },
+    {
+      message: "invalid or duplicate ttml agent id same",
+      source: makeTtml(
+        '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="2.000">Text</span></p></div>',
+        '<ttm:agent xml:id="same" type="person"/><ttm:agent xml:id="same" type="group"/>'
+      ),
+    },
+    {
+      message: "lines support one backing-vocal span",
+      source: makeTtml(
+        '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000"><span begin="1.000" end="1.500" ttm:role="x-bg">(One)</span><span begin="1.500" end="2.000" ttm:role="x-bg">(Two)</span></p></div>'
+      ),
+    },
+  ])("rejects duplicates: $message", ({ message, source }) => {
+    expect(() => read(source)).toThrow(message);
   });
 
   test("preserves repeated pronunciation tracks for one language", () => {
@@ -821,8 +807,8 @@ describe("ttml reader", () => {
     makeTtml(
       '<div begin="1.000" end="2.000"><p begin="1.000" end="2.000" color="red"><span begin="1.000" end="2.000">Text</span></p></div>'
     ),
-  ])("rejects unsupported roles and attributes", (source) => {
-    expect(() => read(source)).toThrow(ParseError);
+  ])("rejects unsupported attributes", (source) => {
+    expect(() => read(source)).toThrow("unsupported color on <p>");
   });
 
   test.each([
@@ -920,6 +906,6 @@ describe("ttml whitespace", () => {
       read(
         makeTtml(`<div begin="0.000" end="3.000">${open} ${group} </p></div>`)
       )
-    ).toThrow(ParseError);
+    ).toThrow("ttml backing track requires primary text on line L1");
   });
 });

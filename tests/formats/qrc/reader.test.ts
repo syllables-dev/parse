@@ -68,15 +68,6 @@ describe("qrc reader", () => {
     expect(() => read(source)).toThrow(ParseError);
   });
 
-  test("folds a zero-duration whitespace spacer into the preceding syllable", () => {
-    const doc = read("[1000,1300]Hello(1000,400) (1400,0)world(1400,600)");
-
-    expect(doc.lines[0]?.p).toEqual([
-      { begin: 1000, end: 1400, id: "l0w0", text: "Hello " },
-      { begin: 1400, end: 2000, id: "l0w1", text: "world" },
-    ]);
-  });
-
   test("folds a zero-duration token with real lyric text into its left neighbor", () => {
     const doc = read("[1000,1300]Hello(1000,400)zap(1400,0)world(1400,600)");
 

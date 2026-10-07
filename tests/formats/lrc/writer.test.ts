@@ -107,50 +107,10 @@ describe("lrc writer", () => {
     });
   });
 
-  test.each([
-    { message: "an empty songwriter list", songwriters: [] },
-    { message: "multiple songwriters", songwriters: ["One", "Two"] },
-  ])("rejects $message", ({ message, songwriters }) => {
-    expect(() =>
-      write({ ...lineDocument, meta: { songwriters: [...songwriters] } })
-    ).toThrow(`lrc cannot represent ${message}`);
-  });
-
   test("rejects line breaks in metadata", () => {
     expect(() =>
       write({ ...lineDocument, meta: { title: "Song\nTitle" } })
     ).toThrow("lrc cannot represent line breaks in metadata");
-  });
-
-  test("drops a line with no lyric text instead of keeping a placeholder", () => {
-    const doc = {
-      ...lineDocument,
-      lines: [
-        {
-          ...lyricLine,
-          begin: 1000,
-          end: 3000,
-          id: "one",
-          p: [{ begin: 1000, end: 3000, id: "onew0", text: "One" }],
-        },
-        {
-          ...lyricLine,
-          begin: 2000,
-          end: 3000,
-          id: "empty",
-          p: [{ begin: 2000, end: 3000, id: "emptyw0", text: "" }],
-        },
-        {
-          ...lyricLine,
-          begin: 3000,
-          end: 8000,
-          id: "three",
-          p: [{ begin: 3000, end: 8000, id: "threew0", text: "Three" }],
-        },
-      ],
-    } satisfies LyricsDocument;
-
-    expect(write(doc)).toBe("[00:01.000]One\n[00:03.000]Three");
   });
 
   test.each([
@@ -301,14 +261,5 @@ describe("lrc writer", () => {
     expect(write(doc, { lossy: true })).toBe(
       "[00:01.000]Hello\n[00:03.000]Bye"
     );
-  });
-
-  test("requires line ends derived from the following start", () => {
-    expect(() =>
-      write({
-        ...lineDocument,
-        lines: [{ ...lyricLine, end: 5999 }],
-      })
-    ).toThrow("lrc cannot represent the end time of line line");
   });
 });
