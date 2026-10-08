@@ -2,7 +2,7 @@ import { ParseError } from "@/errors";
 import { toInt } from "@/internal/timestamps";
 import type { XmlElement } from "@/internal/xml";
 
-const clockPattern = /^(?:(\d+):)?(\d+)(?:\.(\d{1,3}))?$/u;
+const clockPattern = /^(?:\d+:){0,2}\d+(?:\.\d+)?$/u;
 const languagePattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const nonSpace = /\S/u;
 
@@ -92,22 +92,21 @@ export function text(element: XmlElement) {
 }
 
 export function readTime(value: string, label: string) {
-  if (!clockPattern.test(value)) {
+  const clock = value.trim();
+  if (!clockPattern.test(clock)) {
     throw new ParseError(`${label} has an invalid timestamp`);
   }
-  const colon = value.indexOf(":");
-  const dot = value.indexOf(".");
-  const minutes = colon < 0 ? 0 : toInt(value.slice(0, colon), label);
-  const seconds = toInt(
-    value.slice(colon + 1, dot < 0 ? value.length : dot),
-    label
-  );
-  if (colon >= 0 && seconds > 59) {
-    throw new ParseError(`${label} seconds must be less than 60`);
+  const [whole = "", fraction = ""] = clock.split(".");
+  const fields = whole.split(":").map((field) => toInt(field, label));
+  if (fields.slice(1).some((field) => field > 59)) {
+    throw new ParseError(`${label} clock components must be less than 60`);
   }
+  const seconds = fields.reduce((total, field) => total * 60 + field, 0);
+  // the document stores milliseconds; round finer source precision once
   const millis =
-    dot < 0 ? 0 : toInt(value.slice(dot + 1).padEnd(3, "0"), label);
-  const stamp = minutes * 60_000 + seconds * 1000 + millis;
+    Number(fraction.slice(0, 3).padEnd(3, "0")) +
+    (Number(fraction[3] ?? "0") >= 5 ? 1 : 0);
+  const stamp = seconds * 1000 + millis;
   if (!Number.isSafeInteger(stamp)) {
     throw new ParseError(`${label} exceeds the safe integer range`);
   }
