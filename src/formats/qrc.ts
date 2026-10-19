@@ -179,23 +179,16 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-function writeRow(
-  begin: number,
-  end: number,
-  syllables: Syllable[],
-  wrap: boolean
-): string {
+function writeRow(begin: number, end: number, syllables: Syllable[]): string {
   const duration = end - begin;
   checkTime(duration, "qrc line duration");
   checkTime(begin, "qrc line start");
   return `[${begin},${duration}]${syllables
-    .map((syllable, index) => {
+    .map((syllable) => {
       const syllableDuration = syllable.end - syllable.begin;
       checkTime(syllableDuration, `syllable ${syllable.id} duration`);
       checkTime(syllable.begin, `syllable ${syllable.id} start`);
-      const prefix = wrap && index === 0 ? "(" : "";
-      const suffix = wrap && index === syllables.length - 1 ? ")" : "";
-      return `${prefix}${syllable.text}${suffix}(${syllable.begin},${syllableDuration})`;
+      return `${syllable.text}(${syllable.begin},${syllableDuration})`;
     })
     .join("")}`;
 }
@@ -217,7 +210,7 @@ export function write(
     }
   }
   const lyricRows = doc.lines.map((line) =>
-    writeRow(line.begin, line.end, line.p, false)
+    writeRow(line.begin, line.end, line.p)
   );
   return [...writeTags(doc.meta, "qrc"), ...lyricRows].join("\n");
 }

@@ -332,39 +332,16 @@ describe("ttml writer", () => {
           translations: { fr: { p: "Encore" } },
         },
       ],
-      translationTracks: { fr: { automaticallyCreated: true } },
+      translationTracks: {
+        fr: { automaticallyCreated: true, kind: "replacement" },
+      },
     } satisfies LyricsDocument;
+    const written = writeLyrics(doc, "ttml");
 
-    expect(
-      writeLyrics(doc, "ttml").match(/automaticallyCreated=/gu)
-    ).toHaveLength(1);
-  });
-
-  test("stores one translation kind for each language", () => {
-    const laterLine = {
-      ...lyricLine,
-      begin: 4000,
-      end: 6000,
-      id: "later",
-      p: [{ begin: 4000, end: 6000, id: "laterw0", text: "Again" }],
-    } satisfies LyricsLine;
-    const doc = {
-      ...wordDocument,
-      lines: [
-        {
-          ...lyricLine,
-          translations: { fr: { p: "Bonjour" } },
-        },
-        {
-          ...laterLine,
-          translations: { fr: { p: "Encore" } },
-        },
-      ],
-      translationTracks: { fr: { kind: "replacement" } },
-    } satisfies LyricsDocument;
-
-    expect(writeLyrics(doc, "ttml")).toContain(
-      '<translation type="replacement" xml:lang="fr">'
+    expect(written.match(/automaticallyCreated=/gu)).toHaveLength(1);
+    expect(written.match(/<translation /gu)).toHaveLength(1);
+    expect(written).toContain(
+      '<translation type="replacement" xml:lang="fr" automaticallyCreated="true">'
     );
   });
 
@@ -502,7 +479,7 @@ describe("ttml writer", () => {
           },
         ],
       })
-    ).toThrow();
+    ).toThrow("syllable outside must stay within line line");
     expect(() =>
       write({
         ...wordDocument,
@@ -513,6 +490,28 @@ describe("ttml writer", () => {
           },
         ],
       })
-    ).toThrow();
+    ).toThrow("syllable reversed end must not precede its start");
+  });
+});
+
+describe("ttml writer apple layout", () => {
+  test("keeps the space apple puts before word-timed backing vocals", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 2500, end: 3000, id: "lineb0", text: "Echo" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+    const written = write(doc);
+
+    expect(written).toContain('lo</span> <span ttm:role="x-bg">');
+    expect(read(written)).toEqual(doc);
+  });
+
+  test("writes an empty translations element self-closed like apple", () => {
+    expect(write(wordDocument)).toContain("<translations/>");
   });
 });

@@ -8,11 +8,11 @@ const fixtureCases = [
     fileName: "backing-vocals.ttml",
     firstLine: {
       agent: "v1",
-      begin: 9023,
-      end: 10_802,
+      begin: 8222,
+      end: 10_001,
       id: "L1",
       text: "Thought I'd end up with Sean",
-      word: { begin: 9023, end: 9192, id: "L1w0", text: "Thought " },
+      word: { begin: 8222, end: 8391, id: "L1w0", text: "Thought " },
     },
     lineCount: 87,
     meta: {
@@ -36,11 +36,11 @@ const fixtureCases = [
     fileName: "instrumental-gap.ttml",
     firstLine: {
       agent: "v1",
-      begin: 149,
-      end: 3055,
+      begin: 0,
+      end: 2906,
       id: "L1",
       text: "Is this the real life?",
-      word: { begin: 149, end: 607, id: "L1w0", text: "Is " },
+      word: { begin: 0, end: 458, id: "L1w0", text: "Is " },
     },
     lineCount: 73,
     meta: { songwriters: ["Freddie Mercury"] },
@@ -180,22 +180,22 @@ describe("ttml fixtures", () => {
 
     // spaces inside a span stay, the one separating the line from the backing group does not
     expect(doc.lines[17]?.p).toEqual([
-      { begin: 46_341, end: 46_741, id: "L18w0", text: "Thank " },
-      { begin: 46_741, end: 47_291, id: "L18w1", text: "u, " },
-      { begin: 47_474, end: 47_952, id: "L18w2", text: "next" },
+      { begin: 45_540, end: 45_940, id: "L18w0", text: "Thank " },
+      { begin: 45_940, end: 46_490, id: "L18w1", text: "u, " },
+      { begin: 46_673, end: 47_151, id: "L18w2", text: "next" },
     ]);
     expect(doc.lines[17]?.b).toEqual([
-      { begin: 48_007, end: 48_508, id: "L18b0", text: "Next" },
+      { begin: 47_206, end: 47_707, id: "L18b0", text: "Next" },
     ]);
   });
 
   test("keeps overlapping lines and instrumental gaps", async () => {
     const doc = await readFixture("instrumental-gap.ttml");
 
-    expect(doc.lines[52]).toMatchObject({ begin: 227_776, end: 232_264 });
-    expect(doc.lines[53]).toMatchObject({ begin: 231_231, end: 233_960 });
-    expect(doc.lines[34]?.end).toBe(157_209);
-    expect(doc.lines[35]?.begin).toBe(185_957);
+    expect(doc.lines[52]).toMatchObject({ begin: 227_627, end: 232_115 });
+    expect(doc.lines[53]).toMatchObject({ begin: 231_082, end: 233_811 });
+    expect(doc.lines[34]?.end).toBe(157_060);
+    expect(doc.lines[35]?.begin).toBe(185_808);
   });
 
   test("keeps every fixture translation and pronunciation line", async () => {

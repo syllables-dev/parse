@@ -389,6 +389,15 @@ function checkApple(doc: LyricsDocument, knownAgents: Set<string>) {
   if (apple.leadingSilence !== undefined) {
     checkTime(apple.leadingSilence, "Apple leading silence");
   }
+  const lyricOffset = apple.audio?.lyricOffset;
+  if (lyricOffset !== undefined) {
+    if (!Number.isSafeInteger(lyricOffset)) {
+      throw new RangeError("Apple lyric offset must be a safe integer");
+    }
+    if (apple.audio?.role !== "spatial") {
+      throw new Error("Apple lyric offset requires the spatial audio role");
+    }
+  }
   const duration = apple.body?.duration;
   if (duration !== undefined) {
     checkTime(duration, "Apple body duration");
@@ -495,9 +504,11 @@ function writeTracks(
   const backingStartsFirst =
     Math.min(...backing.map((syllable) => syllable.begin)) <
     Math.min(...primary.map((syllable) => syllable.begin));
+  // word-timed apple files keep a space between the main words and the backing vocals so plain-text readers keep them apart, while a line-timed reader would read it into the text
+  const gap = lineTimed ? "" : " ";
   return backingStartsFirst
-    ? backingMarkup + primaryMarkup
-    : primaryMarkup + backingMarkup;
+    ? `${backingMarkup}${gap}${primaryMarkup}`
+    : `${primaryMarkup}${gap}${backingMarkup}`;
 }
 
 function writeTranslationBacking(
@@ -714,10 +725,11 @@ export function write(
     apple?.leadingSilence === undefined
       ? ""
       : ` leadingSilence="${writeTime(apple.leadingSilence)}"`;
+  const lyricOffset = apple?.audio?.lyricOffset;
   const audio =
     apple?.audio?.role === undefined && apple?.audio?.spatial === undefined
       ? ""
-      : `<audio${apple.audio?.role === undefined ? "" : ` role="${escapeAttr(apple.audio.role)}"`}${apple.audio?.spatial === undefined ? "" : ` spatial="${apple.audio.spatial}"`}/>`;
+      : `<audio${lyricOffset === undefined ? "" : ` lyricOffset="${lyricOffset < 0 ? "-" : ""}${writeTime(Math.abs(lyricOffset))}"`}${apple.audio?.role === undefined ? "" : ` role="${escapeAttr(apple.audio.role)}"`}${apple.audio?.spatial === undefined ? "" : ` spatial="${apple.audio.spatial}"`}/>`;
   const lyricGenerationId =
     apple?.lyricGenerationId === undefined
       ? ""
@@ -729,7 +741,7 @@ export function write(
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${timingAttr[doc.timing]}"${lyricGenerationId}${language}${writeAttrs(apple?.root ?? {})}>`,
-    `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
+    `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}>${translations === "" ? "<translations/>" : `<translations>${translations}</translations>`}${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
     writeBody(doc),
     "</tt>",
   ].join("\n");

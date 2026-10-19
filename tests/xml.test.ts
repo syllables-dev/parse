@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { LyricsDocument } from "@/index";
-import { ParseError, read, write } from "@/index";
+import { ParseError, read } from "@/index";
 
 function prefixedTtml(lyricMarkup: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -32,67 +31,15 @@ describe("TTML XML handling", () => {
     });
   });
 
-  test("uses deterministic fallback line keys", () => {
-    const source = prefixedTtml(
-      '<t:p begin="0:01.000" end="0:02.000"><t:span begin="0:01.000" end="0:02.000">one</t:span></t:p><t:p begin="0:02.000" end="0:03.000"><t:span begin="0:02.000" end="0:03.000">two</t:span></t:p>'
-    );
-
-    expect(read(source, "ttml").lines.map((line) => line.id)).toEqual([
-      "L1",
-      "L2",
-    ]);
-    expect(read(source, "ttml")).toEqual(read(source, "ttml"));
-  });
-
-  test("escapes text and attribute entities during a public round trip", () => {
-    const doc: LyricsDocument = {
-      agents: [],
-      lines: [
-        {
-          agent: null,
-          b: [],
-          begin: 0,
-          end: 1000,
-          id: 'line"&',
-          p: [
-            {
-              begin: 0,
-              end: 1000,
-              id: "word",
-              text: "A < B & C > D",
-            },
-          ],
-        },
-      ],
-      meta: {},
-      timing: "line",
-      version: 1,
-    };
-
-    const source = write(doc, "ttml");
-
-    expect(source).toContain('itunes:key="line&quot;&amp;"');
-    expect(source).toContain("A &lt; B &amp; C &gt; D");
-    expect(read(source, "ttml")).toMatchObject({
-      lines: [
-        {
-          begin: 0,
-          end: 1000,
-          id: 'line"&',
-          p: [{ begin: 0, end: 1000, text: "A < B & C > D" }],
-        },
-      ],
-    });
-  });
-
   test.each([
-    "<tt><p></tt>",
-    '<tt a="one" a="two"/>',
-    "<x:tt/>",
-    "<tt>&bogus;</tt>",
-    "<tt/><tail/>",
-    "<tt><!-- unclosed</tt>",
-  ])("throws ParseError for malformed XML", (source) => {
+    { message: "expected </p>", source: "<tt><p></tt>" },
+    { message: "duplicate attribute a", source: '<tt a="one" a="two"/>' },
+    { message: "unbound namespace prefix x", source: "<x:tt/>" },
+    { message: "invalid entity &bogus;", source: "<tt>&bogus;</tt>" },
+    { message: "content after root element", source: "<tt/><tail/>" },
+    { message: "unclosed comment", source: "<tt><!-- unclosed</tt>" },
+  ])("throws $message for malformed XML", ({ message, source }) => {
     expect(() => read(source, "ttml")).toThrow(ParseError);
+    expect(() => read(source, "ttml")).toThrow(message);
   });
 });

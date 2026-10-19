@@ -13,7 +13,6 @@ import {
   formatMetadataLosses,
   projectedMeta,
 } from "@/internal/projections/metadata";
-import { projectedQrcLines } from "@/internal/projections/qrc";
 import type {
   ConversionLoss,
   FormatCapabilities,
@@ -44,9 +43,6 @@ function projectedLines(
   }
   if (format === "lqe") {
     return projectedLqeLines(doc, capabilities, wordTimed);
-  }
-  if (format === "qrc") {
-    return projectedQrcLines(doc, capabilities, wordTimed);
   }
   if (format === "lys") {
     return projectedLysLines(doc).map((line) =>

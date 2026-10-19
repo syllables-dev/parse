@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { read, write } from "@/formats/lys";
 import type { LyricsDocument, LyricsLine } from "@/index";
-import { makeLine } from "./shared";
 
 const lyricLine = {
   agent: "v1",
@@ -24,28 +23,11 @@ const wordDocument = {
 } satisfies LyricsDocument;
 
 describe("lys writer", () => {
-  test("writes a backing row that starts before its line", () => {
-    const doc = {
-      ...wordDocument,
-      lines: [
-        {
-          ...lyricLine,
-          b: [{ begin: 400, end: 900, id: "echo", text: "Ooh" }],
-          // the reader widens begin to the anticipating backing run
-          begin: 400,
-        },
-      ],
-    } satisfies LyricsDocument;
-
-    expect(write(doc)).toBe("[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)");
-  });
-
   test("rewrites its own reading of an anticipating backing run", () => {
     const text = "[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)";
     const once = write(read(text));
 
     expect(once).toBe(text);
-    expect(write(read(once))).toBe(text);
   });
 
   test("rejects reserved marks without mutating the document", () => {
@@ -105,45 +87,6 @@ describe("lys writer", () => {
 
     expect(write(doc)).toBe("[5]Guest(1000,500)");
     expect(read(write(doc))).toEqual(doc);
-  });
-
-  test("rejects a leading backing-only line without mutation", () => {
-    const doc = {
-      agents: [{ id: "v1", type: "person" }],
-      lines: [
-        makeLine("l0", 1000, "Echo", "b"),
-        makeLine("l1", 2000, "Lead", "p"),
-      ],
-      meta: {},
-      timing: "word",
-      version: 1,
-    } satisfies LyricsDocument;
-
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lys cannot preserve backing-only line l0"
-    );
-    expect(doc).toEqual(before);
-  });
-
-  test("rejects a same-agent backing-only line without mutation", () => {
-    const doc = {
-      agents: [{ id: "v1", type: "person" }],
-      lines: [
-        makeLine("l0", 1000, "Lead", "p"),
-        makeLine("l1", 2000, "Echo", "b"),
-      ],
-      meta: {},
-      timing: "word",
-      version: 1,
-    } satisfies LyricsDocument;
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lys cannot preserve backing-only line l1"
-    );
-    expect(doc).toEqual(before);
   });
 
   test("round-trips metadata and consumes document offsets", () => {

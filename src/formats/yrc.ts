@@ -235,9 +235,7 @@ export function write(
   if (
     doc.meta.songwriters &&
     doc.meta.songwriters.length > 1 &&
-    doc.meta.songwriters.some(
-      (name) => name.length === 0 || name.trim() !== name || name.includes("/")
-    )
+    doc.meta.songwriters.some((name) => name.includes("/"))
   ) {
     throw new Error("yrc cannot preserve this songwriter name");
   }

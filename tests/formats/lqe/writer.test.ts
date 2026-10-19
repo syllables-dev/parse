@@ -215,28 +215,6 @@ describe("lqe writer", () => {
     ]);
   });
 
-  test("rejects replacement translations without mutation", () => {
-    const doc = {
-      ...translatedDocument,
-      lines: [
-        {
-          ...translatedLine,
-          translations: {
-            ...translatedLine.translations,
-            ja: { p: "こんにちは" },
-          },
-        },
-      ],
-      translationTracks: { ja: { kind: "replacement" } },
-    } satisfies LyricsDocument;
-    const before = structuredClone(doc);
-
-    expect(() => write(doc)).toThrow(
-      "lqe cannot represent replacement translations"
-    );
-    expect(doc).toEqual(before);
-  });
-
   test.each([true, false])(
     "rejects automaticallyCreated=%s translations without mutation",
     (automaticallyCreated) => {

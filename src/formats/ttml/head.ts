@@ -125,8 +125,11 @@ function readAudio(children: XmlElement[]) {
             )
           );
         })();
+  // a spatial offset aligns the atmos master, so applying it would put every other stream about a second late
+  const spatialOffset = role === "spatial";
   return {
-    ...(offset === undefined ? {} : { offset }),
+    ...(offset === undefined || spatialOffset ? {} : { offset }),
+    ...(offset !== undefined && spatialOffset ? { lyricOffset: offset } : {}),
     ...(role === undefined ? {} : { role }),
     ...(spatial === undefined ? {} : { spatial: boolStart.test(spatial) }),
   };
@@ -504,6 +507,20 @@ function addPron(
   };
 }
 
+function pronunciationLanguage(transliteration: XmlElement) {
+  checkAttrs(transliteration, [
+    key(null, "type"),
+    key(null, "automaticallyCreated"),
+    key(xmlUri, "lang"),
+  ]);
+  if (
+    (attr(transliteration, "type", null) ?? "pronunciation") !== "pronunciation"
+  ) {
+    throw new ParseError("unsupported transliteration type");
+  }
+  return locale(transliteration);
+}
+
 export function readProns(
   containers: XmlElement[],
   lines: LyricsLine[],
@@ -524,11 +541,7 @@ export function readProns(
           `unsupported transliteration element <${transliteration.name}>`
         );
       }
-      checkAttrs(transliteration, [
-        key(null, "automaticallyCreated"),
-        key(xmlUri, "lang"),
-      ]);
-      const language = locale(transliteration);
+      const language = pronunciationLanguage(transliteration);
       const automaticallyCreated = readCreated(transliteration);
       const current = tracks[language];
       const variant =

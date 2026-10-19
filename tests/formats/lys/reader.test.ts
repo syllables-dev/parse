@@ -1,7 +1,23 @@
 import { describe, expect, test } from "bun:test";
 import { read, write } from "@/formats/lys";
-import { type LyricsDocument, ParseError } from "@/index";
-import { makeLine } from "./shared";
+import { type LyricsDocument, type LyricsLine, ParseError } from "@/index";
+
+function makeLine(id: string, begin: number, text: string, track: "b" | "p") {
+  const syllable = {
+    begin,
+    end: begin + 500,
+    id: `${id}${track === "b" ? "b" : "w"}0`,
+    text,
+  };
+  return {
+    agent: "v1",
+    b: track === "b" ? [syllable] : [],
+    begin,
+    end: begin + 500,
+    id,
+    p: track === "p" ? [syllable] : [],
+  } satisfies LyricsLine;
+}
 
 describe("lys reader", () => {
   test("maps properties zero through eight to tracks and agents", () => {

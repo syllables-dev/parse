@@ -83,7 +83,7 @@ function checkTiming(
 /**
  * reports timing and content problems without changing the document.
  *
- * legal overlapping lines remain in the document and are surfaced as findings.
+ * overlapping lines are legal layered vocals, so they are never reported.
  * a static document carries no timing, so it never reports a problem.
  *
  * @param doc - the editable lyric document to inspect.
