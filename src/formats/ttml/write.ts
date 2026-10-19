@@ -504,9 +504,11 @@ function writeTracks(
   const backingStartsFirst =
     Math.min(...backing.map((syllable) => syllable.begin)) <
     Math.min(...primary.map((syllable) => syllable.begin));
+  // word-timed apple files keep a space between the main words and the backing vocals so plain-text readers keep them apart, while a line-timed reader would read it into the text
+  const gap = lineTimed ? "" : " ";
   return backingStartsFirst
-    ? backingMarkup + primaryMarkup
-    : primaryMarkup + backingMarkup;
+    ? `${backingMarkup}${gap}${primaryMarkup}`
+    : `${primaryMarkup}${gap}${backingMarkup}`;
 }
 
 function writeTranslationBacking(
@@ -739,7 +741,7 @@ export function write(
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<tt xmlns="${ttmlUri}" xmlns:itunes="${itunesUri}" xmlns:ttm="${ttmUri}" itunes:timing="${timingAttr[doc.timing]}"${lyricGenerationId}${language}${writeAttrs(apple?.root ?? {})}>`,
-    `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}><translations>${translations}</translations>${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
+    `<head><metadata>${title}${agents}<iTunesMetadata xmlns="${itunesUri}"${leadingSilence}>${translations === "" ? "<translations/>" : `<translations>${translations}</translations>`}${transliterations}<songwriters>${songwriters}</songwriters>${audio}</iTunesMetadata></metadata></head>`,
     writeBody(doc),
     "</tt>",
   ].join("\n");

@@ -493,3 +493,25 @@ describe("ttml writer", () => {
     ).toThrow("syllable reversed end must not precede its start");
   });
 });
+
+describe("ttml writer apple layout", () => {
+  test("keeps the space apple puts before word-timed backing vocals", () => {
+    const doc = {
+      ...wordDocument,
+      lines: [
+        {
+          ...lyricLine,
+          b: [{ begin: 2500, end: 3000, id: "lineb0", text: "Echo" }],
+        },
+      ],
+    } satisfies LyricsDocument;
+    const written = write(doc);
+
+    expect(written).toContain('lo</span> <span ttm:role="x-bg">');
+    expect(read(written)).toEqual(doc);
+  });
+
+  test("writes an empty translations element self-closed like apple", () => {
+    expect(write(wordDocument)).toContain("<translations/>");
+  });
+});
