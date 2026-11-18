@@ -23,6 +23,7 @@ import {
   projectedDocument,
 } from "@/internal/projections";
 import { projectedLines } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   foldSpacers,
   readTimedWords,
@@ -182,6 +183,7 @@ export function read(text: string): LyricsDocument {
     throw new ParseError("input contains no recognizable lys lyric lines");
   }
   const lines = makeLines(rows);
+  checkWordOrder(lines, "lys");
   const { meta, offset } = readTagMeta(tags, "lys");
   const agents: LyricsDocument["agents"] = [];
   const hasLeftAgent = lines.some((line) => line.agent === leftAgentId);

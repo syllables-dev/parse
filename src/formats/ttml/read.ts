@@ -12,6 +12,7 @@ import {
   ttmlUri,
   ttmUri,
 } from "@/formats/ttml/profile";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import { type XmlElement, XmlReader, xmlUri } from "@/internal/xml";
 import type { LyricsDocument, LyricsElementAttributes } from "@/types";
 
@@ -79,6 +80,7 @@ export function read(textSource: string): LyricsDocument {
     head.agents,
     rootFields.timing
   );
+  checkWordOrder(body.lines, "ttml");
   const lyricGenerationId =
     rootFields.lyricGenerationId ?? head.lyricGenerationId;
   if (

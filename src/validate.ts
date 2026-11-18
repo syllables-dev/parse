@@ -1,4 +1,4 @@
-import { outsideLine } from "@/internal/syllable-bounds";
+import { outsideLine, startsEarly } from "@/internal/syllable-bounds";
 import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
 function checkTrack(
@@ -7,9 +7,7 @@ function checkTrack(
   backing = false
 ): Problem[] {
   const problems: Problem[] = [];
-  let previousBegin: number | undefined;
-
-  for (const syllable of syllables) {
+  for (const [index, syllable] of syllables.entries()) {
     if (
       !(
         Number.isSafeInteger(syllable.begin) &&
@@ -22,7 +20,7 @@ function checkTrack(
         message: "syllable times must be integer milliseconds",
       });
     }
-    if (previousBegin !== undefined && syllable.begin < previousBegin) {
+    if (startsEarly(syllable, syllables[index - 1])) {
       problems.push({
         code: "syllable-out-of-order",
         id: syllable.id,
@@ -43,9 +41,7 @@ function checkTrack(
         message: "syllable extends outside its line",
       });
     }
-    previousBegin = syllable.begin;
   }
-
   return problems;
 }
 

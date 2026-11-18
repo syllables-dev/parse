@@ -22,6 +22,7 @@ import {
   projectedDocument,
 } from "@/internal/projections";
 import { projectedLines } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   foldSpacers,
   readRowHeader,
@@ -95,6 +96,7 @@ function readLines(text: string, tags: Map<string, string>): LyricsLine[] {
 export function read(text: string): LyricsDocument {
   const tags = new Map<string, string>();
   const lines = readLines(text, tags);
+  checkWordOrder(lines, "qrc");
   const { meta, offset } = readTagMeta(tags, "qrc");
   return shiftTimes(
     {

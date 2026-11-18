@@ -22,6 +22,7 @@ import {
   projectedDocument,
 } from "@/internal/projections";
 import { projectedLines } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   clockStamp,
   lastLineMs,
@@ -155,10 +156,12 @@ export function read(text: string): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags);
   const { meta, offset } = readTagMeta(tags, "eslrc");
+  const lines = makeLines(rows);
+  checkWordOrder(lines, "eslrc");
   return shiftTimes(
     {
       agents: [],
-      lines: makeLines(rows).map(trimLineEdges),
+      lines: lines.map(trimLineEdges),
       meta,
       timing: "word",
       version: 1,

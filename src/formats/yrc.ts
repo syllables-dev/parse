@@ -24,6 +24,7 @@ import {
   projectedDocument,
 } from "@/internal/projections";
 import { projectedLines } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   foldSpacers,
   readRowHeader,
@@ -150,6 +151,7 @@ export function read(text: string): LyricsDocument {
   const songwriters: string[] = [];
   const tags = new Map<string, string>();
   const lines = readLines(text, songwriters, tags);
+  checkWordOrder(lines, "yrc");
   const { meta, offset } = readTagMeta(tags, "yrc");
   for (const songwriter of meta.songwriters ?? []) {
     if (!songwriters.includes(songwriter)) {

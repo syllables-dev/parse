@@ -32,6 +32,7 @@ import {
   projectedLine,
   track,
 } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   clockStamp,
   lastLineMs,
@@ -168,6 +169,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const rows = readRows(text, tags, options.expandRepeats ?? false);
   const { meta, offset } = readTagMeta(tags, "lrc");
   const { lines, wordTimed } = makeLines(rows);
+  checkWordOrder(lines, "lrc");
   return shiftTimes(
     {
       agents: [],

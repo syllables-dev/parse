@@ -598,6 +598,31 @@ describe("public dispatch", () => {
     );
   });
 
+  test.each([
+    [
+      "qrc",
+      "[ti:Song]\n[1250,2750]One (1250,1750)Two (3000,1000)Back(1500,500)",
+    ],
+    ["yrc", "[1250,2750](1250,1750,0)One (3000,1000,0)Two (1500,500,0)Back"],
+    ["lys", "[4]One (1250,1750)Two (3000,1000)Back(1500,500)"],
+    [
+      "eslrc",
+      "[00:01.250]One [00:03.000]Two [00:04.000][00:01.500]Back[00:02.000]",
+    ],
+    ["lrc", "[00:01.250]<00:01.250>One <00:03.000>Two <00:01.500>Back"],
+    [
+      "ttml",
+      '<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"><head><metadata/></head><body dur="0:05.000"><div begin="0:01.250" end="0:04.000"><p begin="0:01.250" end="0:04.000"><span begin="0:01.250" end="0:03.000">One </span><span begin="0:03.000" end="0:04.000">Two </span><span begin="0:01.500" end="0:02.000">Back</span></p></div></body></tt>',
+    ],
+  ] satisfies [FormatId, string][])(
+    "rejects a %s word that starts before the word before it",
+    (format, source) => {
+      expect(() => read(source, format)).toThrow(
+        `${format} lyric line 1: word 3 starts before word 2`
+      );
+    }
+  );
+
   test("rejects repeat expansion for other readers", () => {
     expect(() =>
       read("[0,500]Hi(0,500)", "qrc", { expandRepeats: true })
