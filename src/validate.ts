@@ -1,6 +1,6 @@
+import { outsideLine } from "@/internal/syllable-bounds";
 import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
-// a backing run may start before its line, as an x-bg span does
 function checkTrack(
   line: LyricsLine,
   syllables: Syllable[],
@@ -36,7 +36,7 @@ function checkTrack(
         message: "syllable ends before it begins",
       });
     }
-    if ((!backing && syllable.begin < line.begin) || syllable.end > line.end) {
+    if (outsideLine(syllable, line, backing)) {
       problems.push({
         code: "syllable-outside-line",
         id: syllable.id,

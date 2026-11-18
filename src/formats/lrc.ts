@@ -10,24 +10,41 @@
  */
 
 import { ParseError } from "@/errors";
-import { readTag, writeTags } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
 import {
-  readOffset,
-  readStamp,
+  checkUnreadRow,
+  projectedTagMeta,
+  readTag,
+  readTagMeta,
+  tagProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
+import {
+  findLosses,
+  keepsWordTiming,
+  lostIf,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import {
+  alreadyWrapped,
+  primaryProblem,
+  projectedLine,
+  track,
+} from "@/internal/projections/line";
+import {
+  clockStamp,
+  lastLineMs,
+  readClock,
   shiftTimes,
   splitLines,
   writeStamp,
 } from "@/internal/timestamps";
-import {
-  checkLines,
-  checkText,
-  checkWrite,
-  hasLyricText,
-} from "@/internal/write-check";
+import { checkLines, checkText, checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
+  LyricsLine,
   ReadOptions,
   WriteOptions,
 } from "@/types";
@@ -38,10 +55,9 @@ interface LrcRow {
   order: number;
 }
 
-const lineStamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gy;
-const wordStamp = /<(\d+):(\d{1,2})(?:[.:](\d{1,3}))?>/gu;
-const reservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
-const lastLineMs = 5000;
+const lineStamp = new RegExp(String.raw`\[${clockStamp}\]`, "gy");
+const wordStamp = new RegExp(`<${clockStamp}>`, "gu");
+const reservedStamp = new RegExp(`<${clockStamp}>`, "u");
 
 export const capabilities = {
   agents: false,
@@ -59,27 +75,8 @@ export const capabilities = {
   translation: false,
 } satisfies FormatCapabilities;
 
-function readTime(marker: string) {
-  const colon = marker.indexOf(":");
-  const dot = marker.indexOf(".", colon + 1);
-  const secondColon = marker.indexOf(":", colon + 1);
-  const fraction = dot >= 0 ? dot : secondColon;
-  const end = marker.length - 1;
-  return readStamp(
-    marker.slice(1, colon),
-    marker.slice(colon + 1, fraction >= 0 ? fraction : end),
-    fraction >= 0 ? marker.slice(fraction + 1, end) : undefined
-  );
-}
-
 function readWords(body: string, lineEnd: number) {
-  wordStamp.lastIndex = 0;
-  const markers: RegExpExecArray[] = [];
-  let match = wordStamp.exec(body);
-  while (match) {
-    markers.push(match);
-    match = wordStamp.exec(body);
-  }
+  const markers = [...body.matchAll(wordStamp)];
   const first = markers.at(0);
   if (!first) {
     return [];
@@ -90,8 +87,8 @@ function readWords(body: string, lineEnd: number) {
   return markers.map((marker, index) => {
     const next = markers[index + 1];
     return {
-      begin: readTime(marker[0]),
-      end: next ? readTime(next[0]) : lineEnd,
+      begin: readClock(marker[0]),
+      end: next ? readClock(next[0]) : lineEnd,
       text: body.slice(
         marker.index + marker[0].length,
         next === undefined ? body.length : next.index
@@ -112,27 +109,15 @@ function readRows(
       tags.set(tag.name, tag.text);
       continue;
     }
-
-    lineStamp.lastIndex = 0;
-    const stamps: number[] = [];
-    let consumed = 0;
-    let timestamp = lineStamp.exec(raw);
-    while (timestamp) {
-      stamps.push(readTime(timestamp[0]));
-      consumed = lineStamp.lastIndex;
-      timestamp = lineStamp.exec(raw);
-    }
-    if (stamps.length === 0) {
-      if (raw.trim().length > 0 && raw.startsWith("[")) {
-        throw new ParseError(`malformed lrc line ${lineIndex + 1}`);
-      }
+    const stamps = [...raw.matchAll(lineStamp)];
+    const last = stamps.at(-1);
+    if (last === undefined) {
+      checkUnreadRow(raw, "lrc", lineIndex);
       continue;
     }
-
-    const body = raw.slice(consumed);
-    const selectedStamps = expandRepeats ? stamps : stamps.slice(0, 1);
-    for (const begin of selectedStamps) {
-      rows.push({ begin, body, order: lineIndex });
+    const body = raw.slice(last.index + last[0].length);
+    for (const stamp of expandRepeats ? stamps : stamps.slice(0, 1)) {
+      rows.push({ begin: readClock(stamp[0]), body, order: lineIndex });
     }
   }
   if (rows.length === 0) {
@@ -180,15 +165,7 @@ function makeLines(rows: LrcRow[]) {
 export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags, options.expandRepeats ?? false);
-  const offsetText = tags.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lrc");
-  const songwriters = tags.get("au");
-  const meta = {
-    ...(tags.has("al") && { album: tags.get("al") }),
-    ...(tags.has("ar") && { artist: tags.get("ar") }),
-    ...(songwriters !== undefined && { songwriters: [songwriters] }),
-    ...(tags.has("ti") && { title: tags.get("ti") }),
-  };
+  const { meta, offset } = readTagMeta(tags, "lrc");
   const { lines, wordTimed } = makeLines(rows);
   return shiftTimes(
     {
@@ -203,35 +180,100 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-function serialize(doc: LyricsDocument): string {
+// lrc infers each line end from the next line start, so any other end is rewritten
+function lineProblem(lines: LyricsLine[], line: LyricsLine, lineIndex: number) {
+  if (line.end !== (lines[lineIndex + 1]?.begin ?? line.begin + lastLineMs)) {
+    return `the end time of line ${line.id}`;
+  }
+  return primaryProblem(line);
+}
+
+function lineLosses(doc: LyricsDocument): ConversionLoss[] {
+  return lostIf(
+    "lineRange",
+    doc.lines.some((line, lineIndex) => {
+      const earlier = doc.lines[lineIndex - 1];
+      return (
+        (earlier !== undefined && line.begin <= earlier.begin) ||
+        lineProblem(doc.lines, line, lineIndex) !== undefined
+      );
+    })
+  );
+}
+
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric) => [
+    ...tagProblems(lyric.meta, "lrc").map((problem) => problem.loss),
+    ...lineLosses(lyric),
+  ]);
+}
+
+function foldedText(line: LyricsLine, primary: string) {
+  const backing = line.b
+    .map((syllable) => syllable.text)
+    .join("")
+    .trim();
+  if (backing.length === 0) {
+    return primary;
+  }
+  const wrapped = alreadyWrapped(backing) ? backing : `(${backing})`;
+  return primary.trim().length === 0
+    ? wrapped
+    : `${primary.trimEnd()} ${wrapped}`;
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  const wordTimed = keepsWordTiming(doc, capabilities);
+  const ordered = doc.lines
+    .map((line, order) => ({ line, order }))
+    .sort(
+      (left, right) =>
+        left.line.begin - right.line.begin || left.order - right.order
+    );
+  const lines = ordered.map(({ line }, lineIndex) => {
+    const { begin } = line;
+    const end = ordered[lineIndex + 1]?.line.begin ?? begin + lastLineMs;
+    const [primary] = track(line.p, { ...line, begin, end });
+    return {
+      ...projectedLine(line, capabilities, wordTimed),
+      begin,
+      end,
+      p: [
+        {
+          begin,
+          end,
+          id: primary?.id ?? `${line.id}w0`,
+          text: foldedText(line, primary?.text ?? ""),
+        },
+      ],
+    };
+  });
+  return projectedDocument(
+    doc,
+    capabilities,
+    lines,
+    projectedTagMeta(doc.meta)
+  );
+}
+
+export function write(
+  source: LyricsDocument,
+  options: WriteOptions = {}
+): string {
+  const doc = prepare(source, options, "lrc", losses, project);
   checkLines(doc, "lrc");
   checkWrite(doc, "lrc", capabilities);
   for (const [lineIndex, line] of doc.lines.entries()) {
-    const expectedEnd =
-      doc.lines[lineIndex + 1]?.begin ?? line.begin + lastLineMs;
-    if (line.end !== expectedEnd) {
-      throw new Error(`lrc cannot represent the end time of line ${line.id}`);
-    }
-    if (line.p.length > 1) {
-      throw new Error(
-        `lrc cannot represent the primary syllable count of line ${line.id}`
-      );
-    }
-    if (
-      line.p.some(
-        (syllable) => syllable.begin !== line.begin || syllable.end !== line.end
-      )
-    ) {
-      throw new Error(
-        `lrc cannot represent the primary syllable range of line ${line.id}`
-      );
+    const problem = lineProblem(doc.lines, line, lineIndex);
+    if (problem !== undefined) {
+      throw new Error(`lrc cannot represent ${problem}`);
     }
     for (const syllable of line.p) {
       checkText(syllable.text, "lrc", reservedStamp);
     }
   }
   return [
-    ...writeTags(doc.meta, "lrc"),
+    ...writeTags(doc.meta, tagProblems(doc.meta, "lrc")),
     ...doc.lines.map(
       (line) =>
         `[${writeStamp(line.begin)}]${line.p
@@ -239,24 +281,4 @@ function serialize(doc: LyricsDocument): string {
           .join("")}`
     ),
   ].join("\n");
-}
-
-export function write(
-  source: LyricsDocument,
-  options: WriteOptions = {}
-): string {
-  const prepared = prepare(source, capabilities, "lrc", options);
-  return serialize({
-    ...prepared,
-    lines: prepared.lines.filter(hasLyricText),
-  });
-}
-
-/**
- * writes LQE's positionally-aligned LRC translation rows.
- * unlike {@link write}, empty rows are kept so each row still lines up with
- * its LYS lyric line.
- */
-export function writeAlignedRows(doc: LyricsDocument): string {
-  return serialize(doc);
 }

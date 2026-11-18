@@ -5,6 +5,7 @@ import {
   splitRuns,
   untimed,
   unwrap,
+  unwrapText,
 } from "@/formats/ttml/lines";
 import {
   attr,
@@ -19,12 +20,12 @@ import {
   owned,
   readRange,
   readTime,
+  role,
   text,
   ttmlUri,
   ttmUri,
-  xmlUri,
 } from "@/formats/ttml/profile";
-import type { XmlElement, XmlNode } from "@/internal/xml";
+import { type XmlElement, type XmlNode, xmlUri } from "@/internal/xml";
 import type {
   AppleLyrics,
   LyricsDocument,
@@ -110,7 +111,7 @@ function readAudio(children: XmlElement[]) {
     throw new ParseError("ttml audio metadata must be empty");
   }
   const lyricOffset = attr(audio, "lyricOffset", null);
-  const role = attr(audio, "role", null);
+  const audioRole = attr(audio, "role", null);
   const spatial = attr(audio, "spatial", null);
   const offset =
     lyricOffset === undefined
@@ -126,11 +127,11 @@ function readAudio(children: XmlElement[]) {
           );
         })();
   // a spatial offset aligns the atmos master, so applying it would put every other stream about a second late
-  const spatialOffset = role === "spatial";
+  const spatialOffset = audioRole === "spatial";
   return {
     ...(offset === undefined || spatialOffset ? {} : { offset }),
     ...(offset !== undefined && spatialOffset ? { lyricOffset: offset } : {}),
-    ...(role === undefined ? {} : { role }),
+    ...(audioRole === undefined ? {} : { role: audioRole }),
     ...(spatial === undefined ? {} : { spatial: boolStart.test(spatial) }),
   };
 }
@@ -198,7 +199,6 @@ export function readHead(root: XmlElement): TtmlHead {
   const metadata = only(head, "metadata", ttmlUri);
   checkAttrs(metadata, [key(itunesUri, "lyricGenId")]);
   for (const child of elements(metadata)) {
-    // a foreign vocabulary is not ours to validate
     if (!owned(child.uri)) {
       continue;
     }
@@ -268,15 +268,7 @@ function parallelAttrs(
   if (agent !== undefined && !agentIds.has(agent)) {
     throw new ParseError(`unknown ttml agent ${agent}`);
   }
-  const namespacedRole = attr(textLine, "role", ttmUri);
-  const plainRole = attr(textLine, "role", null);
-  if (
-    namespacedRole !== undefined &&
-    plainRole !== undefined &&
-    namespacedRole !== plainRole
-  ) {
-    throw new ParseError("conflicting roles on parallel ttml text");
-  }
+  const roleValue = role(textLine);
   const begin = attr(textLine, "begin", null);
   const end = attr(textLine, "end", null);
   if ((begin === undefined) !== (end === undefined)) {
@@ -290,9 +282,7 @@ function parallelAttrs(
     ...(agent === undefined ? {} : { agent }),
     ...range,
     ...(parenthesis === "keep" ? { keepParentheses: true } : {}),
-    ...((namespacedRole ?? plainRole) === undefined
-      ? {}
-      : { role: namespacedRole ?? plainRole }),
+    ...(roleValue === undefined ? {} : { role: roleValue }),
     ...(xmlId === undefined ? {} : { xmlId }),
   };
 }
@@ -331,42 +321,33 @@ function addTranslation(
   }
   const backingRun = runs.backing;
   let backingWords: Syllable[] | undefined;
-  let keepBacking = false;
   let backing: string | undefined;
   if (backingRun !== null) {
-    const rawBacking = backingRun.nodes.some((node) => node.kind === "element")
-      ? readWordTrack(
-          backingRun.nodes,
-          line,
-          offset,
-          `${line.id}tb`,
-          false,
-          agentIds,
-          false,
-          timing === "line"
+    backingWords = backingRun.nodes.some((node) => node.kind === "element")
+      ? unwrap(
+          readWordTrack(
+            backingRun.nodes,
+            line,
+            offset,
+            `${line.id}tb`,
+            false,
+            agentIds,
+            false,
+            timing === "line"
+          ),
+          backingRun.keepParentheses
         )
       : undefined;
-    backingWords =
-      rawBacking === undefined
-        ? undefined
-        : unwrap(rawBacking, backingRun.keepParentheses);
-    const backingText =
-      rawBacking === undefined
-        ? untimed(backingRun.nodes)
-        : rawBacking.map((word) => word.text).join("");
-    if (!(backingText.startsWith("(") && backingText.endsWith(")"))) {
-      throw new ParseError("ttml backing text requires wrapping parentheses");
-    }
-    backing = backingRun.keepParentheses
-      ? backingText
-      : backingText.slice(1, -1);
-    keepBacking = backingRun.keepParentheses;
+    backing =
+      backingWords === undefined
+        ? unwrapText(untimed(backingRun.nodes), backingRun.keepParentheses)
+        : backingWords.map((word) => word.text).join("");
   }
   line.translations = {
     ...line.translations,
     [language]: {
       ...(backing === undefined ? {} : { b: backing }),
-      ...(keepBacking ? { bKeepParentheses: true } : {}),
+      ...(backingRun?.keepParentheses ? { bKeepParentheses: true } : {}),
       ...(backingWords === undefined ? {} : { bWords: backingWords }),
       ...fields,
       p:

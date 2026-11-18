@@ -6,25 +6,35 @@
  */
 
 import { ParseError } from "@/errors";
-import { checkMetaText, readTag } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
 import {
-  readOffset,
-  readStamp,
+  checkUnreadRow,
+  projectedTagMeta,
+  readTag,
+  readTagMeta,
+  tagProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
+import {
+  findLosses,
+  keepsWordTiming,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import { projectedLines } from "@/internal/projections/line";
+import {
+  clockStamp,
+  lastLineMs,
+  readClock,
   shiftTimes,
   splitLines,
   writeStamp,
 } from "@/internal/timestamps";
-import {
-  checkLines,
-  checkText,
-  checkWrite,
-  hasLyricText,
-} from "@/internal/write-check";
+import { checkLines, checkText, checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
-  ReadOptions,
+  LyricsLine,
   WriteOptions,
 } from "@/types";
 
@@ -38,9 +48,8 @@ interface EslrcRow {
   following: EslrcMarker[];
 }
 
-const stamp = /\[(\d+):(\d{1,2})(?:[.:](\d{1,3}))?\]/gu;
-const reservedStamp = /\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
-const lastLineMs = 5000;
+const stamp = new RegExp(String.raw`\[${clockStamp}\]`, "gu");
+const reservedStamp = new RegExp(String.raw`\[${clockStamp}\]`, "u");
 
 export const capabilities = {
   agents: false,
@@ -66,28 +75,12 @@ function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
       tags.set(tag.name, tag.text);
       continue;
     }
-
-    stamp.lastIndex = 0;
-    const matches: RegExpExecArray[] = [];
-    let match = stamp.exec(physicalLine);
-    while (match) {
-      matches.push(match);
-      match = stamp.exec(physicalLine);
-    }
+    const matches = [...physicalLine.matchAll(stamp)];
     const firstAt = matches.at(0)?.index;
     const [first, ...following] = matches.map((marker, markerIndex) => {
-      const colon = marker[0].indexOf(":");
-      const dot = marker[0].indexOf(".", colon + 1);
-      const secondColon = marker[0].indexOf(":", colon + 1);
-      const fraction = dot >= 0 ? dot : secondColon;
-      const end = marker[0].length - 1;
       const next = matches[markerIndex + 1];
       return {
-        begin: readStamp(
-          marker[0].slice(1, colon),
-          marker[0].slice(colon + 1, fraction >= 0 ? fraction : end),
-          fraction >= 0 ? marker[0].slice(fraction + 1, end) : undefined
-        ),
+        begin: readClock(marker[0]),
         text: physicalLine.slice(
           marker.index + marker[0].length,
           next === undefined ? physicalLine.length : next.index
@@ -95,9 +88,7 @@ function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
       };
     });
     if (!first) {
-      if (physicalLine.trim().length > 0 && physicalLine.startsWith("[")) {
-        throw new ParseError(`malformed eslrc line ${lineIndex + 1}`);
-      }
+      checkUnreadRow(physicalLine, "eslrc", lineIndex);
       continue;
     }
     if (firstAt !== 0) {
@@ -107,7 +98,6 @@ function readRows(text: string, tags: Map<string, string>): EslrcRow[] {
     }
     rows.push({ first, following });
   }
-
   if (rows.length === 0) {
     throw new ParseError("input contains no recognizable eslrc lyric lines");
   }
@@ -160,25 +150,10 @@ function makeLines(rows: EslrcRow[]) {
   });
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(text: string): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags);
-  const album = tags.get("al");
-  const artist = tags.get("ar");
-  const offsetText = tags.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "eslrc");
-  const songwriter = tags.get("au");
-  const title = tags.get("ti");
-  const meta = {
-    ...(album !== undefined && { album }),
-    ...(artist !== undefined && { artist }),
-    ...(songwriter !== undefined && { songwriters: [songwriter] }),
-    ...(title !== undefined && { title }),
-  };
-
+  const { meta, offset } = readTagMeta(tags, "eslrc");
   return shiftTimes(
     {
       agents: [],
@@ -192,65 +167,66 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric) =>
+    tagProblems(lyric.meta, "eslrc").map((problem) => problem.loss)
+  );
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  return projectedDocument(
+    doc,
+    capabilities,
+    projectedLines(doc, capabilities, keepsWordTiming(doc, capabilities)),
+    projectedTagMeta(doc.meta)
+  );
+}
+
+function writeLine(line: LyricsLine) {
+  const emptySyllables = line.p.filter(
+    (syllable) => syllable.text.length === 0
+  );
+  if (
+    emptySyllables.length > 0 &&
+    !(
+      line.p.length === 1 &&
+      emptySyllables[0]?.begin === line.begin &&
+      emptySyllables[0]?.end === line.end
+    )
+  ) {
+    throw new Error(
+      `eslrc cannot represent empty syllables in line ${line.id}`
+    );
+  }
+  let currentTime = line.begin;
+  let serialized = `[${writeStamp(line.begin)}]`;
+  for (const syllable of line.p) {
+    if (syllable.begin !== currentTime) {
+      serialized += `[${writeStamp(syllable.begin)}]`;
+    }
+    serialized += `${syllable.text}[${writeStamp(syllable.end)}]`;
+    currentTime = syllable.end;
+  }
+  if (currentTime !== line.end) {
+    serialized += `[${writeStamp(line.end)}]`;
+  }
+  return serialized;
+}
+
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const prepared = prepare(source, capabilities, "eslrc", options);
-  const doc = { ...prepared, lines: prepared.lines.filter(hasLyricText) };
+  const doc = prepare(source, options, "eslrc", losses, project);
   checkLines(doc, "eslrc");
   checkWrite(doc, "eslrc", capabilities);
-  checkMetaText(doc.meta, "eslrc");
   for (const line of doc.lines) {
     for (const syllable of line.p) {
       checkText(syllable.text, "eslrc", reservedStamp);
     }
   }
-  if (doc.meta.songwriters?.length === 0) {
-    throw new Error("eslrc cannot represent an empty songwriter list");
-  }
-  if (doc.meta.songwriters?.some((songwriter) => songwriter.length === 0)) {
-    throw new Error("eslrc cannot represent an empty songwriter name");
-  }
-  if (doc.meta.songwriters && doc.meta.songwriters.length > 1) {
-    throw new Error("eslrc cannot represent multiple songwriters");
-  }
   return [
-    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
-    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
-    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    ...(doc.meta.songwriters?.[0] === undefined
-      ? []
-      : [`[au:${doc.meta.songwriters[0]}]`]),
-    ...doc.lines.map((line) => {
-      const emptySyllables = line.p.filter(
-        (syllable) => syllable.text.length === 0
-      );
-      if (
-        emptySyllables.length > 0 &&
-        !(
-          line.p.length === 1 &&
-          emptySyllables[0]?.begin === line.begin &&
-          emptySyllables[0]?.end === line.end
-        )
-      ) {
-        throw new Error(
-          `eslrc cannot represent empty syllables in line ${line.id}`
-        );
-      }
-      let currentTime = line.begin;
-      let serialized = `[${writeStamp(line.begin)}]`;
-      for (const syllable of line.p) {
-        if (syllable.begin !== currentTime) {
-          serialized += `[${writeStamp(syllable.begin)}]`;
-        }
-        serialized += `${syllable.text}[${writeStamp(syllable.end)}]`;
-        currentTime = syllable.end;
-      }
-      if (currentTime !== line.end) {
-        serialized += `[${writeStamp(line.end)}]`;
-      }
-      return serialized;
-    }),
+    ...writeTags(doc.meta, tagProblems(doc.meta, "eslrc")),
+    ...doc.lines.map(writeLine),
   ].join("\n");
 }

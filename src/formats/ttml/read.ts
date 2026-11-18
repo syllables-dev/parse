@@ -8,16 +8,12 @@ import {
   locale,
   needAttr,
   only,
+  role,
   ttmlUri,
   ttmUri,
-  xmlUri,
 } from "@/formats/ttml/profile";
-import { type XmlElement, XmlReader } from "@/internal/xml";
-import type {
-  LyricsDocument,
-  LyricsElementAttributes,
-  ReadOptions,
-} from "@/types";
+import { type XmlElement, XmlReader, xmlUri } from "@/internal/xml";
+import type { LyricsDocument, LyricsElementAttributes } from "@/types";
 
 function readTiming(root: XmlElement): {
   language?: string;
@@ -28,10 +24,8 @@ function readTiming(root: XmlElement): {
   if (!is(root, "tt", ttmlUri)) {
     throw new ParseError("ttml root must be <tt>");
   }
-  const language = attr(root, "lang", xmlUri);
-  if (language !== undefined) {
-    locale(root);
-  }
+  const language =
+    attr(root, "lang", xmlUri) === undefined ? undefined : locale(root);
   const timingText = needAttr(root, "timing", itunesUri).toLowerCase();
   let timing: LyricsDocument["timing"];
   if (timingText === "line") {
@@ -44,21 +38,11 @@ function readTiming(root: XmlElement): {
     throw new ParseError(`unsupported ttml timing ${timingText}`);
   }
   const agent = attr(root, "agent", ttmUri);
-  const namespacedRole = attr(root, "role", ttmUri);
-  const plainRole = attr(root, "role", null);
-  if (
-    namespacedRole !== undefined &&
-    plainRole !== undefined &&
-    namespacedRole !== plainRole
-  ) {
-    throw new ParseError("conflicting roles on ttml root");
-  }
+  const rootRole = role(root);
   const xmlId = attr(root, "id", xmlUri);
   const rootFields: LyricsElementAttributes = {
     ...(agent === undefined ? {} : { agent }),
-    ...((namespacedRole ?? plainRole) === undefined
-      ? {}
-      : { role: namespacedRole ?? plainRole }),
+    ...(rootRole === undefined ? {} : { role: rootRole }),
     ...(xmlId === undefined ? {} : { xmlId }),
   };
   return {
@@ -69,13 +53,7 @@ function readTiming(root: XmlElement): {
   };
 }
 
-export function read(
-  textSource: string,
-  options: ReadOptions = {}
-): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(textSource: string): LyricsDocument {
   const root = new XmlReader(textSource).read();
   const rootFields = readTiming(root);
   const head = readHead(root);

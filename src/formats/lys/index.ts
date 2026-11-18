@@ -6,35 +6,35 @@
  */
 
 import { ParseError } from "@/errors";
-import { lysSideLines } from "@/formats/lys/agents";
-import { readTag, writeTags } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
+import { fittedLines, rangeLosses, writeRows } from "@/formats/lys/rows";
+import {
+  checkUnreadRow,
+  projectedTagMeta,
+  readTag,
+  readTagMeta,
+  tagProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
+import {
+  findLosses,
+  keepsWordTiming,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import { projectedLines } from "@/internal/projections/line";
 import {
   foldSpacers,
   readTimedWords,
   type TimedWord,
+  toSyllables,
 } from "@/internal/timed-words";
-import {
-  checkTime,
-  readOffset,
-  shiftTimes,
-  splitLines,
-  toInt,
-} from "@/internal/timestamps";
-import {
-  checkLines,
-  checkText,
-  checkWrite,
-  hasLyricText,
-} from "@/internal/write-check";
+import { shiftTimes, splitLines, toInt } from "@/internal/timestamps";
+import { checkLines, checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
-  FormatId,
   LyricsDocument,
   LyricsLine,
-  LyricsMeta,
-  ReadOptions,
-  Syllable,
   WriteOptions,
 } from "@/types";
 
@@ -48,7 +48,6 @@ interface LysRow {
 }
 
 const lineHeader = /^\[(\d+)\](.*)$/u;
-const reservedStamp = /\(\d+,\d+\)/u;
 const whitespace = /^\s+$/u;
 const leftAgentId = "v1";
 const rightAgentId = "v2";
@@ -69,20 +68,6 @@ export const capabilities = {
   translation: false,
 } satisfies FormatCapabilities;
 
-function makeTrack(
-  words: TimedWord[],
-  lineId: string,
-  track: "b" | "w",
-  firstIndex = 0
-): Syllable[] {
-  return words.map((word, wordIndex) => ({
-    begin: word.begin,
-    end: word.end,
-    id: `${lineId}${track}${firstIndex + wordIndex}`,
-    text: word.text,
-  }));
-}
-
 function readRow(
   raw: string,
   lineIndex: number,
@@ -95,9 +80,7 @@ function readRow(
   }
   const header = lineHeader.exec(raw);
   if (!header) {
-    if (raw.trim().length > 0 && raw.startsWith("[")) {
-      throw new ParseError(`malformed lys line ${lineIndex + 1}`);
-    }
+    checkUnreadRow(raw, "lys", lineIndex);
     return null;
   }
   const close = header[0].indexOf("]");
@@ -115,8 +98,7 @@ function readRow(
   const words = foldSpacers(
     readTimedWords(body, lineIndex + 1, 0, 0),
     "lys",
-    lineIndex + 1,
-    (word) => word.begin === word.end
+    lineIndex + 1
   );
   if (words.length === 0) {
     throw new ParseError(`lys line ${lineIndex + 1} has no timed syllables`);
@@ -163,27 +145,25 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
     if (isBacking && mainLine?.agent === row.agent) {
       mainLine.begin = Math.min(mainLine.begin, row.begin);
       mainLine.end = Math.max(mainLine.end, row.end);
-      mainLine.b.push(...makeTrack(words, mainLine.id, "b", mainLine.b.length));
+      mainLine.b.push(
+        ...toSyllables(words, `${mainLine.id}b`, mainLine.b.length)
+      );
       continue;
     }
-
     const lineId = `l${rowIndex}`;
     lines.push({
       agent: row.agent,
-      b: isBacking ? makeTrack(words, lineId, "b") : [],
+      b: isBacking ? toSyllables(words, `${lineId}b`) : [],
       begin: row.begin,
       end: row.end,
       id: lineId,
-      p: isBacking ? [] : makeTrack(words, lineId, "w"),
+      p: isBacking ? [] : toSyllables(words, `${lineId}w`),
     });
   }
   return lines;
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(text: string): LyricsDocument {
   const tags = new Map<string, string>();
   const rows: LysRow[] = [];
   for (const [lineIndex, raw] of splitLines(text).entries()) {
@@ -195,31 +175,19 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   if (rows.length === 0) {
     throw new ParseError("input contains no recognizable lys lyric lines");
   }
-  const offsetText = tags.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lys");
   const lines = makeLines(rows);
-  const album = tags.get("al");
-  const artist = tags.get("ar");
-  const songwriter = tags.get("au");
-  const title = tags.get("ti");
+  const { meta, offset } = readTagMeta(tags, "lys");
   const agents: LyricsDocument["agents"] = [];
   const hasLeftAgent = lines.some((line) => line.agent === leftAgentId);
-  const hasRightAgent = lines.some((line) => line.agent === rightAgentId);
   if (hasLeftAgent) {
     agents.push({ id: leftAgentId, type: "person" });
   }
-  if (hasRightAgent) {
+  if (lines.some((line) => line.agent === rightAgentId)) {
     agents.push({
       id: rightAgentId,
       type: hasLeftAgent ? "person" : "other",
     });
   }
-  const meta: LyricsMeta = {
-    ...(album !== undefined && { album }),
-    ...(artist !== undefined && { artist }),
-    ...(songwriter !== undefined && { songwriters: [songwriter] }),
-    ...(title !== undefined && { title }),
-  };
   return shiftTimes(
     {
       agents,
@@ -233,57 +201,35 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
-function writeRow(property: number, syllables: Syllable[], wrap: boolean) {
-  return `[${property}]${syllables
-    .map((syllable, wordIndex) => {
-      const duration = syllable.end - syllable.begin;
-      checkTime(duration, `syllable ${syllable.id} duration`);
-      const prefix = wrap && wordIndex === 0 ? "(" : "";
-      const suffix = wrap && wordIndex === syllables.length - 1 ? ")" : "";
-      return `${prefix}${syllable.text}${suffix}(${syllable.begin},${duration})`;
-    })
-    .join("")}`;
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric) => [
+    ...tagProblems(lyric.meta, "lys").map((problem) => problem.loss),
+    ...rangeLosses(lyric),
+  ]);
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  return projectedDocument(
+    doc,
+    capabilities,
+    projectedLines(
+      { ...doc, lines: fittedLines(doc) },
+      capabilities,
+      keepsWordTiming(doc, capabilities)
+    ),
+    projectedTagMeta(doc.meta)
+  );
 }
 
 export function write(
   source: LyricsDocument,
-  options: WriteOptions = {},
-  // lqe delegates its lyrics section here and reports errors under its own name
-  format: FormatId = "lys"
+  options: WriteOptions = {}
 ): string {
-  const prepared = prepare(source, capabilities, format, options);
-  const doc = {
-    ...prepared,
-    lines: prepared.lines.filter(hasLyricText),
-  };
-  checkLines(doc, format);
-  checkWrite(doc, format, capabilities);
-  for (const line of doc.lines) {
-    for (const syllable of [...line.p, ...line.b]) {
-      checkText(syllable.text, format, reservedStamp);
-    }
-  }
-  for (const line of doc.lines) {
-    if (line.p.length === 0 && line.b.length > 0) {
-      throw new Error(`${format} cannot preserve backing-only line ${line.id}`);
-    }
-  }
-  const lyricRows: string[] = [];
-  for (const [line, side] of lysSideLines(doc)) {
-    const syllables = [...line.p, ...line.b];
-    const begin = Math.min(...syllables.map((syllable) => syllable.begin));
-    const end = Math.max(...syllables.map((syllable) => syllable.end));
-    if (begin !== line.begin || end !== line.end) {
-      throw new Error(
-        `${format} cannot represent the range of line ${line.id}`
-      );
-    }
-    if (line.p.length > 0) {
-      lyricRows.push(writeRow(side + 3, line.p, false));
-    }
-    if (line.b.length > 0) {
-      lyricRows.push(writeRow(side + 6, line.b, true));
-    }
-  }
-  return [...writeTags(doc.meta, format), ...lyricRows].join("\n");
+  const doc = prepare(source, options, "lys", losses, project);
+  checkLines(doc, "lys");
+  checkWrite(doc, "lys", capabilities);
+  const rows = writeRows(doc, "lys");
+  return [...writeTags(doc.meta, tagProblems(doc.meta, "lys")), ...rows].join(
+    "\n"
+  );
 }

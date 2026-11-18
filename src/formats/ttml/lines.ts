@@ -10,11 +10,18 @@ import {
   owned,
   readRange,
   readTime,
+  role,
   shiftTime,
   ttmlUri,
   ttmUri,
 } from "@/formats/ttml/profile";
-import type { XmlElement, XmlNode, XmlText } from "@/internal/xml";
+import { outsideLine } from "@/internal/syllable-bounds";
+import {
+  type XmlElement,
+  type XmlNode,
+  type XmlText,
+  xmlUri,
+} from "@/internal/xml";
 import type {
   LyricsDocument,
   LyricsLine,
@@ -75,7 +82,6 @@ function blockNodes(parent: XmlElement) {
     }
     node.text = normalized;
   }
-  // a run still open at the block edge is trailing
   const trailing = running
     ? texts.findLast((node) => node.text.length > 0)
     : undefined;
@@ -90,16 +96,6 @@ function isSpan(element: XmlElement) {
     element.local === "span" &&
     (element.uri === ttmlUri || element.uri === itunesUri)
   );
-}
-
-function role(element: XmlElement) {
-  const namespaced = attr(element, "role", ttmUri);
-  const plain = attr(element, "role", null);
-  if (namespaced !== undefined && plain !== undefined && namespaced !== plain) {
-    throw new ParseError(`conflicting roles on <${element.name}>`);
-  }
-  const value = namespaced ?? plain;
-  return value;
 }
 
 function agentRef(
@@ -197,7 +193,7 @@ function readWord(
       ? { begin: fallbackBegin, end: fallbackEnd }
       : readRange(element, offset, `syllable ${id}`, true);
   const agent = agentRef(element, inheritedAgent, agentIds);
-  const xmlId = attr(element, "id", "http://www.w3.org/XML/1998/namespace");
+  const xmlId = attr(element, "id", xmlUri);
   const word = {
     ...(agent === null || agent === inheritedAgent ? {} : { agent }),
     ...range,
@@ -298,11 +294,19 @@ export function readWords(
     : syllables;
 }
 
-export function unwrap(syllables: Syllable[], keepParentheses = false) {
-  const lyric = syllables.map((syllable) => syllable.text).join("");
+function checkWrapped(lyric: string) {
   if (!(lyric.startsWith("(") && lyric.endsWith(")"))) {
     throw new ParseError("ttml backing vocals require wrapping parentheses");
   }
+}
+
+export function unwrapText(lyric: string, keepParentheses: boolean) {
+  checkWrapped(lyric);
+  return keepParentheses ? lyric : lyric.slice(1, -1);
+}
+
+export function unwrap(syllables: Syllable[], keepParentheses = false) {
+  checkWrapped(syllables.map((syllable) => syllable.text).join(""));
   if (keepParentheses) {
     return syllables;
   }
@@ -372,15 +376,13 @@ export function untimed(nodes: XmlNode[]) {
   return lyric;
 }
 
-// an x-bg span carries its own begin, so a backing run may start before its line
 export function checkTrack(
   syllables: Syllable[],
   line: Pick<LyricsLine, "begin" | "end" | "id">,
   backing = false
 ) {
-  const outside = syllables.find(
-    (syllable) =>
-      (!backing && syllable.begin < line.begin) || syllable.end > line.end
+  const outside = syllables.find((syllable) =>
+    outsideLine(syllable, line, backing)
   );
   if (outside) {
     throw new ParseError(
@@ -451,6 +453,7 @@ function readLine(
       ? { begin: 0, end: 0 }
       : readRange(paragraph, offset, `line ${id}`);
   const roleValue = role(paragraph);
+  const xmlId = attr(paragraph, "id", xmlUri);
   // a paragraph carrying the role is backing in its entirety, so it never splits into two runs
   const whole = roleValue === "x-bg" ? blockNodes(paragraph) : [];
   const runs =
@@ -489,12 +492,7 @@ function readLine(
       : {}),
     p: readTrack(runs.primary, line, timing, offset, `${id}w`, agentIds),
     ...(roleValue === undefined ? {} : { role: roleValue }),
-    ...(attr(paragraph, "id", "http://www.w3.org/XML/1998/namespace") ===
-    undefined
-      ? {}
-      : {
-          xmlId: attr(paragraph, "id", "http://www.w3.org/XML/1998/namespace"),
-        }),
+    ...(xmlId === undefined ? {} : { xmlId }),
   };
   if (lyricLine.p.length === 0 && lyricLine.b.length > 0) {
     throw new ParseError(
@@ -557,7 +555,7 @@ function readDiv(
     );
   });
   const roleValue = role(division);
-  const xmlId = attr(division, "id", "http://www.w3.org/XML/1998/namespace");
+  const xmlId = attr(division, "id", xmlUri);
   const part = attr(division, "songPart", itunesUri);
   return {
     lines,
@@ -635,7 +633,7 @@ export function readBody(
     throw new ParseError("ttml body duration ends before its lyrics");
   }
   const roleValue = role(body);
-  const xmlId = attr(body, "id", "http://www.w3.org/XML/1998/namespace");
+  const xmlId = attr(body, "id", xmlUri);
   const defaultBegin =
     lines.length === 0
       ? undefined

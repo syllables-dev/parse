@@ -1,45 +1,55 @@
 import { ParseError } from "@/errors";
 import {
   capabilities as eslrcCapabilities,
+  losses as eslrcLosses,
   read as readEslrc,
   write as writeEslrc,
 } from "@/formats/eslrc";
 import {
+  containerMark,
   capabilities as lqeCapabilities,
+  losses as lqeLosses,
   read as readLqe,
   write as writeLqe,
 } from "@/formats/lqe";
 import {
   capabilities as lrcCapabilities,
+  losses as lrcLosses,
   read as readLrc,
   write as writeLrc,
 } from "@/formats/lrc";
 import {
   capabilities as lylCapabilities,
+  losses as lylLosses,
   read as readLyl,
   write as writeLyl,
 } from "@/formats/lyl";
 import {
   capabilities as lysCapabilities,
+  losses as lysLosses,
   read as readLys,
   write as writeLys,
 } from "@/formats/lys";
 import {
   capabilities as qrcCapabilities,
+  losses as qrcLosses,
   read as readQrc,
   write as writeQrc,
 } from "@/formats/qrc";
 import {
   read as readTtml,
   capabilities as ttmlCapabilities,
+  losses as ttmlLosses,
   write as writeTtml,
 } from "@/formats/ttml";
+import { itunesUri, ttmlUri } from "@/formats/ttml/profile";
 import {
   read as readYrc,
   write as writeYrc,
   capabilities as yrcCapabilities,
+  losses as yrcLosses,
 } from "@/formats/yrc";
-import { losses as findLosses } from "@/internal/projections";
+import { clockStamp } from "@/internal/timestamps";
 import type {
   ConversionLoss,
   ConvertOptions,
@@ -54,22 +64,53 @@ import type {
 const codecs = {
   eslrc: {
     capabilities: eslrcCapabilities,
+    losses: eslrcLosses,
     read: readEslrc,
     write: writeEslrc,
   },
-  lqe: { capabilities: lqeCapabilities, read: readLqe, write: writeLqe },
-  lrc: { capabilities: lrcCapabilities, read: readLrc, write: writeLrc },
-  lyl: { capabilities: lylCapabilities, read: readLyl, write: writeLyl },
-  lys: { capabilities: lysCapabilities, read: readLys, write: writeLys },
-  qrc: { capabilities: qrcCapabilities, read: readQrc, write: writeQrc },
+  lqe: {
+    capabilities: lqeCapabilities,
+    losses: lqeLosses,
+    read: readLqe,
+    write: writeLqe,
+  },
+  lrc: {
+    capabilities: lrcCapabilities,
+    losses: lrcLosses,
+    read: readLrc,
+    write: writeLrc,
+  },
+  lyl: {
+    capabilities: lylCapabilities,
+    losses: lylLosses,
+    read: readLyl,
+    write: writeLyl,
+  },
+  lys: {
+    capabilities: lysCapabilities,
+    losses: lysLosses,
+    read: readLys,
+    write: writeLys,
+  },
+  qrc: {
+    capabilities: qrcCapabilities,
+    losses: qrcLosses,
+    read: readQrc,
+    write: writeQrc,
+  },
   ttml: {
     capabilities: ttmlCapabilities,
+    losses: ttmlLosses,
     read: readTtml,
     write: writeTtml,
   },
-  yrc: { capabilities: yrcCapabilities, read: readYrc, write: writeYrc },
+  yrc: {
+    capabilities: yrcCapabilities,
+    losses: yrcLosses,
+    read: readYrc,
+    write: writeYrc,
+  },
 };
-const lqeMark = "[Lyricify Quick Export]";
 const ttmlRoot =
   /^(?:\s*(?:<\?[\s\S]*?\?>|<!--[\s\S]*?-->))*\s*<(?:[\w.-]+:)?tt(?=\s|>)[^>]*>/u;
 const yrcRow = /^\[\d+,\d+\]\(\d+,\d+,\d+\)/u;
@@ -77,11 +118,11 @@ const qrcRow = /^\[\d+,\d+\].*\(\d+,\d+\)/u;
 const lysRow = /^\[\d+\].*\(\d+,\d+\)/u;
 const lylTypeTag = /^\[type:\s*LyricifyLines\s*\]$/iu;
 const lylRow = /^\[\d+,\d+\]/u;
-const eslrcRow =
-  /^\[\d+:\d{1,2}(?:[.:]\d{1,3})?\][^[]+\[\d+:\d{1,2}(?:[.:]\d{1,3})?\]/u;
-const lrcRow = /^(?:\[\d+:\d{1,2}(?:[.:]\d{1,3})?\])+/u;
-const ttmlUri = "http://www.w3.org/ns/ttml";
-const appleUri = "http://music.apple.com/lyric-ttml-internal";
+const eslrcRow = new RegExp(
+  String.raw`^\[${clockStamp}\][^[]+\[${clockStamp}\]`,
+  "u"
+);
+const lrcRow = new RegExp(String.raw`^(?:\[${clockStamp}\])+`, "u");
 const timingAttr = /\s[\w.-]+:timing\s*=/u;
 const lineBreak = /\r\n|\n|\r/u;
 
@@ -93,13 +134,13 @@ const lineBreak = /\r\n|\n|\r/u;
 export function detect(text: string): FormatId | null {
   const source = text.startsWith("\uFEFF") ? text.slice(1) : text;
   const lines = source.split(lineBreak);
-  if (lines.find((line) => line.trim().length > 0)?.trim() === lqeMark) {
+  if (lines.find((line) => line.trim().length > 0)?.trim() === containerMark) {
     return "lqe";
   }
   const root = ttmlRoot.exec(source)?.[0];
   if (
     root?.includes(ttmlUri) &&
-    root.includes(appleUri) &&
+    root.includes(itunesUri) &&
     timingAttr.test(root)
   ) {
     return "ttml";
@@ -145,7 +186,13 @@ export function read(
   format: FormatId,
   options: ReadOptions = {}
 ): LyricsDocument {
-  return codecs[format].read(text, options);
+  if (format === "lrc") {
+    return readLrc(text, options);
+  }
+  if (options.expandRepeats) {
+    throw new Error("expandRepeats is available for lrc input");
+  }
+  return codecs[format].read(text);
 }
 
 /** writes a document with the selected format codec. */
@@ -171,7 +218,7 @@ export function losses(
   doc: LyricsDocument,
   format: FormatId
 ): ConversionLoss[] {
-  return findLosses(doc, format, codecs[format].capabilities);
+  return codecs[format].losses(doc);
 }
 
 /** returns an isolated snapshot of the features preserved by the selected format writer. */

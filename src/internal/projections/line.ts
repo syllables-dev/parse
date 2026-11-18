@@ -1,4 +1,9 @@
-import type { FormatCapabilities, LyricsLine, Syllable } from "@/types";
+import type {
+  FormatCapabilities,
+  LyricsDocument,
+  LyricsLine,
+  Syllable,
+} from "@/types";
 
 export function track(syllables: Syllable[], line: LyricsLine) {
   const [first] = syllables;
@@ -16,13 +21,39 @@ export function track(syllables: Syllable[], line: LyricsLine) {
 }
 
 // a line-timed writer emits one syllable spanning the line, so anything else is collapsed away
-export function primaryCoversLine(line: LyricsLine) {
-  const [first] = line.p;
-  return (
-    line.p.length <= 1 &&
-    (first === undefined ||
-      (first.begin === line.begin && first.end === line.end))
-  );
+export function primaryProblem(line: LyricsLine) {
+  if (line.p.length > 1) {
+    return `the primary syllable count of line ${line.id}`;
+  }
+  if (
+    line.p.some(
+      (syllable) => syllable.begin !== line.begin || syllable.end !== line.end
+    )
+  ) {
+    return `the primary syllable range of line ${line.id}`;
+  }
+}
+
+export function alreadyWrapped(text: string) {
+  return text.startsWith("(") && text.endsWith(")");
+}
+
+export function projectedLine(
+  line: LyricsLine,
+  capabilities: FormatCapabilities,
+  wordTimed: boolean
+): LyricsLine {
+  const { pronunciations, translations, ...shared } = line;
+  return {
+    ...shared,
+    agent: capabilities.agents === false ? null : line.agent,
+    b: capabilities.backing ? projectedTrack(line.b, line, wordTimed) : [],
+    p: projectedTrack(line.p, line, wordTimed),
+    ...(capabilities.pronunciation &&
+      pronunciations !== undefined && { pronunciations }),
+    ...(capabilities.translation &&
+      translations !== undefined && { translations }),
+  };
 }
 
 function projectedTrack(
@@ -31,10 +62,6 @@ function projectedTrack(
   wordTimed: boolean
 ) {
   return wordTimed ? syllables : track(syllables, line);
-}
-
-export function alreadyWrapped(text: string) {
-  return text.startsWith("(") && text.endsWith(")");
 }
 
 // a format without a backing track keeps the words as their own parenthesized line,
@@ -47,8 +74,6 @@ export function backingLine(
   if (capabilities.backing || line.b.length === 0) {
     return;
   }
-  const begin = Math.min(...line.b.map((syllable) => syllable.begin));
-  const end = Math.max(...line.b.map((syllable) => syllable.end));
   const carriesParens = alreadyWrapped(
     line.b
       .map((syllable) => syllable.text)
@@ -70,49 +95,32 @@ export function backingLine(
     };
   });
   const bare = {
-    ...projectedLine(line, capabilities, wordTimed, undefined, false),
+    agent: capabilities.agents === false ? null : line.agent,
     b: [],
-    begin,
-    end,
+    begin: Math.min(...line.b.map((syllable) => syllable.begin)),
+    end: Math.max(...line.b.map((syllable) => syllable.end)),
     id: `${line.id}b`,
     p: wrapped,
   };
   return { ...bare, p: projectedTrack(wrapped, bare, wordTimed) };
 }
 
-export function projectedLine(
-  line: LyricsLine,
+export function projectedLines(
+  doc: LyricsDocument,
   capabilities: FormatCapabilities,
-  wordTimed: boolean,
-  translations: LyricsLine["translations"],
-  isAppleTarget: boolean
+  wordTimed: boolean
 ) {
-  const projectedTranslations =
-    isAppleTarget || translations === undefined
-      ? translations
-      : Object.fromEntries(
-          Object.entries(translations).map(([language, translation]) => [
-            language,
-            {
-              ...(translation.b === undefined ? {} : { b: translation.b }),
-              p: translation.p,
-            },
-          ])
-        );
-  return {
-    agent: capabilities.agents === false ? null : line.agent,
-    b: capabilities.backing ? projectedTrack(line.b, line, wordTimed) : [],
-    begin: line.begin,
-    end: line.end,
-    id: line.id,
-    p: projectedTrack(line.p, line, wordTimed),
-    ...(capabilities.pronunciation &&
-      line.pronunciations !== undefined && {
-        pronunciations: line.pronunciations,
-      }),
-    ...(capabilities.translation &&
-      projectedTranslations !== undefined && {
-        translations: projectedTranslations,
-      }),
-  };
+  return doc.lines.flatMap((line) => {
+    if (capabilities.backing && line.p.length === 0) {
+      return [];
+    }
+    const primary = projectedLine(line, capabilities, wordTimed);
+    const backing = backingLine(line, capabilities, wordTimed);
+    if (backing === undefined) {
+      return [primary];
+    }
+    return backing.begin < primary.begin
+      ? [backing, primary]
+      : [primary, backing];
+  });
 }

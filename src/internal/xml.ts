@@ -41,7 +41,7 @@ interface StartTag {
   uri: string | null;
 }
 
-const xmlUri = "http://www.w3.org/XML/1998/namespace";
+export const xmlUri = "http://www.w3.org/XML/1998/namespace";
 const xmlnsUri = "http://www.w3.org/2000/xmlns/";
 const nameStart = /[:\p{L}\p{Nl}_]/u;
 const namePart = /[-.:\p{L}\p{Nl}\p{Nd}\p{Mc}\p{Mn}\p{Pc}\u00b7_]/u;

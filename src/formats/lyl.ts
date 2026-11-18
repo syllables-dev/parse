@@ -7,24 +7,34 @@
  */
 
 import { ParseError } from "@/errors";
-import { readTag, writeTags } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
 import {
-  readOffset,
-  shiftTimes,
-  splitLines,
-  toInt,
-} from "@/internal/timestamps";
+  checkUnreadRow,
+  projectedTagMeta,
+  readTag,
+  readTagMeta,
+  tagProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
 import {
-  checkLines,
-  checkText,
-  checkWrite,
-  hasLyricText,
-} from "@/internal/write-check";
+  findLosses,
+  keepsWordTiming,
+  lostIf,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import {
+  backingLine,
+  primaryProblem,
+  projectedLine,
+  track,
+} from "@/internal/projections/line";
+import { shiftTimes, splitLines, toInt } from "@/internal/timestamps";
+import { checkLines, checkText, checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
-  ReadOptions,
+  LyricsLine,
   WriteOptions,
 } from "@/types";
 
@@ -64,9 +74,7 @@ function readRows(text: string, tags: Map<string, string>): LylRow[] {
     }
     const header = lineHeader.exec(raw);
     if (!header) {
-      if (raw.trim().length > 0 && raw.startsWith("[")) {
-        throw new ParseError(`malformed lyl line ${lineIndex + 1}`);
-      }
+      checkUnreadRow(raw, "lyl", lineIndex);
       continue;
     }
     const separator = header[0].indexOf(",");
@@ -89,10 +97,7 @@ function readRows(text: string, tags: Map<string, string>): LylRow[] {
   return rows;
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(text: string): LyricsDocument {
   const tags = new Map<string, string>();
   const rows = readRows(text, tags);
   const declaredType = tags.get("type");
@@ -102,15 +107,7 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   ) {
     throw new ParseError(`lyl declares the unknown type ${declaredType}`);
   }
-  const offsetText = tags.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lyl");
-  const songwriter = tags.get("au");
-  const meta = {
-    ...(tags.has("al") && { album: tags.get("al") }),
-    ...(tags.has("ar") && { artist: tags.get("ar") }),
-    ...(songwriter !== undefined && { songwriters: [songwriter] }),
-    ...(tags.has("ti") && { title: tags.get("ti") }),
-  };
+  const { meta, offset } = readTagMeta(tags, "lyl");
   return shiftTimes(
     {
       agents: [],
@@ -138,12 +135,51 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
+// lyl writes an explicit line range, so only a primary track that disagrees with its line is lost
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric) => [
+    ...tagProblems(lyric.meta, "lyl").map((problem) => problem.loss),
+    ...lostIf(
+      "lineRange",
+      lyric.timing !== "word" &&
+        lyric.lines.some((line) => primaryProblem(line) !== undefined)
+    ),
+  ]);
+}
+
+function collapsed(line: LyricsLine, wordTimed: boolean): LyricsLine {
+  return {
+    ...projectedLine(line, capabilities, wordTimed),
+    p: track(line.p, line),
+  };
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  const wordTimed = keepsWordTiming(doc, capabilities);
+  const lines = doc.lines.flatMap((line) => {
+    const primary = collapsed(line, wordTimed);
+    const backing = backingLine(line, capabilities, wordTimed);
+    if (backing === undefined) {
+      return [primary];
+    }
+    const flattened = collapsed(backing, wordTimed);
+    return backing.begin < line.begin
+      ? [flattened, primary]
+      : [primary, flattened];
+  });
+  return projectedDocument(
+    doc,
+    capabilities,
+    lines,
+    projectedTagMeta(doc.meta)
+  );
+}
+
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const prepared = prepare(source, capabilities, "lyl", options);
-  const doc = { ...prepared, lines: prepared.lines.filter(hasLyricText) };
+  const doc = prepare(source, options, "lyl", losses, project);
   checkLines(doc, "lyl");
   checkWrite(doc, "lyl", capabilities);
   for (const line of doc.lines) {
@@ -152,19 +188,9 @@ export function write(
         `lyl cannot represent the inverted range of line ${line.id}`
       );
     }
-    if (line.p.length > 1) {
-      throw new Error(
-        `lyl cannot represent the primary syllable count of line ${line.id}`
-      );
-    }
-    if (
-      line.p.some(
-        (syllable) => syllable.begin !== line.begin || syllable.end !== line.end
-      )
-    ) {
-      throw new Error(
-        `lyl cannot represent the primary syllable range of line ${line.id}`
-      );
+    const problem = primaryProblem(line);
+    if (problem !== undefined) {
+      throw new Error(`lyl cannot represent ${problem}`);
     }
     for (const syllable of line.p) {
       checkText(syllable.text, "lyl", reservedStamp);
@@ -172,7 +198,7 @@ export function write(
   }
   return [
     `[type:${typeName}]`,
-    ...writeTags(doc.meta, "lyl"),
+    ...writeTags(doc.meta, tagProblems(doc.meta, "lyl")),
     ...doc.lines.map(
       (line) =>
         `[${line.begin},${line.end}]${line.p
