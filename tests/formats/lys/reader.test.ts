@@ -118,6 +118,12 @@ describe("lys reader", () => {
     }
   });
 
+  test("rejects a second backing row for one lyric line", () => {
+    expect(() =>
+      read("[4]Lead(0,1000)\n[7](One)(1000,1000)\n[7](Two)(3000,1000)")
+    ).toThrow("lys line 3 is a second backing row for one lyric line");
+  });
+
   test("preserves overlapping lyric rows", () => {
     const doc = read(
       "[4]one(1000,1000)\n[4]two(1500,1000)\n[5]three(1750,1000)"

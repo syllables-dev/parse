@@ -43,15 +43,11 @@ export function readRowHeader(
   return { begin, body: header[0].slice(close + 1), end: begin + duration };
 }
 
-export function toSyllables(
-  words: TimedWord[],
-  idPrefix: string,
-  firstIndex = 0
-): Syllable[] {
+export function toSyllables(words: TimedWord[], idPrefix: string): Syllable[] {
   return words.map((word, wordIndex) => ({
     begin: word.begin,
     end: word.end,
-    id: `${idPrefix}${firstIndex + wordIndex}`,
+    id: `${idPrefix}${wordIndex}`,
     text: word.text,
   }));
 }

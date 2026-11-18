@@ -43,6 +43,7 @@ interface LysRow {
   agent: string | null;
   begin: number;
   end: number;
+  lineNumber: number;
   property: number;
   words: TimedWord[];
   wrapped: boolean;
@@ -115,6 +116,7 @@ function readRow(
     agent,
     begin: Math.min(...words.map((word) => word.begin)),
     end: Math.max(...words.map((word) => word.end)),
+    lineNumber: lineIndex + 1,
     property,
     words,
     wrapped:
@@ -144,11 +146,14 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
         : row.words;
     const mainLine = lines.at(-1);
     if (isBacking && mainLine?.agent === row.agent) {
+      if (mainLine.b.length > 0) {
+        throw new ParseError(
+          `lys line ${row.lineNumber} is a second backing row for one lyric line`
+        );
+      }
       mainLine.begin = Math.min(mainLine.begin, row.begin);
       mainLine.end = Math.max(mainLine.end, row.end);
-      mainLine.b.push(
-        ...toSyllables(words, `${mainLine.id}b`, mainLine.b.length)
-      );
+      mainLine.b = toSyllables(words, `${mainLine.id}b`);
       continue;
     }
     const lineId = `l${rowIndex}`;
