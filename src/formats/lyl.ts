@@ -7,6 +7,7 @@
  */
 
 import { ParseError } from "@/errors";
+import { trimLineEdges } from "@/internal/edge-whitespace";
 import {
   checkUnreadRow,
   projectedTagMeta,
@@ -111,21 +112,23 @@ export function read(text: string): LyricsDocument {
   return shiftTimes(
     {
       agents: [],
-      lines: rows.map((row, lineIndex) => ({
-        agent: null,
-        b: [],
-        begin: row.begin,
-        end: row.end,
-        id: `l${lineIndex}`,
-        p: [
-          {
-            begin: row.begin,
-            end: row.end,
-            id: `l${lineIndex}w0`,
-            text: row.text,
-          },
-        ],
-      })),
+      lines: rows
+        .map((row, lineIndex) => ({
+          agent: null,
+          b: [],
+          begin: row.begin,
+          end: row.end,
+          id: `l${lineIndex}`,
+          p: [
+            {
+              begin: row.begin,
+              end: row.end,
+              id: `l${lineIndex}w0`,
+              text: row.text,
+            },
+          ],
+        }))
+        .map(trimLineEdges),
       meta,
       timing: "line",
       version: 1,

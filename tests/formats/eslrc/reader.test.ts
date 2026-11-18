@@ -15,14 +15,14 @@ describe("eslrc reader", () => {
     ]);
   });
 
-  test("reads empty and whitespace-only lyric lines, but drops them on write", () => {
+  test("reads empty and whitespace-only lyric lines without syllables, and drops them on write", () => {
     const doc = read(
       "[00:01.000][00:02.000]\n[00:03.000]   [00:04.000]\n[00:05.000]Real[00:06.000]"
     );
 
     expect(doc.lines.map((line) => line.p)).toEqual([
-      [{ begin: 1000, end: 2000, id: "l0w0", text: "" }],
-      [{ begin: 3000, end: 4000, id: "l1w0", text: "   " }],
+      [],
+      [],
       [{ begin: 5000, end: 6000, id: "l2w0", text: "Real" }],
     ]);
     expect(
