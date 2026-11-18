@@ -98,12 +98,15 @@ function capabilityLosses(
 export function findLosses(
   doc: LyricsDocument,
   capabilities: FormatCapabilities,
-  formatLosses: (doc: LyricsDocument) => ConversionLoss[]
+  formatLosses: (
+    lyric: LyricsDocument,
+    source: LyricsDocument
+  ) => ConversionLoss[]
 ): ConversionLoss[] {
   const lyric = lyricLines(doc);
   const found = new Set([
     ...capabilityLosses(lyric, capabilities),
-    ...formatLosses(lyric),
+    ...formatLosses(lyric, doc),
   ]);
   return lossOrder.filter((loss) => found.has(loss));
 }

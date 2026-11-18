@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { read, write } from "@/formats/lqe";
-import type { LyricsDocument, LyricsLine } from "@/index";
+import { type LyricsDocument, type LyricsLine, losses } from "@/index";
 import { containerMark } from "./shared";
 
 const translatedLine = {
@@ -214,6 +214,44 @@ describe("lqe writer", () => {
       { en: { p: "" } },
       { en: { p: "trans C" } },
     ]);
+  });
+
+  test("refuses a translation whose lyric line has no text, dropping it only when lossy", () => {
+    const doc = {
+      agents: [],
+      lines: [
+        {
+          agent: null,
+          b: [],
+          begin: 1000,
+          end: 2000,
+          id: "l0",
+          p: [{ begin: 1000, end: 2000, id: "l0w0", text: "Lead" }],
+          translations: { fr: { p: "Un" } },
+        },
+        {
+          agent: null,
+          b: [],
+          begin: 3000,
+          end: 4000,
+          id: "l1",
+          p: [{ begin: 3000, end: 4000, id: "l1w0", text: "   " }],
+          translations: { fr: { p: "Deux" } },
+        },
+      ],
+      meta: {},
+      timing: "word",
+      translationTracks: { fr: { kind: "subtitle" } },
+      version: 1,
+    } satisfies LyricsDocument;
+
+    expect(losses(doc, "lqe")).toEqual(["translations"]);
+    expect(() => write(doc)).toThrow(
+      "lqe cannot place primary translation for line l1"
+    );
+    expect(
+      read(write(doc, { lossy: true })).lines.map((line) => line.translations)
+    ).toEqual([{ fr: { p: "Un" } }]);
   });
 
   test.each([true, false])(

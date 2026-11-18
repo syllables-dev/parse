@@ -38,7 +38,12 @@ import {
   splitLines,
   writeStamp,
 } from "@/internal/timestamps";
-import { checkLines, checkText, checkWrite } from "@/internal/write-check";
+import {
+  checkLines,
+  checkText,
+  checkWrite,
+  hasLyricText,
+} from "@/internal/write-check";
 import type {
   ConversionLoss,
   FormatCapabilities,
@@ -360,6 +365,16 @@ function placementProblems(line: LyricsLine, translation: LyricsTranslation) {
   ];
 }
 
+function droppedTranslationProblems(doc: LyricsDocument) {
+  return doc.lines
+    .filter((line) => !hasLyricText(line))
+    .flatMap((line) =>
+      Object.values(line.translations ?? {}).flatMap((translation) =>
+        placementProblems({ ...line, b: [], p: [] }, translation)
+      )
+    );
+}
+
 function translationProblems(doc: LyricsDocument) {
   const tracks = Object.values(doc.translationTracks ?? {});
   const languages = new Set(languagesOf(doc.lines));
@@ -384,14 +399,15 @@ function translationProblems(doc: LyricsDocument) {
 }
 
 export function losses(doc: LyricsDocument): ConversionLoss[] {
-  return findLosses(doc, capabilities, (lyric) => [
+  return findLosses(doc, capabilities, (lyric, source) => [
     ...tagProblems(lyric.meta, "lqe").map((problem) => problem.loss),
     ...rangeLosses(lyric),
     ...lostIf(
       "translations",
-      lyric.lines.some(
-        (line) => line.p.length === 0 && line.translations !== undefined
-      ) ||
+      droppedTranslationProblems(source).length > 0 ||
+        lyric.lines.some(
+          (line) => line.p.length === 0 && line.translations !== undefined
+        ) ||
         translationProblems({ ...lyric, lines: fittedLines(lyric) }).length > 0
     ),
   ]);
@@ -456,6 +472,10 @@ export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
+  const [dropped] = options.lossy ? [] : droppedTranslationProblems(source);
+  if (dropped !== undefined) {
+    throw new Error(dropped);
+  }
   const doc = prepare(source, options, "lqe", losses, project);
   checkLines(doc, "lqe");
   checkWrite(doc, "lqe", capabilities);
