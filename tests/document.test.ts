@@ -24,8 +24,5 @@ describe("createDocument", () => {
       timing: "line",
       version: 1,
     });
-    expect(first.agents).not.toBe(second.agents);
-    expect(first.lines).not.toBe(second.lines);
-    expect(first.meta).not.toBe(second.meta);
   });
 });

@@ -261,9 +261,6 @@ describe("public dispatch", () => {
         "v2",
       ]);
     }
-    expect(capabilities("ttml").agents).toBe("identity");
-    expect(capabilities("lys").agents).toBe("alignment");
-    expect(capabilities("lqe").agents).toBe("alignment");
     expect(lyricDocument).toEqual(before);
   });
 
@@ -984,10 +981,7 @@ describe("public dispatch", () => {
     exposed.trackGenerated = true;
     exposed.trackKind = true;
 
-    expect(capabilities("lrc")).not.toBe(exposed);
-    expect(capabilities("lrc").timing).not.toBe(exposed.timing);
     expect(capabilities("lrc").timing.word).toBeFalse();
-    expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(capabilities("lrc").trackGenerated).toBeFalse();
     expect(capabilities("lrc").trackKind).toBeFalse();

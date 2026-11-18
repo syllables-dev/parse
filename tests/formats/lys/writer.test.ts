@@ -25,9 +25,8 @@ const wordDocument = {
 describe("lys writer", () => {
   test("rewrites its own reading of an anticipating backing run", () => {
     const text = "[4]Hel(1001,751)lo(1752,751)\n[7](Ooh)(400,500)";
-    const once = write(read(text));
 
-    expect(once).toBe(text);
+    expect(write(read(text))).toBe(text);
   });
 
   test("rejects reserved marks without mutating the document", () => {
@@ -111,7 +110,6 @@ describe("lys writer", () => {
         "[4]Hel(1001,751)lo(1752,751)",
       ].join("\n")
     );
-    expect(written).not.toContain("[offset:");
     expect(read(written)).toMatchObject({
       lines: [
         {

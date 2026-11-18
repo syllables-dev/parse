@@ -46,6 +46,7 @@ describe("lqe writer", () => {
         ],
         translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
+      error: "lqe cannot represent line breaks in text",
       message: "line breaks in lyric text",
     },
     {
@@ -62,6 +63,7 @@ describe("lqe writer", () => {
         ],
         translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
+      error: "lqe cannot represent reserved marks in text",
       message: "reserved lyric marks",
     },
     {
@@ -75,6 +77,7 @@ describe("lqe writer", () => {
         ],
         translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
+      error: "lqe cannot represent line breaks in text",
       message: "line breaks in translation text",
     },
     {
@@ -90,13 +93,11 @@ describe("lqe writer", () => {
         ],
         translationTracks: { ja: { kind: "subtitle" } },
       } satisfies LyricsDocument,
+      error: "lqe cannot represent reserved marks in text",
       message: "reserved translation marks",
     },
-  ])("rejects $message without mutating the document", ({ doc, message }) => {
+  ])("rejects $message without mutating the document", ({ doc, error }) => {
     const before = structuredClone(doc);
-    const error = message.startsWith("line breaks")
-      ? "lqe cannot represent line breaks in text"
-      : "lqe cannot represent reserved marks in text";
 
     expect(() => write(doc)).toThrow(error);
     expect(doc).toEqual(before);

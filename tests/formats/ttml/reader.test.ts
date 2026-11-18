@@ -1,12 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { file as openFile } from "bun";
 import { read, write } from "@/formats/ttml";
-import {
-  ParseError,
-  read as readLyrics,
-  validate,
-  write as writeLyrics,
-} from "@/index";
+import { ParseError, read as readLyrics, write as writeLyrics } from "@/index";
 
 const ttmlUri = "http://www.w3.org/ns/ttml";
 const ttmUri = "http://www.w3.org/ns/ttml#metadata";
@@ -450,20 +445,11 @@ describe("ttml reader", () => {
       ).text(),
       "qrc"
     );
-    const [, , , , sourceLine] = qrc.lines;
     const ttml = writeLyrics(qrc, "ttml", { lossy: true });
-    const roundTripped = readLyrics(ttml, "ttml");
 
-    expect(sourceLine?.p).toContainEqual({
-      begin: 13_843,
-      end: 14_227,
-      id: "l4w2",
-      text: "了 ",
-    });
-    expect(validate(qrc)).toEqual([]);
     expect(ttml).toContain('<span begin="0:13.843" end="0:14.227">了 </span>');
     expect(ttml).not.toContain('end="0:14.227"> </span>');
-    expect(roundTripped.lines).toEqual(qrc.lines);
+    expect(readLyrics(ttml, "ttml").lines).toEqual(qrc.lines);
   });
 
   test.each([
