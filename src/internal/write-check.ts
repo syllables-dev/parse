@@ -75,13 +75,15 @@ export function checkWrite(
   }
   if (
     !capabilities.translation &&
-    doc.lines.some((line) => line.translations !== undefined)
+    (doc.translationTracks !== undefined ||
+      doc.lines.some((line) => line.translations !== undefined))
   ) {
     throw new Error(`${format} cannot represent translations`);
   }
   if (
     !capabilities.pronunciation &&
-    doc.lines.some((line) => line.pronunciations !== undefined)
+    (doc.pronunciationTracks !== undefined ||
+      doc.lines.some((line) => line.pronunciations !== undefined))
   ) {
     throw new Error(`${format} cannot represent pronunciations`);
   }

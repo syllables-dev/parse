@@ -817,6 +817,34 @@ describe("public dispatch", () => {
     }
   );
 
+  test.each([
+    [
+      "a line without lyrics",
+      "[1000,1000]Hello(1000,1000)\n[3000,1000] (3000,1000)",
+    ],
+    ["no line", "[1000,1000]Hello(1000,1000)"],
+  ])(
+    "refuses a translation track that sits on %s unless lossy",
+    (_, source) => {
+      const doc = read(source, "qrc");
+      const translated: LyricsDocument = {
+        ...doc,
+        lines: doc.lines.map((line) =>
+          line.p.length === 0
+            ? { ...line, translations: { fr: { p: "Salut" } } }
+            : line
+        ),
+        translationTracks: { fr: { kind: "subtitle" } },
+      };
+
+      expect(losses(translated, "qrc")).toEqual(["translations"]);
+      expect(() => write(translated, "qrc")).toThrow(
+        "qrc cannot represent translations"
+      );
+      expect(write(translated, "qrc", { lossy: true })).toBe(write(doc, "qrc"));
+    }
+  );
+
   test("omits empty songwriter names during a lossy write", () => {
     const doc = read("[00:01.000]Hello", "lrc");
     doc.meta.songwriters = [""];
