@@ -184,10 +184,6 @@ function metaProblems(meta: LyricsMeta) {
       : songwriterProblems(
           [
             [
-              songwriters.length === 0,
-              "cannot represent an empty songwriter list",
-            ],
-            [
               songwriters.some((name) => name.length === 0),
               "cannot represent an empty songwriter name",
             ],

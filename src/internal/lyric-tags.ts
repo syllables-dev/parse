@@ -92,10 +92,6 @@ export function tagProblems(meta: LyricsMeta, format: FormatId) {
       ? []
       : songwriterProblems(
           [
-            [
-              songwriters.length === 0,
-              "cannot represent an empty songwriter list",
-            ],
             [songwriters.length > 1, "cannot represent multiple songwriters"],
             [
               songwriters.some((name) => name.length === 0),

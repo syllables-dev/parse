@@ -419,9 +419,6 @@ function checkDoc(doc: LyricsDocument) {
     throw new Error("ttml requires a version 1 document");
   }
   checkWrite(doc, "ttml", capabilities);
-  if (doc.meta.songwriters?.length === 0) {
-    throw new Error("ttml cannot preserve an empty songwriter list");
-  }
   const { songwriterIds, songwriters } = doc.meta;
   if (
     songwriterIds !== undefined &&

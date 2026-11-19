@@ -439,9 +439,6 @@ describe("ttml writer", () => {
         meta: { album: "Album", artist: "Artist" },
       })
     ).toThrow("ttml cannot represent artist or album metadata");
-    expect(() => write({ ...wordDocument, meta: { songwriters: [] } })).toThrow(
-      "ttml cannot preserve an empty songwriter list"
-    );
   });
 
   test("rejects unrepresentable maps, agents, and line timing", () => {

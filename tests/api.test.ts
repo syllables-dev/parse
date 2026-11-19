@@ -802,23 +802,18 @@ describe("public dispatch", () => {
   });
 
   test.each([
-    ["lrc", "[00:01.000]Hello"],
-    ["yrc", "[1000,1000](1000,1000,0)Hello"],
-  ] satisfies [FormatId, string][])(
-    "omits empty %s songwriter metadata during a lossy write",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = [];
-      const before = structuredClone(doc);
+    ["lrc", "lrc", "[00:01.000]Hello"],
+    ["yrc", "yrc", "[1000,1000](1000,1000,0)Hello"],
+    ["ttml", "yrc", "[1000,1000](1000,1000,0)Hello"],
+  ] satisfies [FormatId, FormatId, string][])(
+    "writes an empty %s songwriter list as no songwriters",
+    (format, sourceFormat, source) => {
+      const doc = read(source, sourceFormat);
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent an empty songwriter list`
+      expect(losses({ ...doc, meta: { songwriters: [] } }, format)).toEqual([]);
+      expect(write({ ...doc, meta: { songwriters: [] } }, format)).toBe(
+        write(doc, format)
       );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toBeUndefined();
-      expect(doc).toEqual(before);
     }
   );
 
