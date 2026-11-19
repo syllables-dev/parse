@@ -1,15 +1,14 @@
 import { ParseError } from "@/errors";
+import { isLanguageTag } from "@/internal/language-tag";
 import { toInt } from "@/internal/timestamps";
-import type { XmlElement } from "@/internal/xml";
+import { type XmlElement, xmlUri } from "@/internal/xml";
 
 const clockPattern = /^(?:\d+:){0,2}\d+(?:\.\d+)?$/u;
-const languagePattern = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
 const nonSpace = /\S/u;
 
 export const ttmlUri = "http://www.w3.org/ns/ttml";
 export const ttmUri = "http://www.w3.org/ns/ttml#metadata";
 export const itunesUri = "http://music.apple.com/lyric-ttml-internal";
-export const xmlUri = "http://www.w3.org/XML/1998/namespace";
 
 export function key(uri: string | null, local: string) {
   return `${uri === null ? "" : uri}|${local}`;
@@ -49,6 +48,15 @@ export function checkAttrs(element: XmlElement, allowed: string[]) {
       );
     }
   }
+}
+
+export function role(element: XmlElement) {
+  const namespaced = attr(element, "role", ttmUri);
+  const plain = attr(element, "role", null);
+  if (namespaced !== undefined && plain !== undefined && namespaced !== plain) {
+    throw new ParseError(`conflicting roles on <${element.name}>`);
+  }
+  return namespaced ?? plain;
 }
 
 export function elements(parent: XmlElement) {
@@ -102,7 +110,6 @@ export function readTime(value: string, label: string) {
     throw new ParseError(`${label} clock components must be less than 60`);
   }
   const seconds = fields.reduce((total, field) => total * 60 + field, 0);
-  // the document stores milliseconds; round finer source precision once
   const millis =
     Number(fraction.slice(0, 3).padEnd(3, "0")) +
     (Number(fraction[3] ?? "0") >= 5 ? 1 : 0);
@@ -145,14 +152,10 @@ export function shiftTime(value: number, offset: number, label: string) {
 
 export function locale(element: XmlElement) {
   const language = needAttr(element, "lang", xmlUri);
-  if (!languagePattern.test(language)) {
+  if (!isLanguageTag(language)) {
     throw new ParseError(`invalid ttml language ${language}`);
   }
   return language;
-}
-
-export function validLanguage(language: string) {
-  return languagePattern.test(language);
 }
 
 export function escapeText(value: string) {

@@ -1,15 +1,13 @@
+import { outsideLine, startsEarly } from "@/internal/syllable-bounds";
 import type { LyricsDocument, LyricsLine, Problem, Syllable } from "@/types";
 
-// a backing run may start before its line, as an x-bg span does
 function checkTrack(
   line: LyricsLine,
   syllables: Syllable[],
   backing = false
 ): Problem[] {
   const problems: Problem[] = [];
-  let previousBegin: number | undefined;
-
-  for (const syllable of syllables) {
+  for (const [index, syllable] of syllables.entries()) {
     if (
       !(
         Number.isSafeInteger(syllable.begin) &&
@@ -22,7 +20,7 @@ function checkTrack(
         message: "syllable times must be integer milliseconds",
       });
     }
-    if (previousBegin !== undefined && syllable.begin < previousBegin) {
+    if (startsEarly(syllable, syllables[index - 1])) {
       problems.push({
         code: "syllable-out-of-order",
         id: syllable.id,
@@ -36,16 +34,14 @@ function checkTrack(
         message: "syllable ends before it begins",
       });
     }
-    if ((!backing && syllable.begin < line.begin) || syllable.end > line.end) {
+    if (outsideLine(syllable, line, backing)) {
       problems.push({
         code: "syllable-outside-line",
         id: syllable.id,
         message: "syllable extends outside its line",
       });
     }
-    previousBegin = syllable.begin;
   }
-
   return problems;
 }
 

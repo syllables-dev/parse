@@ -5,6 +5,9 @@ const lineBreak = /\r\n|\n|\r/u;
 const digits = /^\d+$/u;
 const signPrefix = /^[+-]/u;
 
+export const clockStamp = String.raw`\d+:\d{1,2}(?:[.:]\d{1,3})?`;
+export const lastLineMs = 5000;
+
 export function splitLines(text: string): string[] {
   return (text.startsWith("\uFEFF") ? text.slice(1) : text).split(lineBreak);
 }
@@ -13,7 +16,6 @@ export function toInt(value: string, context: string): number {
   if (!digits.test(value)) {
     throw new ParseError(`${context} must be a nonnegative integer`);
   }
-
   const integer = Number(value);
   if (!Number.isSafeInteger(integer)) {
     throw new ParseError(`${context} exceeds the safe integer range`);
@@ -21,12 +23,18 @@ export function toInt(value: string, context: string): number {
   return integer;
 }
 
-export function readOffset(source: string, context: string): number {
+export function readOffset(
+  source: string | undefined,
+  format: FormatId
+): number {
+  if (source === undefined) {
+    return 0;
+  }
   const text = source.trim();
   const sign = text.startsWith("-") ? -1 : 1;
   return (
     sign *
-    toInt(signPrefix.test(text) ? text.slice(1) : text, `${context} offset`)
+    toInt(signPrefix.test(text) ? text.slice(1) : text, `${format} offset`)
   );
 }
 
@@ -86,19 +94,27 @@ export function shiftTimes(
   };
 }
 
-export function readStamp(
-  minutesText: string,
-  secondsText: string,
-  fractionText = ""
-): number {
-  const minutes = toInt(minutesText, "timestamp minutes");
-  const seconds = toInt(secondsText, "timestamp seconds");
+export function readClock(marker: string): number {
+  const colon = marker.indexOf(":");
+  const dot = marker.indexOf(".", colon + 1);
+  const secondColon = marker.indexOf(":", colon + 1);
+  const fraction = dot >= 0 ? dot : secondColon;
+  const end = marker.length - 1;
+  const minutes = toInt(marker.slice(1, colon), "timestamp minutes");
+  const seconds = toInt(
+    marker.slice(colon + 1, fraction >= 0 ? fraction : end),
+    "timestamp seconds"
+  );
   if (seconds > 59) {
     throw new ParseError("timestamp seconds must be less than 60");
   }
-  const milliseconds = fractionText
-    ? toInt(fractionText.padEnd(3, "0"), "timestamp fraction")
-    : 0;
+  const milliseconds =
+    fraction >= 0
+      ? toInt(
+          marker.slice(fraction + 1, end).padEnd(3, "0"),
+          "timestamp fraction"
+        )
+      : 0;
   const stamp = minutes * 60_000 + seconds * 1000 + milliseconds;
   if (!Number.isSafeInteger(stamp)) {
     throw new ParseError("timestamp exceeds the safe integer range");

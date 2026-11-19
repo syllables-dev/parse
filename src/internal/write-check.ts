@@ -8,7 +8,6 @@ import type {
 
 const lineBreak = /[\r\n]/u;
 
-// a line with no lyric text holds a timing slot nothing renders, so such formats drop it
 export function hasLyricText(line: LyricsLine): boolean {
   return [...line.p, ...line.b].some(
     (syllable) => syllable.text.trim().length > 0
@@ -39,16 +38,20 @@ function checkMetadata(
   format: FormatId,
   capabilities: FormatCapabilities
 ): void {
+  const { meta } = doc;
+  const { metadata } = capabilities;
   const unsupported = [
-    ["album", capabilities.metadata.album, doc.meta.album],
-    ["artist", capabilities.metadata.artist, doc.meta.artist],
-    ["songwriter", capabilities.metadata.songwriters, doc.meta.songwriters],
-    ["title", capabilities.metadata.title, doc.meta.title],
-  ].find(
-    ([, preserved, metadataValue]) => !preserved && metadataValue !== undefined
+    ["artist", metadata.artist, meta.artist],
+    ["album", metadata.album, meta.album],
+    ["songwriter", metadata.songwriters, meta.songwriters],
+    ["title", metadata.title, meta.title],
+  ].flatMap(([name, preserved, value]) =>
+    preserved || value === undefined ? [] : [name]
   );
-  if (unsupported) {
-    throw new Error(`${format} cannot represent ${unsupported[0]} metadata`);
+  if (unsupported.length > 0) {
+    throw new Error(
+      `${format} cannot represent ${unsupported.join(" or ")} metadata`
+    );
   }
 }
 
@@ -72,17 +75,18 @@ export function checkWrite(
   }
   if (
     !capabilities.translation &&
-    doc.lines.some((line) => line.translations !== undefined)
+    (doc.translationTracks !== undefined ||
+      doc.lines.some((line) => line.translations !== undefined))
   ) {
     throw new Error(`${format} cannot represent translations`);
   }
   if (
     !capabilities.pronunciation &&
-    doc.lines.some((line) => line.pronunciations !== undefined)
+    (doc.pronunciationTracks !== undefined ||
+      doc.lines.some((line) => line.pronunciations !== undefined))
   ) {
     throw new Error(`${format} cannot represent pronunciations`);
   }
-
   for (const line of doc.lines) {
     checkTime(line.begin, `line ${line.id} start`);
     checkTime(line.end, `line ${line.id} end`);

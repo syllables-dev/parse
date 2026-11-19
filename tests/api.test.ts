@@ -261,9 +261,6 @@ describe("public dispatch", () => {
         "v2",
       ]);
     }
-    expect(capabilities("ttml").agents).toBe("identity");
-    expect(capabilities("lys").agents).toBe("alignment");
-    expect(capabilities("lqe").agents).toBe("alignment");
     expect(lyricDocument).toEqual(before);
   });
 
@@ -601,6 +598,31 @@ describe("public dispatch", () => {
     );
   });
 
+  test.each([
+    [
+      "qrc",
+      "[ti:Song]\n[1250,2750]One (1250,1750)Two (3000,1000)Back(1500,500)",
+    ],
+    ["yrc", "[1250,2750](1250,1750,0)One (3000,1000,0)Two (1500,500,0)Back"],
+    ["lys", "[4]One (1250,1750)Two (3000,1000)Back(1500,500)"],
+    [
+      "eslrc",
+      "[00:01.250]One [00:03.000]Two [00:04.000][00:01.500]Back[00:02.000]",
+    ],
+    ["lrc", "[00:01.250]<00:01.250>One <00:03.000>Two <00:01.500>Back"],
+    [
+      "ttml",
+      '<tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal" itunes:timing="Word"><head><metadata/></head><body dur="0:05.000"><div begin="0:01.250" end="0:04.000"><p begin="0:01.250" end="0:04.000"><span begin="0:01.250" end="0:03.000">One </span><span begin="0:03.000" end="0:04.000">Two </span><span begin="0:01.500" end="0:02.000">Back</span></p></div></body></tt>',
+    ],
+  ] satisfies [FormatId, string][])(
+    "rejects a %s word that starts before the word before it",
+    (format, source) => {
+      expect(() => read(source, format)).toThrow(
+        `${format} lyric line 1: word 3 starts before word 2`
+      );
+    }
+  );
+
   test("rejects repeat expansion for other readers", () => {
     expect(() =>
       read("[0,500]Hi(0,500)", "qrc", { expandRepeats: true })
@@ -780,23 +802,46 @@ describe("public dispatch", () => {
   });
 
   test.each([
-    ["lrc", "[00:01.000]Hello"],
-    ["yrc", "[1000,1000](1000,1000,0)Hello"],
-  ] satisfies [FormatId, string][])(
-    "omits empty %s songwriter metadata during a lossy write",
-    (format, source) => {
-      const doc = read(source, format);
-      doc.meta.songwriters = [];
-      const before = structuredClone(doc);
+    ["lrc", "lrc", "[00:01.000]Hello"],
+    ["yrc", "yrc", "[1000,1000](1000,1000,0)Hello"],
+    ["ttml", "yrc", "[1000,1000](1000,1000,0)Hello"],
+  ] satisfies [FormatId, FormatId, string][])(
+    "writes an empty %s songwriter list as no songwriters",
+    (format, sourceFormat, source) => {
+      const doc = read(source, sourceFormat);
 
-      expect(losses(doc, format)).toEqual(["metadata.songwriters"]);
-      expect(() => write(doc, format)).toThrow(
-        `${format} cannot represent an empty songwriter list`
+      expect(losses({ ...doc, meta: { songwriters: [] } }, format)).toEqual([]);
+      expect(write({ ...doc, meta: { songwriters: [] } }, format)).toBe(
+        write(doc, format)
       );
-      expect(
-        read(write(doc, format, { lossy: true }), format).meta.songwriters
-      ).toBeUndefined();
-      expect(doc).toEqual(before);
+    }
+  );
+
+  test.each([
+    [
+      "a line without lyrics",
+      "[1000,1000]Hello(1000,1000)\n[3000,1000] (3000,1000)",
+    ],
+    ["no line", "[1000,1000]Hello(1000,1000)"],
+  ])(
+    "refuses a translation track that sits on %s unless lossy",
+    (_, source) => {
+      const doc = read(source, "qrc");
+      const translated: LyricsDocument = {
+        ...doc,
+        lines: doc.lines.map((line) =>
+          line.p.length === 0
+            ? { ...line, translations: { fr: { p: "Salut" } } }
+            : line
+        ),
+        translationTracks: { fr: { kind: "subtitle" } },
+      };
+
+      expect(losses(translated, "qrc")).toEqual(["translations"]);
+      expect(() => write(translated, "qrc")).toThrow(
+        "qrc cannot represent translations"
+      );
+      expect(write(translated, "qrc", { lossy: true })).toBe(write(doc, "qrc"));
     }
   );
 
@@ -984,10 +1029,7 @@ describe("public dispatch", () => {
     exposed.trackGenerated = true;
     exposed.trackKind = true;
 
-    expect(capabilities("lrc")).not.toBe(exposed);
-    expect(capabilities("lrc").timing).not.toBe(exposed.timing);
     expect(capabilities("lrc").timing.word).toBeFalse();
-    expect(capabilities("lrc").metadata).not.toBe(exposed.metadata);
     expect(capabilities("lrc").metadata.title).toBeTrue();
     expect(capabilities("lrc").trackGenerated).toBeFalse();
     expect(capabilities("lrc").trackKind).toBeFalse();

@@ -59,7 +59,7 @@ describe("lys fixtures", () => {
       doc.lines
         .slice(20, 21)
         .map((line) => line.p.map((word) => word.text).join(""))
-    ).toEqual(["They say "]);
+    ).toEqual(["They say"]);
     expect(
       doc.lines
         .slice(20, 21)

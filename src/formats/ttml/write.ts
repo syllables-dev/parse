@@ -5,13 +5,22 @@ import {
   itunesUri,
   ttmlUri,
   ttmUri,
-  validLanguage,
   writeTime,
 } from "@/formats/ttml/profile";
-import { prepare } from "@/internal/projections";
+import { isLanguageTag } from "@/internal/language-tag";
+import {
+  findLosses,
+  keepsWordTiming,
+  prepare,
+  projectedDocument,
+  projectedMeta,
+} from "@/internal/projections";
+import { projectedLines } from "@/internal/projections/line";
+import { outsideLine } from "@/internal/syllable-bounds";
 import { checkTime } from "@/internal/timestamps";
-import { hasLyricText } from "@/internal/write-check";
+import { checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   LyricsDocument,
   LyricsElementAttributes,
   LyricsLine,
@@ -42,7 +51,7 @@ function checkTrack(
         `syllable ${syllable.id} end must not precede its start`
       );
     }
-    if ((!backing && syllable.begin < line.begin) || syllable.end > line.end) {
+    if (outsideLine(syllable, line, backing)) {
       throw new RangeError(
         `syllable ${syllable.id} must stay within line ${line.id}`
       );
@@ -112,9 +121,6 @@ function checkPronunciation(
   lineTimed: boolean,
   knownAgents: Set<string>
 ) {
-  if (!validLanguage(language)) {
-    throw new Error(`invalid ttml pronunciation language ${language}`);
-  }
   for (const [variant, entry] of [
     pronunciation,
     ...(pronunciation.variants ?? []),
@@ -144,9 +150,6 @@ function checkTranslation(
   lineTimed: boolean,
   knownAgents: Set<string>
 ) {
-  if (!validLanguage(language)) {
-    throw new Error(`invalid ttml translation language ${language}`);
-  }
   checkParallel(translation, `${language} translation`, knownAgents);
   if (translation.pWords !== undefined) {
     checkAgents(translation.pWords, knownAgents);
@@ -208,28 +211,33 @@ function createdAttr(created: boolean | undefined) {
   return created === undefined ? "" : ` automaticallyCreated="${created}"`;
 }
 
-function translationTracks(doc: LyricsDocument) {
-  const tracks = new Map(Object.entries(doc.translationTracks ?? {}));
-  for (const line of doc.lines) {
-    for (const language of Object.keys(line.translations ?? {})) {
-      if (!tracks.has(language)) {
-        tracks.set(language, {});
-      }
+function tracksOf<Track>(
+  declared: Record<string, Track> | undefined,
+  lineLanguages: string[]
+) {
+  const tracks = new Map<string, Track | Record<string, never>>(
+    Object.entries(declared ?? {})
+  );
+  for (const language of lineLanguages) {
+    if (!tracks.has(language)) {
+      tracks.set(language, {});
     }
   }
   return tracks;
 }
 
+function translationTracks(doc: LyricsDocument) {
+  return tracksOf(
+    doc.translationTracks,
+    doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
+  );
+}
+
 function pronunciationTracks(doc: LyricsDocument) {
-  const tracks = new Map(Object.entries(doc.pronunciationTracks ?? {}));
-  for (const line of doc.lines) {
-    for (const language of Object.keys(line.pronunciations ?? {})) {
-      if (!tracks.has(language)) {
-        tracks.set(language, {});
-      }
-    }
-  }
-  return tracks;
+  return tracksOf(
+    doc.pronunciationTracks,
+    doc.lines.flatMap((line) => Object.keys(line.pronunciations ?? {}))
+  );
 }
 
 function pronunciationEntries(
@@ -237,7 +245,7 @@ function pronunciationEntries(
   language: string,
   variant: number
 ) {
-  const entries = doc.lines.flatMap((line) => {
+  return doc.lines.flatMap((line) => {
     const pronunciation = line.pronunciations?.[language];
     const entry =
       variant === 0 ? pronunciation : pronunciation?.variants?.[variant - 1];
@@ -245,7 +253,6 @@ function pronunciationEntries(
       ? []
       : [{ line, pronunciation: entry }];
   });
-  return entries;
 }
 
 function checkIds(ids: string[], label: string) {
@@ -279,11 +286,8 @@ function checkAgents(syllables: Syllable[], knownAgents: Set<string>) {
   }
 }
 
-function checkLines(doc: LyricsDocument, agentIds: string[]) {
-  const knownAgents = new Set(agentIds);
+function checkLines(doc: LyricsDocument, knownAgents: Set<string>) {
   for (const line of doc.lines) {
-    checkTime(line.begin, `line ${line.id} start`);
-    checkTime(line.end, `line ${line.id} end`);
     if (doc.timing !== "static" && line.end <= line.begin) {
       throw new RangeError(`line ${line.id} end must follow its start`);
     }
@@ -383,7 +387,7 @@ function checkApple(doc: LyricsDocument, knownAgents: Set<string>) {
   if (apple === undefined) {
     return;
   }
-  if (apple.language !== undefined && !validLanguage(apple.language)) {
+  if (apple.language !== undefined && !isLanguageTag(apple.language)) {
     throw new Error(`invalid Apple TTML language ${apple.language}`);
   }
   if (apple.leadingSilence !== undefined) {
@@ -411,16 +415,10 @@ function checkApple(doc: LyricsDocument, knownAgents: Set<string>) {
 }
 
 function checkDoc(doc: LyricsDocument) {
-  if (doc.version !== 1 || !capabilities.timing[doc.timing]) {
-    throw new Error("ttml requires a version 1 document with known timing");
+  if (doc.version !== 1) {
+    throw new Error("ttml requires a version 1 document");
   }
-  // title has a home in ttml's own vocabulary, artist and album do not
-  if (doc.meta.artist !== undefined || doc.meta.album !== undefined) {
-    throw new Error("ttml cannot represent artist or album metadata");
-  }
-  if (doc.meta.songwriters?.length === 0) {
-    throw new Error("ttml cannot preserve an empty songwriter list");
-  }
+  checkWrite(doc, "ttml", capabilities);
   const { songwriterIds, songwriters } = doc.meta;
   if (
     songwriterIds !== undefined &&
@@ -435,7 +433,7 @@ function checkDoc(doc: LyricsDocument) {
     "line ids"
   );
   for (const [language, track] of translationTracks(doc)) {
-    if (!validLanguage(language)) {
+    if (!isLanguageTag(language)) {
       throw new Error(`invalid ttml translation language ${language}`);
     }
     if (
@@ -447,13 +445,13 @@ function checkDoc(doc: LyricsDocument) {
     }
   }
   for (const language of pronunciationTracks(doc).keys()) {
-    if (!validLanguage(language)) {
+    if (!isLanguageTag(language)) {
       throw new Error(`invalid ttml pronunciation language ${language}`);
     }
   }
   const knownAgents = new Set(agentIds);
   checkApple(doc, knownAgents);
-  checkLines(doc, agentIds);
+  checkLines(doc, knownAgents);
 }
 
 function writeSyllable(
@@ -670,31 +668,43 @@ function writeBody(doc: LyricsDocument) {
   return `<body${dur}${writeAttrs(doc.apple?.body ?? {})}>${writeSections(doc, duration)}</body>`;
 }
 
-function droppingEmptyLines(doc: LyricsDocument): LyricsDocument {
-  const kept = doc.lines.filter(hasLyricText);
-  if (kept.length === doc.lines.length) {
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, () => []);
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  return projectedDocument(
+    doc,
+    capabilities,
+    projectedLines(doc, capabilities, keepsWordTiming(doc, capabilities)),
+    projectedMeta(doc.meta, capabilities)
+  );
+}
+
+function withKeptSections(doc: LyricsDocument): LyricsDocument {
+  const sections = doc.apple?.sections;
+  if (sections === undefined) {
     return doc;
   }
-  const keptIds = new Set(kept.map((line) => line.id));
-  const apple =
-    doc.apple?.sections === undefined
-      ? doc.apple
-      : {
-          ...doc.apple,
-          sections: doc.apple.sections.map((section) => ({
-            ...section,
-            lines: section.lines.filter((id) => keptIds.has(id)),
-          })),
-        };
-  return { ...doc, apple, lines: kept };
+  const kept = new Set(doc.lines.map((line) => line.id));
+  return {
+    ...doc,
+    apple: {
+      ...doc.apple,
+      sections: sections.map((section) => ({
+        ...section,
+        lines: section.lines.filter((id) => kept.has(id)),
+      })),
+    },
+  };
 }
 
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = droppingEmptyLines(
-    prepare(source, capabilities, "ttml", options)
+  const doc = withKeptSections(
+    prepare(source, options, "ttml", losses, project)
   );
   checkDoc(doc);
   // ttml's own title element, emitted before the agents it precedes in the profile

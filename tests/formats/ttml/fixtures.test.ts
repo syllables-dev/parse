@@ -208,4 +208,16 @@ describe("ttml fixtures", () => {
       doc.lines.filter((line) => line.pronunciations?.["ja-Latn"])
     ).toHaveLength(74);
   });
+
+  test("keeps song parts when a lossy rewrite drops unrelated metadata", async () => {
+    const doc = await readFixture("backing-vocals.ttml");
+    const restored = read(
+      write({ ...doc, meta: { ...doc.meta, album: "Album" } }, { lossy: true })
+    );
+
+    expect(restored.apple?.sections).toEqual(doc.apple?.sections);
+    expect(restored.apple?.sections?.map((section) => section.part)).toContain(
+      "Chorus"
+    );
+  });
 });

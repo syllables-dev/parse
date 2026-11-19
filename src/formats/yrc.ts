@@ -6,42 +6,45 @@
  */
 
 import { ParseError } from "@/errors";
-import { checkMetaText, readTag } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
+import { trimLineEdges } from "@/internal/edge-whitespace";
+import {
+  checkUnreadRow,
+  normalizedTagText,
+  projectedTagMeta,
+  readTag,
+  readTagMeta,
+  songwriterProblems,
+  textProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
+import {
+  findLosses,
+  keepsWordTiming,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import { projectedLines } from "@/internal/projections/line";
+import { checkWordOrder } from "@/internal/syllable-bounds";
 import {
   foldSpacers,
+  readRowHeader,
   readYrcWords,
-  type TimedWord,
+  toSyllables,
+  yrcMark,
 } from "@/internal/timed-words";
-import {
-  checkTime,
-  readOffset,
-  shiftTimes,
-  splitLines,
-  toInt,
-} from "@/internal/timestamps";
-import {
-  checkLines,
-  checkText,
-  checkWrite,
-  hasLyricText,
-} from "@/internal/write-check";
+import { checkTime, shiftTimes, splitLines } from "@/internal/timestamps";
+import { checkLines, checkText, checkWrite } from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
-  ReadOptions,
+  LyricsLine,
+  LyricsMeta,
   WriteOptions,
 } from "@/types";
 
-interface YrcRow {
-  begin: number;
-  end: number;
-  words: TimedWord[];
-}
-
-const lineHeader = /^\[(\d+),(\d+)\](.*)$/u;
-const reservedStamp = /\(\d+,\d+,-?\d+\)/u;
 const creditLabel = /^(?:作词|作詞|作曲)\s*[:：]\s*/u;
+const lineBreak = /[\r\n]/u;
 
 export const capabilities = {
   agents: false,
@@ -95,12 +98,12 @@ function readCredits(raw: string, lineNumber: number): string[] {
     .filter((name) => name.length > 0);
 }
 
-function readRows(
+function readLines(
   text: string,
   songwriters: string[],
   tags: Map<string, string>
-): YrcRow[] {
-  const rows: YrcRow[] = [];
+): LyricsLine[] {
+  const lines: LyricsLine[] = [];
   for (const [lineIndex, raw] of splitLines(text).entries()) {
     const trimmedStart = raw.trimStart();
     if (trimmedStart.startsWith("{")) {
@@ -116,90 +119,52 @@ function readRows(
       tags.set(tag.name, tag.text);
       continue;
     }
-    const header = lineHeader.exec(raw);
-    if (!header) {
-      if (raw.trim().length > 0 && raw.startsWith("[")) {
-        throw new ParseError(`malformed yrc line ${lineIndex + 1}`);
-      }
+    const row = readRowHeader(raw, "yrc", lineIndex);
+    if (!row) {
+      checkUnreadRow(raw, "yrc", lineIndex);
       continue;
     }
-    const comma = header[0].indexOf(",");
-    const close = header[0].indexOf("]");
-    const begin = toInt(
-      header[0].slice(1, comma),
-      `yrc line ${lineIndex + 1} start`
-    );
-    const duration = toInt(
-      header[0].slice(comma + 1, close),
-      `yrc line ${lineIndex + 1} duration`
-    );
-    if (!Number.isSafeInteger(begin + duration)) {
-      throw new ParseError(
-        `yrc line ${lineIndex + 1} end exceeds the safe integer range`
-      );
-    }
-    rows.push({
-      begin,
-      end: begin + duration,
-      words: foldSpacers(
-        readYrcWords(
-          header[0].slice(close + 1),
-          lineIndex + 1,
-          begin,
-          begin + duration
+    const id = `l${lines.length}`;
+    lines.push({
+      agent: null,
+      b: [],
+      begin: row.begin,
+      end: row.end,
+      id,
+      p: toSyllables(
+        foldSpacers(
+          readYrcWords(row.body, lineIndex + 1, row.begin, row.end),
+          "yrc",
+          lineIndex + 1
         ),
-        "yrc",
-        lineIndex + 1,
-        (word) => word.begin === word.end
+        `${id}w`
       ),
     });
   }
-  if (rows.length === 0) {
+  if (lines.length === 0) {
     throw new ParseError("input contains no recognizable yrc lyric lines");
   }
-  return rows;
+  return lines;
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(text: string): LyricsDocument {
   const songwriters: string[] = [];
   const tags = new Map<string, string>();
-  const rows = readRows(text, songwriters, tags);
-  const taggedSongwriter = tags.get("au");
-  if (
-    taggedSongwriter !== undefined &&
-    !songwriters.includes(taggedSongwriter)
-  ) {
-    songwriters.push(taggedSongwriter);
+  const lines = readLines(text, songwriters, tags);
+  checkWordOrder(lines, "yrc");
+  const { meta, offset } = readTagMeta(tags, "yrc");
+  for (const songwriter of meta.songwriters ?? []) {
+    if (!songwriters.includes(songwriter)) {
+      songwriters.push(songwriter);
+    }
   }
-  const album = tags.get("al");
-  const artist = tags.get("ar");
-  const offsetText = tags.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "yrc");
-  const title = tags.get("ti");
   return shiftTimes(
     {
       agents: [],
-      lines: rows.map((row, lineIndex) => ({
-        agent: null,
-        b: [],
-        begin: row.begin,
-        end: row.end,
-        id: `l${lineIndex}`,
-        p: row.words.map((word, wordIndex) => ({
-          begin: word.begin,
-          end: word.end,
-          id: `l${lineIndex}w${wordIndex}`,
-          text: word.text,
-        })),
-      })),
+      lines: lines.map(trimLineEdges),
       meta: {
-        ...(album !== undefined && { album }),
-        ...(artist !== undefined && { artist }),
+        ...meta,
         ...(songwriters.length > 0 && { songwriters }),
-        ...(title !== undefined && { title }),
       },
       timing: "word",
       version: 1,
@@ -209,70 +174,109 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
   );
 }
 
+function metaProblems(meta: LyricsMeta) {
+  const { songwriters } = meta;
+  const many = songwriters !== undefined && songwriters.length > 1;
+  return [
+    ...textProblems(meta, "yrc"),
+    ...(songwriters === undefined
+      ? []
+      : songwriterProblems(
+          [
+            [
+              songwriters.some((name) => name.length === 0),
+              "cannot represent an empty songwriter name",
+            ],
+            [
+              many && songwriters.some((name) => name.includes("/")),
+              "cannot preserve this songwriter name",
+            ],
+            [
+              many && new Set(songwriters).size !== songwriters.length,
+              "requires unique songwriter names",
+            ],
+          ],
+          "yrc"
+        )),
+  ];
+}
+
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric) =>
+    metaProblems(lyric.meta).map((problem) => problem.loss)
+  );
+}
+
+function projectedSongwriters(meta: LyricsMeta) {
+  const { songwriters } = meta;
+  const [first] = songwriters ?? [];
+  if (songwriters === undefined || first === undefined) {
+    return;
+  }
+  if (songwriters.length > 1 && metaProblems({ songwriters }).length === 0) {
+    return songwriters;
+  }
+  const clean = songwriters.find(
+    (name) =>
+      name.length > 0 &&
+      name.trim() === name &&
+      !name.includes("/") &&
+      !lineBreak.test(name)
+  );
+  const selected =
+    songwriters.length === 1
+      ? normalizedTagText(first)
+      : normalizedTagText(clean ?? first).replaceAll("/", "");
+  return selected.length === 0 ? undefined : [selected];
+}
+
+function project(doc: LyricsDocument): LyricsDocument {
+  const { songwriters, ...meta } = projectedTagMeta(doc.meta);
+  const projected = projectedSongwriters(doc.meta);
+  return projectedDocument(
+    doc,
+    capabilities,
+    projectedLines(doc, capabilities, keepsWordTiming(doc, capabilities)),
+    { ...meta, ...(projected !== undefined && { songwriters: projected }) }
+  );
+}
+
+function writeRow(line: LyricsLine) {
+  const duration = line.end - line.begin;
+  checkTime(duration, `line ${line.id} duration`);
+  return `[${line.begin},${duration}]${line.p
+    .map((syllable) => {
+      const syllableDuration = syllable.end - syllable.begin;
+      checkTime(syllableDuration, `syllable ${syllable.id} duration`);
+      return `(${syllable.begin},${syllableDuration},0)${syllable.text}`;
+    })
+    .join("")}`;
+}
+
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const prepared = prepare(source, capabilities, "yrc", options);
-  const doc = {
-    ...prepared,
-    lines: prepared.lines.filter(hasLyricText),
-  };
+  const doc = prepare(source, options, "yrc", losses, project);
   checkLines(doc, "yrc");
   checkWrite(doc, "yrc", capabilities);
-  checkMetaText(doc.meta, "yrc");
   for (const line of doc.lines) {
     for (const syllable of line.p) {
-      checkText(syllable.text, "yrc", reservedStamp);
+      checkText(syllable.text, "yrc", yrcMark);
     }
   }
-  if (doc.meta.songwriters?.length === 0) {
-    throw new Error("yrc cannot represent an empty songwriter list");
-  }
-  if (doc.meta.songwriters?.some((songwriter) => songwriter.length === 0)) {
-    throw new Error("yrc cannot represent an empty songwriter name");
-  }
-  if (
-    doc.meta.songwriters &&
-    doc.meta.songwriters.length > 1 &&
-    doc.meta.songwriters.some((name) => name.includes("/"))
-  ) {
-    throw new Error("yrc cannot preserve this songwriter name");
-  }
-  if (
-    doc.meta.songwriters &&
-    doc.meta.songwriters.length > 1 &&
-    new Set(doc.meta.songwriters).size !== doc.meta.songwriters.length
-  ) {
-    throw new Error("yrc requires unique songwriter names");
-  }
-  const preamble =
-    doc.meta.songwriters && doc.meta.songwriters.length > 1
+  const tags = writeTags(doc.meta, metaProblems(doc.meta));
+  const { songwriters } = doc.meta;
+  return [
+    ...(songwriters !== undefined && songwriters.length > 1
       ? [
           JSON.stringify({
-            c: [{ tx: "作词: " }, { tx: doc.meta.songwriters.join("/") }],
+            c: [{ tx: "作词: " }, { tx: songwriters.join("/") }],
             t: 0,
           }),
         ]
-      : [];
-  return [
-    ...preamble,
-    ...(doc.meta.title === undefined ? [] : [`[ti:${doc.meta.title}]`]),
-    ...(doc.meta.artist === undefined ? [] : [`[ar:${doc.meta.artist}]`]),
-    ...(doc.meta.album === undefined ? [] : [`[al:${doc.meta.album}]`]),
-    ...(doc.meta.songwriters?.length === 1
-      ? [`[au:${doc.meta.songwriters[0]}]`]
       : []),
-    ...doc.lines.map((line) => {
-      const duration = line.end - line.begin;
-      checkTime(duration, `line ${line.id} duration`);
-      return `[${line.begin},${duration}]${line.p
-        .map((syllable) => {
-          const syllableDuration = syllable.end - syllable.begin;
-          checkTime(syllableDuration, `syllable ${syllable.id} duration`);
-          return `(${syllable.begin},${syllableDuration},0)${syllable.text}`;
-        })
-        .join("")}`;
-    }),
+    ...tags,
+    ...doc.lines.map(writeRow),
   ].join("\n");
 }

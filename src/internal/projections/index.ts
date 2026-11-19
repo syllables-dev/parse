@@ -1,191 +1,167 @@
-import { backingLine, projectedLine } from "@/internal/projections/line";
-import {
-  lqeTranslationLosses,
-  projectedLqeLines,
-  projectedPronunciationTracks,
-  projectedTranslationTracks,
-  trackMetadataLosses,
-} from "@/internal/projections/lqe";
-import { lrcLineLosses, projectedLrcLines } from "@/internal/projections/lrc";
-import { lylLineLosses, projectedLylLines } from "@/internal/projections/lyl";
-import { lysLineLosses, projectedLysLines } from "@/internal/projections/lys";
-import {
-  formatMetadataLosses,
-  projectedMeta,
-} from "@/internal/projections/metadata";
+import { hasLyricText } from "@/internal/write-check";
 import type {
   ConversionLoss,
   FormatCapabilities,
   FormatId,
   LyricsDocument,
+  LyricsLine,
+  LyricsMeta,
   WriteOptions,
 } from "@/types";
 
-function lost(
-  field: ConversionLoss,
-  value: string | string[] | undefined,
-  preserved: boolean
-) {
-  return value !== undefined && !preserved ? [field] : [];
+const lossOrder: ConversionLoss[] = [
+  "metadata.album",
+  "metadata.artist",
+  "metadata.songwriters",
+  "metadata.title",
+  "wordTiming",
+  "lineRange",
+  "agents",
+  "backing",
+  "translations",
+  "pronunciations",
+];
+
+export function lostIf(loss: ConversionLoss, lost: boolean): ConversionLoss[] {
+  return lost ? [loss] : [];
 }
 
-function projectedLines(
+export function keepsWordTiming(
   doc: LyricsDocument,
-  format: FormatId,
-  capabilities: FormatCapabilities,
-  wordTimed: boolean
+  capabilities: FormatCapabilities
 ) {
-  if (format === "lrc") {
-    return projectedLrcLines(doc, capabilities, wordTimed);
-  }
-  if (format === "lyl") {
-    return projectedLylLines(doc, capabilities, wordTimed);
-  }
-  if (format === "lqe") {
-    return projectedLqeLines(doc, capabilities, wordTimed);
-  }
-  if (format === "lys") {
-    return projectedLysLines(doc).map((line) =>
-      projectedLine(line, capabilities, wordTimed, line.translations, false)
-    );
-  }
-  return doc.lines.flatMap((line) => {
-    const primary = projectedLine(
-      line,
-      capabilities,
-      wordTimed,
-      line.translations,
-      format === "ttml"
-    );
-    const backing = backingLine(line, capabilities, wordTimed);
-    if (backing === undefined) {
-      return [primary];
-    }
-    return backing.begin < primary.begin
-      ? [backing, primary]
-      : [primary, backing];
-  });
+  return doc.timing !== "word" || capabilities.timing.word;
 }
 
-function basicLosses(
+function lyricLines(doc: LyricsDocument): LyricsDocument {
+  return { ...doc, lines: doc.lines.filter(hasLyricText) };
+}
+
+function capabilityLosses(
   doc: LyricsDocument,
-  format: FormatId,
   capabilities: FormatCapabilities
 ): ConversionLoss[] {
-  const features: ConversionLoss[] = [];
-  if (!capabilities.timing.word && doc.timing === "word") {
-    features.push("wordTiming");
-  }
-  if (format === "lrc") {
-    features.push(...lrcLineLosses(doc));
-  } else if (format === "lyl") {
-    features.push(...lylLineLosses(doc));
-  } else if (format === "lqe" || format === "lys") {
-    features.push(...lysLineLosses(doc));
-  }
-  if (
-    capabilities.agents === false &&
-    (doc.agents.length > 0 || doc.lines.some((line) => line.agent !== null))
-  ) {
-    features.push("agents");
-  }
-  if (
-    (!capabilities.backing && doc.lines.some((line) => line.b.length > 0)) ||
-    ((format === "lys" || format === "lqe" || format === "ttml") &&
-      doc.lines.some((line) => line.p.length === 0 && line.b.length > 0))
-  ) {
-    features.push("backing");
-  }
-  return features;
-}
-
-function trackLossFeatures(
-  doc: LyricsDocument,
-  format: FormatId,
-  capabilities: FormatCapabilities
-) {
-  const features: ConversionLoss[] = [];
-  const tracks = trackMetadataLosses(doc, capabilities);
-  if (
-    (!capabilities.translation &&
-      (doc.translationTracks !== undefined ||
-        doc.lines.some((line) => line.translations !== undefined))) ||
-    (capabilities.translation && tracks.translation) ||
-    (format === "lqe" &&
-      (doc.lines.some(
-        (line) => line.p.length === 0 && line.translations !== undefined
-      ) ||
-        lqeTranslationLosses({ ...doc, lines: projectedLysLines(doc) })))
-  ) {
-    features.push("translations");
-  }
-  if (
-    (!capabilities.pronunciation &&
-      (doc.pronunciationTracks !== undefined ||
-        doc.lines.some((line) => line.pronunciations !== undefined))) ||
-    (capabilities.pronunciation && tracks.pronunciation)
-  ) {
-    features.push("pronunciations");
-  }
-  return features;
-}
-
-export function losses(
-  doc: LyricsDocument,
-  format: FormatId,
-  capabilities: FormatCapabilities
-): ConversionLoss[] {
-  return [
-    ...lost("metadata.album", doc.meta.album, capabilities.metadata.album),
-    ...lost("metadata.artist", doc.meta.artist, capabilities.metadata.artist),
-    ...lost(
+  const { meta } = doc;
+  const { metadata } = capabilities;
+  const checks: [ConversionLoss, boolean][] = [
+    ["metadata.album", meta.album !== undefined && !metadata.album],
+    ["metadata.artist", meta.artist !== undefined && !metadata.artist],
+    [
       "metadata.songwriters",
-      doc.meta.songwriters,
-      capabilities.metadata.songwriters
-    ),
-    ...lost("metadata.title", doc.meta.title, capabilities.metadata.title),
-    ...formatMetadataLosses(doc.meta, format, capabilities),
-    ...basicLosses(doc, format, capabilities),
-    ...trackLossFeatures(doc, format, capabilities),
+      meta.songwriters !== undefined && !metadata.songwriters,
+    ],
+    ["metadata.title", meta.title !== undefined && !metadata.title],
+    ["wordTiming", !keepsWordTiming(doc, capabilities)],
+    [
+      "agents",
+      capabilities.agents === false &&
+        (doc.agents.length > 0 ||
+          doc.lines.some((line) => line.agent !== null)),
+    ],
+    [
+      "backing",
+      doc.lines.some(
+        (line) =>
+          line.b.length > 0 && !(capabilities.backing && line.p.length > 0)
+      ),
+    ],
+    [
+      "translations",
+      capabilities.translation
+        ? Object.values(doc.translationTracks ?? {}).some(
+            (track) =>
+              (track.automaticallyCreated !== undefined &&
+                !capabilities.trackGenerated) ||
+              (track.kind === "replacement" && !capabilities.trackKind)
+          )
+        : doc.translationTracks !== undefined ||
+          doc.lines.some((line) => line.translations !== undefined),
+    ],
+    [
+      "pronunciations",
+      capabilities.pronunciation
+        ? Object.values(doc.pronunciationTracks ?? {}).some((track) =>
+            [track, ...(track.variants ?? [])].some(
+              (entry) =>
+                entry.automaticallyCreated !== undefined &&
+                !capabilities.trackGenerated
+            )
+          )
+        : doc.pronunciationTracks !== undefined ||
+          doc.lines.some((line) => line.pronunciations !== undefined),
+    ],
   ];
+  return checks.filter(([, lost]) => lost).map(([loss]) => loss);
 }
 
-function project(
+// lines without lyric text are dropped on every write, so they are never a loss
+export function findLosses(
   doc: LyricsDocument,
-  format: FormatId,
+  capabilities: FormatCapabilities,
+  formatLosses: (
+    lyric: LyricsDocument,
+    source: LyricsDocument
+  ) => ConversionLoss[]
+): ConversionLoss[] {
+  const lyric = lyricLines(doc);
+  const found = new Set([
+    ...capabilityLosses(lyric, capabilities),
+    ...formatLosses(lyric, doc),
+  ]);
+  return lossOrder.filter((loss) => found.has(loss));
+}
+
+export function projectedMeta(
+  meta: LyricsMeta,
   capabilities: FormatCapabilities
-): LyricsDocument {
-  if (losses(doc, format, capabilities).length === 0) {
-    return doc;
-  }
-  const wordTimed = doc.timing !== "word" || capabilities.timing.word;
-  const lines = projectedLines(doc, format, capabilities, wordTimed);
-  const pronunciationTracks = projectedPronunciationTracks(doc, capabilities);
-  const translationTracks = projectedTranslationTracks(
-    doc,
-    lines,
-    format,
-    capabilities
-  );
+): LyricsMeta {
+  const { album, artist, songwriterIds, songwriters, title, ...shared } = meta;
+  const { metadata } = capabilities;
   return {
+    ...shared,
+    ...(metadata.album && album !== undefined && { album }),
+    ...(metadata.artist && artist !== undefined && { artist }),
+    ...(metadata.songwriters &&
+      songwriters !== undefined && {
+        songwriters,
+        ...(songwriterIds !== undefined && { songwriterIds }),
+      }),
+    ...(metadata.title && title !== undefined && { title }),
+  };
+}
+
+export function projectedDocument(
+  doc: LyricsDocument,
+  capabilities: FormatCapabilities,
+  lines: LyricsLine[],
+  meta: LyricsMeta
+): LyricsDocument {
+  const { pronunciationTracks, translationTracks, ...shared } = doc;
+  return {
+    ...shared,
     agents: capabilities.agents === false ? [] : doc.agents,
     lines,
-    meta: projectedMeta(doc.meta, format, capabilities),
-    ...(pronunciationTracks === undefined ? {} : { pronunciationTracks }),
-    timing: wordTimed ? doc.timing : "line",
-    ...(translationTracks === undefined ? {} : { translationTracks }),
-    version: doc.version,
+    meta,
+    ...(capabilities.pronunciation &&
+      pronunciationTracks !== undefined && { pronunciationTracks }),
+    timing: keepsWordTiming(doc, capabilities) ? doc.timing : "line",
+    ...(capabilities.translation &&
+      translationTracks !== undefined && { translationTracks }),
   };
 }
 
 export function prepare(
   doc: LyricsDocument,
-  capabilities: FormatCapabilities,
+  options: WriteOptions,
   format: FormatId,
-  options: WriteOptions
-) {
+  losses: (doc: LyricsDocument) => ConversionLoss[],
+  project: (doc: LyricsDocument) => LyricsDocument
+): LyricsDocument {
   if (Object.keys(options).some((key) => key !== "lossy")) {
     throw new Error(`${format} write options are unsupported`);
   }
-  return options.lossy ? project(doc, format, capabilities) : doc;
+  const lyric = lyricLines(doc);
+  return options.lossy && losses(lyric).length > 0
+    ? lyricLines(project(lyric))
+    : lyric;
 }

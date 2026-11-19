@@ -1,15 +1,56 @@
+/**
+ * LQE (Lyricify Quick Export), Lyricify's container for a lyric track and its translations.
+ * by Lyricify / WXRIW
+ *
+ * [Lyricify Quick Export]
+ * [version:1.0]
+ *
+ * [lyrics: format@Lyricify Syllable]
+ * [4]Hel(12000,400)lo(12400,600)
+ *
+ * [translation: language@fr, format@LRC]
+ * [00:12.000]Bonjour
+ */
+
 import { ParseError } from "@/errors";
-import { read as readLrc, writeAlignedRows } from "@/formats/lrc";
-import { read as readLys, write as writeLys } from "@/formats/lys";
-import { readTag, writeTags } from "@/internal/lyric-tags";
-import { prepare } from "@/internal/projections";
-import { readOffset, shiftTimes, splitLines } from "@/internal/timestamps";
-import { checkLines, checkText, checkWrite } from "@/internal/write-check";
+import { read as readLrc } from "@/formats/lrc";
+import { read as readLys } from "@/formats/lys";
+import { fittedLines, rangeLosses, writeRows } from "@/formats/lys/rows";
+import { isLanguageTag } from "@/internal/language-tag";
+import {
+  projectedTagMeta,
+  readTag,
+  tagProblems,
+  writeTags,
+} from "@/internal/lyric-tags";
+import {
+  findLosses,
+  keepsWordTiming,
+  lostIf,
+  prepare,
+  projectedDocument,
+} from "@/internal/projections";
+import { projectedLines } from "@/internal/projections/line";
+import {
+  clockStamp,
+  readOffset,
+  shiftTimes,
+  splitLines,
+  writeStamp,
+} from "@/internal/timestamps";
+import {
+  checkLines,
+  checkText,
+  checkWrite,
+  hasLyricText,
+} from "@/internal/write-check";
 import type {
+  ConversionLoss,
   FormatCapabilities,
   LyricsDocument,
   LyricsLine,
-  ReadOptions,
+  LyricsTranslation,
+  LyricsTranslationTrack,
   WriteOptions,
 } from "@/types";
 
@@ -26,18 +67,11 @@ interface TranslationTarget {
   track: "b" | "p";
 }
 
-interface TranslationRow {
-  begin: number;
-  text: string;
-}
-
-const containerMark = "[Lyricify Quick Export]";
+export const containerMark = "[Lyricify Quick Export]";
 const sectionHeader = /^\[([A-Za-z]+):\s*(.*)\]$/u;
-const lrcRow = /^(?:\[\d+:\d{1,2}(?:[.:]\d{1,3})?\])+/u;
+const lrcRow = new RegExp(String.raw`^(?:\[${clockStamp}\])+`, "u");
 const lysRow = /^\[\d+\]/u;
-const languageTag = /^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u;
-const lrcReservedStamp = /<\d+:\d{1,2}(?:[.:]\d{1,3})?>/u;
-const lysReservedStamp = /\(\d+,\d+\)/u;
+const lrcReservedStamp = new RegExp(`<${clockStamp}>`, "u");
 const offsetTag = /^\[offset:.*\]$/iu;
 // by parses as a tag so it is not a malformed line, then goes nowhere: the schema has no author
 const supportedMetadata = new Set(["al", "ar", "au", "by", "offset", "ti"]);
@@ -184,7 +218,7 @@ function readTranslation(section: LqeSection) {
     throw new ParseError("lqe translation must use LRC format");
   }
   const language = section.attributes.get("language") ?? "und";
-  if (!languageTag.test(language)) {
+  if (!isLanguageTag(language)) {
     throw new ParseError("lqe translation language is invalid");
   }
   const body = section.body.filter((line) => !offsetTag.test(line.trim()));
@@ -234,6 +268,25 @@ function addTranslation(
   }
 }
 
+function languagesOf(lines: LyricsLine[]) {
+  return [
+    ...new Set(lines.flatMap((line) => Object.keys(line.translations ?? {}))),
+  ];
+}
+
+function subtitleTracks(lines: LyricsLine[]) {
+  const languages = languagesOf(lines);
+  if (languages.length === 0) {
+    return;
+  }
+  return Object.fromEntries(
+    languages.map((language): [string, LyricsTranslationTrack] => [
+      language,
+      { kind: "subtitle" },
+    ])
+  );
+}
+
 function readTracks(
   sections: LqeSection[],
   metadata: Map<string, string>
@@ -280,25 +333,14 @@ function readTracks(
       addTranslation(section, targets, assigned);
     }
   }
-  const languages = [
-    ...new Set(
-      doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
-    ),
-  ];
+  const translationTracks = subtitleTracks(doc.lines);
   return {
     ...doc,
-    ...(languages.length > 0 && {
-      translationTracks: Object.fromEntries(
-        languages.map((language) => [language, { kind: "subtitle" }])
-      ),
-    }),
+    ...(translationTracks !== undefined && { translationTracks }),
   };
 }
 
-export function read(text: string, options: ReadOptions = {}): LyricsDocument {
-  if (options.expandRepeats) {
-    throw new Error("expandRepeats is available for lrc input");
-  }
+export function read(text: string): LyricsDocument {
   const lines = splitLines(text);
   const firstLine = lines.findIndex((line) => line.trim().length > 0);
   if (lines.at(firstLine)?.trim() !== containerMark) {
@@ -309,142 +351,157 @@ export function read(text: string, options: ReadOptions = {}): LyricsDocument {
     throw new ParseError("lqe version must be 1.0");
   }
   const doc = readTracks(readSections(lines, lineIndex), metadata);
-  const offsetText = metadata.get("offset");
-  const offset = offsetText === undefined ? 0 : readOffset(offsetText, "lqe");
-  return shiftTimes(doc, offset, "lqe");
+  return shiftTimes(doc, readOffset(metadata.get("offset"), "lqe"), "lqe");
 }
 
-function addRow(
-  rows: TranslationRow[],
-  syllables: LyricsLine["p"],
-  text: string,
-  lineId: string,
-  track: "backing" | "primary"
-) {
-  const firstSyllable = syllables.at(0);
-  if (!firstSyllable) {
-    if (text.length > 0 || track === "backing") {
-      throw new Error(
-        `lqe cannot place ${track} translation for line ${lineId}`
-      );
-    }
-    return;
-  }
-  rows.push({ begin: firstSyllable.begin, text });
+function placementProblems(line: LyricsLine, translation: LyricsTranslation) {
+  return [
+    ...(line.p.length === 0 && translation.p.length > 0
+      ? [`lqe cannot place primary translation for line ${line.id}`]
+      : []),
+    ...(translation.b !== undefined && line.b.length === 0
+      ? [`lqe cannot place backing translation for line ${line.id}`]
+      : []),
+  ];
 }
 
-function translationDoc(doc: LyricsDocument, language: string): LyricsDocument {
-  const rows: TranslationRow[] = [];
-  for (const line of doc.lines) {
-    const translation = line.translations?.[language];
-    addRow(rows, line.p, translation?.p ?? "", line.id, "primary");
-    if (translation?.b !== undefined) {
-      addRow(rows, line.b, translation.b, line.id, "backing");
-    }
+function droppedTranslationProblems(doc: LyricsDocument) {
+  return doc.lines
+    .filter((line) => !hasLyricText(line))
+    .flatMap((line) =>
+      Object.values(line.translations ?? {}).flatMap((translation) =>
+        placementProblems({ ...line, b: [], p: [] }, translation)
+      )
+    );
+}
+
+function translationProblems(doc: LyricsDocument) {
+  const tracks = Object.values(doc.translationTracks ?? {});
+  const languages = new Set(languagesOf(doc.lines));
+  return [
+    ...(tracks.some((track) => track.kind === "replacement")
+      ? ["lqe cannot represent replacement translations"]
+      : []),
+    ...(tracks.some((track) => track.automaticallyCreated !== undefined)
+      ? ["lqe cannot represent automaticallyCreated translations"]
+      : []),
+    ...(Object.keys(doc.translationTracks ?? {}).some(
+      (language) => !languages.has(language)
+    )
+      ? ["lqe cannot represent an empty translation track"]
+      : []),
+    ...doc.lines.flatMap((line) =>
+      Object.values(line.translations ?? {}).flatMap((translation) =>
+        placementProblems(line, translation)
+      )
+    ),
+  ];
+}
+
+export function losses(doc: LyricsDocument): ConversionLoss[] {
+  return findLosses(doc, capabilities, (lyric, source) => [
+    ...tagProblems(lyric.meta, "lqe").map((problem) => problem.loss),
+    ...rangeLosses(lyric),
+    ...lostIf(
+      "translations",
+      droppedTranslationProblems(source).length > 0 ||
+        lyric.lines.some(
+          (line) => line.p.length === 0 && line.translations !== undefined
+        ) ||
+        translationProblems({ ...lyric, lines: fittedLines(lyric) }).length > 0
+    ),
+  ]);
+}
+
+function placedTranslations(line: LyricsLine): LyricsLine {
+  const { translations } = line;
+  if (translations === undefined) {
+    return line;
   }
   return {
-    agents: [],
-    lines: rows.map((row, lineIndex) => {
-      const end = rows[lineIndex + 1]?.begin ?? row.begin + 5000;
-      return {
-        agent: null,
-        b: [],
-        begin: row.begin,
-        end,
-        id: `l${lineIndex}`,
-        p: [
-          {
-            begin: row.begin,
-            end,
-            id: `l${lineIndex}w0`,
-            text: row.text,
-          },
-        ],
-      };
-    }),
-    meta: {},
-    timing: "line",
-    version: 1,
+    ...line,
+    translations: Object.fromEntries(
+      Object.entries(translations).map(([language, translation]) => [
+        language,
+        {
+          ...(translation.b !== undefined &&
+            line.b.length > 0 && { b: translation.b }),
+          p: translation.p,
+        },
+      ])
+    ),
   };
 }
 
-function checkDoc(doc: LyricsDocument) {
-  checkLines(doc, "lqe");
-  checkWrite(doc, "lqe", capabilities);
-  if (
-    Object.values(doc.translationTracks ?? {}).some(
-      (track) => track.kind === "replacement"
-    )
-  ) {
-    throw new Error("lqe cannot represent replacement translations");
-  }
-  if (
-    Object.values(doc.translationTracks ?? {}).some(
-      (track) => track.automaticallyCreated !== undefined
-    )
-  ) {
-    throw new Error("lqe cannot represent automaticallyCreated translations");
-  }
-  if (
-    Object.keys(doc.translationTracks ?? {}).some(
-      (language) =>
-        !doc.lines.some((line) => line.translations?.[language] !== undefined)
-    )
-  ) {
-    throw new Error("lqe cannot represent an empty translation track");
-  }
-  for (const line of doc.lines) {
-    for (const syllable of [...line.p, ...line.b]) {
-      checkText(syllable.text, "lqe", lysReservedStamp);
-    }
-    for (const translation of Object.values(line.translations ?? {})) {
-      checkText(translation.p, "lqe", lrcReservedStamp);
-      if (translation.b !== undefined) {
-        checkText(translation.b, "lqe", lrcReservedStamp);
-      }
-    }
-    if (line.p.length === 0 && line.b.length > 0) {
-      throw new Error(`lqe cannot preserve backing-only line ${line.id}`);
-    }
-  }
+function project(doc: LyricsDocument): LyricsDocument {
+  const lines = projectedLines(
+    { ...doc, lines: fittedLines(doc) },
+    capabilities,
+    keepsWordTiming(doc, capabilities)
+  ).map(placedTranslations);
+  const { translationTracks: _, ...projected } = projectedDocument(
+    doc,
+    capabilities,
+    lines,
+    projectedTagMeta(doc.meta)
+  );
+  const translationTracks = subtitleTracks(lines);
+  return {
+    ...projected,
+    ...(translationTracks !== undefined && { translationTracks }),
+  };
+}
+
+function translationRows(doc: LyricsDocument, language: string) {
+  return doc.lines.flatMap((line) => {
+    const translation = line.translations?.[language];
+    const [primary] = line.p;
+    const [backing] = line.b;
+    return [
+      ...(primary === undefined
+        ? []
+        : [`[${writeStamp(primary.begin)}]${translation?.p ?? ""}`]),
+      ...(backing === undefined || translation?.b === undefined
+        ? []
+        : [`[${writeStamp(backing.begin)}]${translation.b}`]),
+    ];
+  });
 }
 
 export function write(
   source: LyricsDocument,
   options: WriteOptions = {}
 ): string {
-  const doc = prepare(source, capabilities, "lqe", options);
-  checkDoc(doc);
+  const [dropped] = options.lossy ? [] : droppedTranslationProblems(source);
+  if (dropped !== undefined) {
+    throw new Error(dropped);
+  }
+  const doc = prepare(source, options, "lqe", losses, project);
+  checkLines(doc, "lqe");
+  checkWrite(doc, "lqe", capabilities);
+  const [problem] = translationProblems(doc);
+  if (problem !== undefined) {
+    throw new Error(problem);
+  }
+  for (const line of doc.lines) {
+    for (const translation of Object.values(line.translations ?? {})) {
+      checkText(translation.p, "lqe", lrcReservedStamp);
+      if (translation.b !== undefined) {
+        checkText(translation.b, "lqe", lrcReservedStamp);
+      }
+    }
+  }
+  const rows = writeRows(doc, "lqe");
   const sections = [
     containerMark,
     "[version:1.0]",
-    ...writeTags(doc.meta, "lqe"),
+    ...writeTags(doc.meta, tagProblems(doc.meta, "lqe")),
     "",
     "[lyrics: format@Lyricify Syllable]",
-    writeLys(
-      {
-        ...doc,
-        lines: doc.lines.map((line) => ({
-          agent: line.agent,
-          b: line.b,
-          begin: line.begin,
-          end: line.end,
-          id: line.id,
-          p: line.p,
-        })),
-        meta: {},
-      },
-      {},
-      "lqe"
-    ),
+    ...rows,
   ];
-  const languages = [
-    ...new Set(
-      doc.lines.flatMap((line) => Object.keys(line.translations ?? {}))
-    ),
-  ].sort();
-  for (const language of languages) {
-    if (!languageTag.test(language)) {
+  for (const language of languagesOf(doc.lines).sort()) {
+    if (!isLanguageTag(language)) {
       throw new Error(`invalid lqe translation language ${language}`);
     }
     sections.push(
@@ -452,7 +509,7 @@ export function write(
       `[translation: ${
         language === "und" ? "" : `language@${language}, `
       }format@LRC]`,
-      writeAlignedRows(translationDoc(doc, language))
+      ...translationRows(doc, language)
     );
   }
   return sections.join("\n");

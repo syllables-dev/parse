@@ -1,5 +1,6 @@
 import { ParseError } from "@/errors";
 import { toInt } from "@/internal/timestamps";
+import type { FormatId, Syllable } from "@/types";
 
 export interface TimedWord {
   begin: number;
@@ -7,9 +8,49 @@ export interface TimedWord {
   text: string;
 }
 
+const rowHeader = /^\[(\d+),(\d+)\](.*)$/u;
 const suffixStamp = /\((\d+),(\d+)\)/gu;
 const yrcStamp = /\((\d+),(\d+),(-?\d+)\)/gu;
+
+export const suffixMark = new RegExp(suffixStamp.source, "u");
+export const yrcMark = new RegExp(yrcStamp.source, "u");
 const whitespace = /^\s+$/u;
+
+export function readRowHeader(
+  raw: string,
+  format: FormatId,
+  lineIndex: number
+) {
+  const header = rowHeader.exec(raw);
+  if (!header) {
+    return null;
+  }
+  const comma = header[0].indexOf(",");
+  const close = header[0].indexOf("]");
+  const begin = toInt(
+    header[0].slice(1, comma),
+    `${format} line ${lineIndex + 1} start`
+  );
+  const duration = toInt(
+    header[0].slice(comma + 1, close),
+    `${format} line ${lineIndex + 1} duration`
+  );
+  if (!Number.isSafeInteger(begin + duration)) {
+    throw new ParseError(
+      `${format} line ${lineIndex + 1} end exceeds the safe integer range`
+    );
+  }
+  return { begin, body: header[0].slice(close + 1), end: begin + duration };
+}
+
+export function toSyllables(words: TimedWord[], idPrefix: string): Syllable[] {
+  return words.map((word, wordIndex) => ({
+    begin: word.begin,
+    end: word.end,
+    id: `${idPrefix}${wordIndex}`,
+    text: word.text,
+  }));
+}
 
 export function readTimedWords(
   body: string,
@@ -22,7 +63,6 @@ export function readTimedWords(
   }
   const words: TimedWord[] = [];
   let cursor = 0;
-
   suffixStamp.lastIndex = 0;
   let marker = suffixStamp.exec(body);
   while (marker) {
@@ -48,7 +88,6 @@ export function readTimedWords(
     cursor = suffixStamp.lastIndex;
     marker = suffixStamp.exec(body);
   }
-
   if (cursor !== body.length) {
     throw new ParseError(`line ${lineNumber} has untimed trailing text`);
   }
@@ -77,7 +116,6 @@ export function readYrcWords(
   if (markers.at(0)?.index !== 0) {
     throw new ParseError(`line ${lineNumber} must begin with a word timestamp`);
   }
-
   return markers.map((marker, index) => {
     const next = markers[index + 1];
     const firstComma = marker[0].indexOf(",");
@@ -109,30 +147,26 @@ export function readYrcWords(
   });
 }
 
-/**
- * a zero-duration token is never meaningful on its own (lys `(0,0)`, qrc/yrc
- * a marker where begin === end); it always folds into the syllable to its
- * left, regardless of what text it carries.
- */
+// a zero-duration token (lys `(0,0)`, a qrc or yrc marker with no length) is never a syllable of
+// its own: it folds into the syllable on its left, whatever text it carries
 export function foldSpacers(
   words: TimedWord[],
-  format: string,
-  lineNumber: number,
-  isSpacer: (word: TimedWord) => boolean
+  format: FormatId,
+  lineNumber: number
 ): TimedWord[] {
   const syllables: TimedWord[] = [];
   for (const word of words) {
-    if (isSpacer(word)) {
-      const previous = syllables.at(-1);
-      if (!previous) {
-        throw new ParseError(
-          `${format} line ${lineNumber} begins with a zero-time separator`
-        );
-      }
-      previous.text += word.text;
+    if (word.begin !== word.end) {
+      syllables.push(word);
       continue;
     }
-    syllables.push(word);
+    const previous = syllables.at(-1);
+    if (!previous) {
+      throw new ParseError(
+        `${format} line ${lineNumber} begins with a zero-time separator`
+      );
+    }
+    previous.text += word.text;
   }
   return syllables;
 }

@@ -118,6 +118,26 @@ describe("lys reader", () => {
     }
   });
 
+  test("fits the line range to the words left after trimming timed edge spaces", () => {
+    const doc = read(
+      "[4] (0,500)Hi(500,1000) (1500,500)\n[7]( (1000,200)Ooh)(1200,300)"
+    );
+
+    expect(doc.lines.map((line) => [line.begin, line.end])).toEqual([
+      [500, 1500],
+    ]);
+    expect(doc.lines[0]?.b).toEqual([
+      { begin: 1200, end: 1500, id: "l0b0", text: "Ooh" },
+    ]);
+    expect(write(doc)).toBe("[4]Hi(500,1000)\n[7](Ooh)(1200,300)");
+  });
+
+  test("rejects a second backing row for one lyric line", () => {
+    expect(() =>
+      read("[4]Lead(0,1000)\n[7](One)(1000,1000)\n[7](Two)(3000,1000)")
+    ).toThrow("lys line 3 is a second backing row for one lyric line");
+  });
+
   test("preserves overlapping lyric rows", () => {
     const doc = read(
       "[4]one(1000,1000)\n[4]two(1500,1000)\n[5]three(1750,1000)"

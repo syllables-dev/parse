@@ -24,13 +24,13 @@ describe("yrc reader", () => {
     expect(read(source).meta.songwriters).toEqual(["One", "Two"]);
   });
 
-  test("parses an empty line distinctly from a whitespace-only line", () => {
-    const doc = read("[1000,1000]\n[2000,1000]   ");
+  test("strips spaces at the edges of a line and empties a whitespace-only one", () => {
+    const doc = read("[0,1000](0,1000,0) 作词 : One \n[2000,1000]   ");
 
-    expect(doc.lines[0]?.p).toEqual([]);
-    expect(doc.lines[1]?.p).toEqual([
-      { begin: 2000, end: 3000, id: "l1w0", text: "   " },
+    expect(doc.lines[0]?.p).toEqual([
+      { begin: 0, end: 1000, id: "l0w0", text: "作词 : One" },
     ]);
+    expect(doc.lines[1]?.p).toEqual([]);
   });
 
   // a whitespace-only row carries no lyric text, so it drops with empty rows
