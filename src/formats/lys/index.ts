@@ -7,7 +7,7 @@
 
 import { ParseError } from "@/errors";
 import { fittedLines, rangeLosses, writeRows } from "@/formats/lys/rows";
-import { trimLineEdges } from "@/internal/edge-whitespace";
+import { trimEdges } from "@/internal/edge-whitespace";
 import {
   checkUnreadRow,
   projectedTagMeta,
@@ -135,7 +135,7 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
       !rows[rowIndex - 1]?.wrapped &&
       !rows[rowIndex + 1]?.wrapped;
     const isBacking = row.property >= 6 || inferredBacking;
-    const words =
+    const words = trimEdges(
       isBacking && row.wrapped
         ? row.words.map((word, wordIndex) => ({
             ...word,
@@ -144,7 +144,14 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
               wordIndex === row.words.length - 1 ? -1 : undefined
             ),
           }))
-        : row.words;
+        : row.words
+    );
+    const begin =
+      words.length > 0
+        ? Math.min(...words.map((word) => word.begin))
+        : row.begin;
+    const end =
+      words.length > 0 ? Math.max(...words.map((word) => word.end)) : row.end;
     const mainLine = lines.at(-1);
     if (isBacking && mainLine?.agent === row.agent) {
       if (mainLine.b.length > 0) {
@@ -152,8 +159,8 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
           `lys line ${row.lineNumber} is a second backing row for one lyric line`
         );
       }
-      mainLine.begin = Math.min(mainLine.begin, row.begin);
-      mainLine.end = Math.max(mainLine.end, row.end);
+      mainLine.begin = Math.min(mainLine.begin, begin);
+      mainLine.end = Math.max(mainLine.end, end);
       mainLine.b = toSyllables(words, `${mainLine.id}b`);
       continue;
     }
@@ -161,8 +168,8 @@ function makeLines(rows: LysRow[]): LyricsLine[] {
     lines.push({
       agent: row.agent,
       b: isBacking ? toSyllables(words, `${lineId}b`) : [],
-      begin: row.begin,
-      end: row.end,
+      begin,
+      end,
       id: lineId,
       p: isBacking ? [] : toSyllables(words, `${lineId}w`),
     });
@@ -199,7 +206,7 @@ export function read(text: string): LyricsDocument {
   return shiftTimes(
     {
       agents,
-      lines: lines.map(trimLineEdges),
+      lines,
       meta,
       timing: "word",
       version: 1,

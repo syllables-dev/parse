@@ -1,6 +1,8 @@
-import type { LyricsLine, Syllable } from "@/types";
+import type { LyricsLine } from "@/types";
 
-function trimEdges(syllables: Syllable[]): Syllable[] {
+export function trimEdges<Word extends { text: string }>(
+  syllables: Word[]
+): Word[] {
   const first = syllables.findIndex(
     (syllable) => syllable.text.trim().length > 0
   );
